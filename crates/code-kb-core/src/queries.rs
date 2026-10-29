@@ -7795,7 +7795,98 @@ pub fn compute_blast_radius_scoped_with_ids_and_low_signal(
         limit,
         Some(MAX_BLAST_DEPTH),
         include_low_signal,
+        &[],
     )
+}
+
+/// Compute blast radius for files or folders, with the tests that the callers reports of their
+/// symbols tie to them. Such a test is listed on its own, never in a constructor-only fold.
+pub(crate) fn compute_blast_radius_for_files(
+    conn: &Connection,
+    seed_paths: &[&str],
+    max_depth: usize,
+    limit: usize,
+    include_low_signal: bool,
+    report_tests: &[TestTarget],
+) -> Result<BlastRadiusResult, QueryError> {
+    blast_radius_walk_with_options(
+        conn,
+        &[],
+        &[],
+        None,
+        seed_paths,
+        None,
+        max_depth,
+        limit,
+        Some(MAX_BLAST_DEPTH),
+        include_low_signal,
+        report_tests,
+    )
+}
+
+/// The symbols of the files or folders `seed_paths` whose callers report can tie a test that the
+/// walk does not follow, such as a read of a decorated command or a module-level object: every
+/// function, method, constructor, and type, and every variable or constant at module level,
+/// outside tests and documentation, in path and line order.
+pub(crate) fn file_report_targets(
+    conn: &Connection,
+    seed_paths: &[&str],
+) -> Result<Vec<Symbol>, QueryError> {
+    let mut params = Vec::new();
+    let condition = seed_path_condition(seed_paths, &mut params);
+    let lifecycle = if has_column(conn, "symbols", "test_lifecycle") {
+        "COALESCE(s.test_lifecycle, 0) = 0"
+    } else {
+        "1"
+    };
+    let mut stmt = conn.prepare(&format!(
+        "SELECT s.symbol_id, replace(s.path, '\\', '/') FROM symbols s
+         WHERE {condition}
+           AND (s.kind IN ('function', 'method', 'constructor')
+                OR s.kind IN {OWNER_KINDS}
+                OR (s.kind IN ('variable', 'constant') AND s.parent_symbol_id IS NULL))
+           AND s.is_test = 0 AND s.test_container = 0 AND {lifecycle}
+           AND {not_documentation}
+         ORDER BY s.path, s.start_line",
+        not_documentation = not_documentation(conn, "s")
+    ))?;
+    let ids = stmt
+        .query_map(rusqlite::params_from_iter(&params), |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut targets = Vec::new();
+    for (id, path) in ids {
+        if is_test_path(&path) {
+            continue;
+        }
+        if let Some(symbol) = get_symbol_by_id(conn, &id)? {
+            targets.push(symbol);
+        }
+    }
+    Ok(targets)
+}
+
+/// The condition that selects the symbols of the files or folders `seed_paths`, with its values
+/// appended to `params`.
+fn seed_path_condition(seed_paths: &[&str], params: &mut Vec<rusqlite::types::Value>) -> String {
+    let mut path_conds = Vec::new();
+    for p in seed_paths {
+        let raw = p
+            .replace('\\', "/")
+            .trim_start_matches("./")
+            .trim_matches('/')
+            .to_string();
+        let exact_idx = params.len() + 1;
+        params.push(rusqlite::types::Value::Text(raw.clone()));
+        let dir_pattern = format!("{}/%", escape_like(&raw));
+        let like_idx = params.len() + 1;
+        params.push(rusqlite::types::Value::Text(dir_pattern));
+        path_conds.push(format!(
+            "replace(path, '\\', '/') = ?{exact_idx} COLLATE NOCASE OR replace(path, '\\', '/') LIKE ?{like_idx} ESCAPE '\\'"
+        ));
+    }
+    format!("({})", path_conds.join(" OR "))
 }
 
 /// Compute blast radius from the callers of a target that only its callers report found, one
@@ -7837,6 +7928,7 @@ pub(crate) fn compute_blast_radius_from_callers_with_low_signal(
         limit,
         Some(MAX_BLAST_DEPTH - 1),
         include_low_signal,
+        &[],
     )
 }
 
@@ -7884,6 +7976,7 @@ pub fn compute_blast_radius_for_changes_with_low_signal(
         limit,
         Some(MAX_BLAST_DEPTH),
         include_low_signal,
+        &[],
     )
 }
 
@@ -7910,6 +8003,7 @@ fn blast_radius_walk(
         limit,
         probe_depth,
         false,
+        &[],
     )
 }
 
@@ -7925,6 +8019,7 @@ fn blast_radius_walk_with_options(
     limit: usize,
     probe_depth: Option<usize>,
     include_low_signal: bool,
+    report_tests: &[TestTarget],
 ) -> Result<BlastRadiusResult, QueryError> {
     validate_result_limit(limit)?;
     let max_depth = max_depth.min(MAX_BLAST_DEPTH);
@@ -7996,6 +8091,7 @@ fn blast_radius_walk_with_options(
             tests_past_depth: None,
             tests_past_depth_cut: false,
             past_depth_tests: Vec::new(),
+            report_symbols_unchecked: None,
         });
     };
 
@@ -8013,23 +8109,7 @@ fn blast_radius_walk_with_options(
     }
 
     if !seed_paths.is_empty() {
-        let mut path_conds = Vec::new();
-        for p in seed_paths.iter() {
-            let raw = p
-                .replace('\\', "/")
-                .trim_start_matches("./")
-                .trim_matches('/')
-                .to_string();
-            let exact_idx = params_vec.len() + 1;
-            params_vec.push(rusqlite::types::Value::Text(raw.clone()));
-            let dir_pattern = format!("{}/%", escape_like(&raw));
-            let like_idx = params_vec.len() + 1;
-            params_vec.push(rusqlite::types::Value::Text(dir_pattern));
-            path_conds.push(format!(
-                "replace(path, '\\', '/') = ?{exact_idx} COLLATE NOCASE OR replace(path, '\\', '/') LIKE ?{like_idx} ESCAPE '\\'"
-            ));
-        }
-        where_clauses.push(format!("({})", path_conds.join(" OR ")));
+        where_clauses.push(seed_path_condition(seed_paths, &mut params_vec));
     }
 
     let seed_condition = where_clauses.join(" OR ");
@@ -8059,6 +8139,7 @@ fn blast_radius_walk_with_options(
             .collect(),
         changed,
         file_seed: seed_type == "file",
+        report_tests,
     };
     let mut walk = CallerWalk::start(
         conn,
@@ -8127,6 +8208,7 @@ fn blast_radius_walk_with_options(
         tests_past_depth,
         tests_past_depth_cut,
         past_depth_tests,
+        report_symbols_unchecked: None,
     })
 }
 
@@ -8147,6 +8229,7 @@ struct WalkSeeds<'a> {
     target_ids: HashSet<&'a str>,
     changed: Option<&'a BTreeMap<String, Vec<(usize, usize)>>>,
     file_seed: bool,
+    report_tests: &'a [TestTarget],
 }
 
 /// What a walk reached up to one depth, before `limit` cuts the lists.
@@ -8799,6 +8882,21 @@ fn collect_walk(
         }
     }
     likely_tests.retain(|test| !replaced.contains(&(test.path.clone(), test.line)));
+    for test in seeds.report_tests {
+        let key = (test.path.clone(), test.line);
+        let constructor_only =
+            constructor_only_test_keys.contains(&key) && !non_constructor_test_keys.contains(&key);
+        non_constructor_test_keys.insert(key);
+        if seen_test_keys.insert(format!("{}:{}", test.path, test.line)) {
+            likely_tests.push(test.clone());
+        } else if constructor_only
+            && let Some(row) = likely_tests
+                .iter_mut()
+                .find(|row| row.path == test.path && row.line == test.line)
+        {
+            row.reason = test.reason.clone();
+        }
+    }
     constructor_only_test_keys.retain(|key| !non_constructor_test_keys.contains(key));
 
     qualify_test_methods(conn, &mut likely_tests)?;
@@ -8825,7 +8923,7 @@ fn collect_walk(
                     name: path.clone(),
                     path,
                     line: 1,
-                    reason: format!("constructor-only callers ({count} targets)"),
+                    reason: format!("{count} tests reach it only through a constructor"),
                 });
             } else if let Some(test) = tests.pop() {
                 other_tests.push(test);

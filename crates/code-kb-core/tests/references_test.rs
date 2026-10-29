@@ -2015,7 +2015,7 @@ fn whole_file_blast_radius_ranks_constructor_only_tests_after_direct_callers() {
     assert_eq!(constructor_rows[0].name, "tests/test_application.py");
     assert_eq!(
         constructor_rows[0].reason,
-        "constructor-only callers (2 targets)"
+        "2 tests reach it only through a constructor"
     );
     assert!(
         position("test_runs_cli_command") < position("tests/test_application.py"),
@@ -2023,7 +2023,7 @@ fn whole_file_blast_radius_ranks_constructor_only_tests_after_direct_callers() {
     );
     let formatted = format_blast_radius(&result);
     assert!(
-        formatted.contains("constructor-only callers (2 targets)"),
+        formatted.contains("2 tests reach it only through a constructor"),
         "{formatted}"
     );
     assert!(

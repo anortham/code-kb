@@ -1564,3 +1564,82 @@ fn a_diff_lists_the_tests_that_only_the_callers_report_of_a_changed_function_fin
     );
     assert!(result.open_ends.is_empty(), "{text}");
 }
+
+const CLICK_CLI: &str = "import click\n\n\nclass AppGroup(click.Group):\n    def group(self):\n        return self\n\n\nclass FlaskGroup(AppGroup):\n    def __init__(self, create_app=None):\n        super().__init__()\n        self.create_app = create_app\n\n\n@click.command(\"run\")\ndef run_command(info):\n    return info\n\n\ncli = FlaskGroup()\n";
+
+const CLICK_APP: &str = "from pkg.cli import AppGroup\n\n\nclass Flask:\n    def __init__(self):\n        self.cli = AppGroup()\n";
+
+const CLICK_TESTS: &str = "import re\n\nimport click\n\nfrom pkg.cli import FlaskGroup\nfrom pkg.cli import run_command\n\n\ndef test_run_cert_path():\n    ctx = run_command.make_context(\"run\", [])\n    assert ctx\n\n\ndef test_flaskgroup_app_context():\n    @click.group(cls=FlaskGroup)\n    def cli():\n        pass\n\n    assert cli\n\n\ndef test_help_echo_loading_error():\n    from pkg.cli import cli\n\n    print(cli)\n\n\ndef test_session_expiration():\n    match = re.search(\"a\", \"a\")\n    assert match.group(0)\n";
+
+const CLICK_APP_TESTS: &str = "from pkg.app import Flask\nfrom pkg.cli import run_command\n\n\ndef test_one():\n    assert Flask()\n\n\ndef test_two():\n    assert Flask()\n\n\ndef test_app_runs_command():\n    app = Flask()\n    assert run_command.make_context(\"run\", [app])\n";
+
+fn click_project() -> (tempfile::TempDir, Workspace, Connection) {
+    scanned(&[
+        ("pyproject.toml", "[project]\nname = \"pkg\"\n"),
+        ("src/pkg/__init__.py", ""),
+        ("src/pkg/cli.py", CLICK_CLI),
+        ("src/pkg/app.py", CLICK_APP),
+        ("tests/test_cli.py", CLICK_TESTS),
+        ("tests/test_app.py", CLICK_APP_TESTS),
+    ])
+}
+
+#[test]
+fn a_file_target_lists_the_tests_that_read_its_commands_classes_and_module_objects() {
+    let (_temp, workspace, conn) = click_project();
+
+    let result = blast_radius_op(&workspace, &conn, None, Some("src/pkg/cli.py"), 2, 20).unwrap();
+
+    let text = format_blast_radius(&result);
+    let rows = reasons(&result);
+    for expected in [
+        (
+            "test_run_cert_path",
+            "calls `run_command` (find_references)",
+        ),
+        (
+            "test_flaskgroup_app_context",
+            "calls `FlaskGroup` (find_references)",
+        ),
+        (
+            "test_help_echo_loading_error",
+            "calls `cli` (find_references)",
+        ),
+    ] {
+        assert!(rows.contains(&expected), "{expected:?} missing\n{text}");
+    }
+    assert!(
+        !rows
+            .iter()
+            .any(|(name, _)| *name == "test_session_expiration"),
+        "{text}"
+    );
+    assert!(
+        !result.open_ends.iter().any(|end| end.name == "run_command"),
+        "{text}"
+    );
+}
+
+#[test]
+fn a_file_target_lists_a_test_that_the_callers_report_ties_outside_its_constructor_fold() {
+    let (_temp, workspace, conn) = click_project();
+
+    let result = blast_radius_op(&workspace, &conn, None, Some("src/pkg/cli.py"), 2, 20).unwrap();
+
+    let text = format_blast_radius(&result);
+    let rows = reasons(&result);
+    assert!(
+        rows.contains(&(
+            "test_app_runs_command",
+            "calls `run_command` (find_references)"
+        )),
+        "{text}"
+    );
+    assert!(
+        rows.contains(&(
+            "tests/test_app.py",
+            "2 tests reach it only through a constructor"
+        )),
+        "{text}"
+    );
+}

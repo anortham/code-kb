@@ -51,7 +51,7 @@ LIMIT = 200
 MODES = ("symbol", "diff")
 WARNING_FIELD = "open_ends"
 DEPTH_FIELD = "tests_past_depth"
-COLLAPSED_FILE = "constructor-only callers"
+COLLAPSED_FILE = "reach it only through a constructor"
 SEED_KINDS = ("function", "method", "constructor", "class", "struct")
 
 C_LIKE_MUTATIONS = [
@@ -543,7 +543,7 @@ def judge(answer, failing):
     """How one answer fares against the failing tests: what it missed, and whether it warned."""
     listed, files = set(), set()
     for test in answer.get("tests", []):
-        if test["reason"].startswith(COLLAPSED_FILE):
+        if test["reason"].endswith(COLLAPSED_FILE):
             files.add(test["path"])
         listed.add(test_key(test["path"], test["name"]))
     truth = {test_key(test["path"], test["name"]) for test in failing}

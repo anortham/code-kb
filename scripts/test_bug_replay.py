@@ -153,7 +153,7 @@ class TestJudge(unittest.TestCase):
     def test_a_folded_constructor_row_covers_its_whole_file(self):
         judged = bug_replay.judge(answer([("tests/test_basic.py", "test_session", "direct caller"),
                                           ("tests/test_helpers.py", "tests/test_helpers.py",
-                                           "constructor-only callers (4 targets)")]), FAILING)
+                                           "4 tests reach it only through a constructor")]), FAILING)
 
         self.assertEqual(judged["tests_missed"], 0)
 

@@ -2599,16 +2599,33 @@ fn edit_site_row(site: &EditSite) -> String {
     format!("      {}:{}  {caller}{note}\n", site.path, site.line)
 }
 
-/// The warning for the symbols where the walk stopped because no indexed code calls them.
-fn open_ends_text(open_ends: &[OpenEnd]) -> String {
-    const SHOWN: usize = 3;
+/// The warning for the symbols where the walk stopped because no indexed code calls them: the
+/// first three on the first page, else the rows of the page window.
+fn open_ends_text(open_ends: &[OpenEnd], page: Option<(usize, usize)>) -> String {
+    const FIRST_PAGE: usize = 3;
+    const INTRO: &str = "No indexed code calls these symbols, so the walk stopped at them. The runtime, a framework, a library, or a call that the index cannot tie calls them. The list above does not show the tests that reach the target through them:\n";
     if open_ends.is_empty() {
         return String::new();
     }
-    let mut out = String::from(
-        "### Open Ends\nNo indexed code calls these symbols, so the walk stopped at them. The runtime, a framework, a library, or a call that the index cannot tie calls them. The list above does not show the tests that reach the target through them:\n",
-    );
-    for end in open_ends.iter().take(SHOWN) {
+    let (start, end) = match page {
+        Some((offset, limit)) => page_bounds(open_ends.len(), offset, limit),
+        None => (0, open_ends.len().min(FIRST_PAGE)),
+    };
+    let mut out = match page {
+        Some((offset, _)) if start == end => {
+            return format!(
+                "### Open Ends (0 shown at offset {offset}; {} found)\nNo open ends at this offset.\n\n",
+                open_ends.len()
+            );
+        }
+        Some((offset, _)) => format!(
+            "### Open Ends ({} shown at offset {offset}; {} found)\n{INTRO}",
+            end - start,
+            open_ends.len()
+        ),
+        None => format!("### Open Ends\n{INTRO}"),
+    };
+    for end in &open_ends[start..end] {
         let name = match &end.owner {
             Some(owner) => format!("{owner}.{}", end.name),
             None => end.name.clone(),
@@ -2618,10 +2635,10 @@ fn open_ends_text(open_ends: &[OpenEnd]) -> String {
             end.kind, end.path, end.line
         ));
     }
-    if open_ends.len() > SHOWN {
+    if open_ends.len() > end {
         out.push_str(&format!(
-            "  - {} more in CLI --json.\n",
-            open_ends.len() - SHOWN
+            "  - {} more; pass offset {end} to list them.\n",
+            open_ends.len() - end
         ));
     }
     out.push('\n');
@@ -2800,7 +2817,17 @@ fn format_blast_radius_with_page(
         );
     }
 
-    out.push_str(&open_ends_text(&result.open_ends));
+    if let Some(count) = result.report_symbols_unchecked {
+        out.push_str(&format!(
+            "find_references did not check {count} {} of the target within the time limit, so tests that only {} reach may be missing.\n\n",
+            plural(count, "symbol"),
+            if count == 1 { "it" } else { "they" }
+        ));
+    }
+    out.push_str(&open_ends_text(
+        &result.open_ends,
+        paged.then_some((offset, limit)),
+    ));
 
     if !impact_candidates.is_empty() {
         let mut visible = Vec::new();
@@ -2834,7 +2861,7 @@ fn format_blast_radius_with_page(
                 "rows (imports/modules)"
             };
             out.push_str(&format!(
-                "All impacted symbols are imports/modules; {low_signal_count} low-signal {row_word} hidden; available in CLI --json.\n"
+                "All impacted symbols are imports/modules; {low_signal_count} low-signal {row_word} hidden; pass include_low_signal to show them.\n"
             ));
         } else {
             let mut syms_by_file: std::collections::BTreeMap<&str, Vec<&ImpactedSymbol>> =
@@ -2873,7 +2900,7 @@ fn format_blast_radius_with_page(
                     "rows (imports/modules)"
                 };
                 out.push_str(&format!(
-                    "... {low_signal_count} low-signal {row_word} hidden; available in CLI --json.\n"
+                    "... {low_signal_count} low-signal {row_word} hidden; pass include_low_signal to show them.\n"
                 ));
             }
         }
@@ -2929,6 +2956,7 @@ pub fn format_blast_radius_report(
         || result.likely_tests_truncated
         || result.traversal_ceiling_reached
         || result.stopped_at_depth.is_some()
+        || result.report_symbols_unchecked.is_some()
         || !result.open_ends.is_empty();
     if !needs_broader_suite || result.seed_type == "none" {
         return out;
@@ -4031,6 +4059,7 @@ mod tests {
             tests_past_depth: None,
             tests_past_depth_cut: false,
             past_depth_tests: Vec::new(),
+            report_symbols_unchecked: None,
         };
 
         let formatted = format_blast_radius(&res);
@@ -4060,6 +4089,7 @@ mod tests {
             tests_past_depth: None,
             tests_past_depth_cut: false,
             past_depth_tests: Vec::new(),
+            report_symbols_unchecked: None,
         }
     }
 
@@ -4102,6 +4132,59 @@ mod tests {
         let text = format_blast_radius_report(root.path(), &result, 0, 20, false);
         assert!(!text.contains("Broader test command:"), "{text}");
         assert!(text.contains("run the full suite manually"), "{text}");
+    }
+
+    fn result_with_open_ends(count: usize) -> BlastRadiusResult {
+        let mut result = empty_scope_result("file", &["src/cli.py"]);
+        result.open_ends = (1..=count)
+            .map(|line| OpenEnd {
+                name: format!("command_{line}"),
+                kind: "function".into(),
+                path: "src/cli.py".into(),
+                line,
+                depth: 0,
+                owner: None,
+            })
+            .collect();
+        result
+    }
+
+    #[test]
+    fn the_first_page_names_the_offset_that_lists_the_other_open_ends() {
+        let text = format_blast_radius(&result_with_open_ends(5));
+
+        assert!(text.contains("`command_3`"), "{text}");
+        assert!(!text.contains("`command_4`"), "{text}");
+        assert!(
+            text.contains("  - 2 more; pass offset 3 to list them.\n"),
+            "{text}"
+        );
+        assert!(!text.contains("CLI --json"), "{text}");
+    }
+
+    #[test]
+    fn a_later_page_lists_the_open_ends_at_its_offset() {
+        let result = result_with_open_ends(5);
+
+        let text = format_blast_radius_page(&result, 3, 1, false);
+        assert!(
+            text.contains("### Open Ends (1 shown at offset 3; 5 found)\n"),
+            "{text}"
+        );
+        assert!(!text.contains("`command_3`"), "{text}");
+        assert!(text.contains("`command_4`"), "{text}");
+        assert!(
+            text.contains("  - 1 more; pass offset 4 to list them.\n"),
+            "{text}"
+        );
+
+        let past_end = format_blast_radius_page(&result, 9, 20, false);
+        assert!(
+            past_end.contains(
+                "### Open Ends (0 shown at offset 9; 5 found)\nNo open ends at this offset.\n"
+            ),
+            "{past_end}"
+        );
     }
 
     #[test]
@@ -4163,6 +4246,7 @@ mod tests {
             tests_past_depth: None,
             tests_past_depth_cut: false,
             past_depth_tests: Vec::new(),
+            report_symbols_unchecked: None,
         };
 
         let formatted = format_blast_radius(&res);
@@ -4178,10 +4262,9 @@ mod tests {
         assert!(formatted.contains("  - `test_"));
 
         assert!(!formatted.contains("use_foo"));
-        assert!(
-            formatted
-                .contains("... 1 low-signal row (import/module) hidden; available in CLI --json.")
-        );
+        assert!(formatted.contains(
+            "... 1 low-signal row (import/module) hidden; pass include_low_signal to show them."
+        ));
         assert!(formatted.contains("src/service.rs:\n"));
         assert!(formatted.contains("  - [depth 1] function `service_fn` [line 20]"));
     }
@@ -4495,6 +4578,7 @@ mod tests {
             tests_past_depth: None,
             tests_past_depth_cut: false,
             past_depth_tests: Vec::new(),
+            report_symbols_unchecked: None,
         };
 
         let formatted = format_blast_radius(&res);
@@ -4520,6 +4604,7 @@ mod tests {
             tests_past_depth: None,
             tests_past_depth_cut: false,
             past_depth_tests: Vec::new(),
+            report_symbols_unchecked: None,
         };
 
         let formatted = format_blast_radius(&res);
@@ -4590,6 +4675,7 @@ mod tests {
             tests_past_depth: None,
             tests_past_depth_cut: false,
             past_depth_tests: Vec::new(),
+            report_symbols_unchecked: None,
         };
         let formatted = format_blast_radius(&unresolved_only);
         assert!(!formatted.contains("No downstream callers"), "{formatted}");

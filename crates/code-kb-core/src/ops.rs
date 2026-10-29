@@ -839,10 +839,11 @@ pub fn blast_radius_selected_op_with_options(
     });
 
     let depth = if max_depth == 0 { 2 } else { max_depth.min(5) };
-    let (seed_symbols, symbol_path_filter, seed_paths) = match (clean_symbol, clean_file) {
-        (Some(s), Some(f)) => (vec![s], Some(f), vec![]),
-        (Some(s), None) => (vec![s], None, vec![]),
-        (None, Some(f)) => (vec![], None, vec![f]),
+    let (symbol, symbol_path_filter) = match (clean_symbol, clean_file) {
+        (Some(s), f) => (s, f),
+        (None, Some(f)) => {
+            return file_blast_radius(workspace, conn, &f, depth, limit, include_low_signal);
+        }
         (None, None) => {
             let mut changes = edit_check::uncommitted_changes(&workspace.root)?;
             changes.retain(|path, _| !crate::workspace::is_hard_excluded(path));
@@ -858,21 +859,17 @@ pub fn blast_radius_selected_op_with_options(
         }
     };
 
-    let seed_paths_refs: Vec<&str> = seed_paths.iter().map(|s| s.as_str()).collect();
     let res = queries::compute_blast_radius_scoped_with_ids_and_low_signal(
         conn,
-        &seed_symbols,
+        &[symbol],
         &[],
         symbol_path_filter.as_deref(),
-        &seed_paths_refs,
+        &[],
         depth,
         limit,
         include_low_signal,
     )?;
-    let target = match seed_symbols.as_slice() {
-        [name] => select_reference_target(conn, name, symbol_path_filter.as_deref()).ok(),
-        _ => None,
-    };
+    let target = select_reference_target(conn, symbol, symbol_path_filter.as_deref()).ok();
     with_calling_tests(
         workspace,
         conn,
@@ -882,6 +879,95 @@ pub fn blast_radius_selected_op_with_options(
         limit,
         include_low_signal,
     )
+}
+
+/// How long the callers reports of a file target's symbols may run before the rest go unchecked.
+const FILE_REPORT_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// The blast radius of a file or folder. The walk follows resolved and pending calls; the callers
+/// report of each symbol of the file also ties a read of a name, such as
+/// `run_command.make_context()` on a decorated command or a module-level object passed as an
+/// argument. Its tests join the walk's, except a test that only `name only` sites tie, and a
+/// symbol whose report has a proven or likely site is no open end.
+fn file_blast_radius(
+    workspace: &Workspace,
+    conn: &Connection,
+    file: &str,
+    depth: usize,
+    limit: usize,
+    include_low_signal: bool,
+) -> Result<BlastRadiusResult, OpError> {
+    let targets = queries::file_report_targets(conn, &[file])?;
+    let started = std::time::Instant::now();
+    let mut tests = Vec::new();
+    let mut seen = HashSet::new();
+    let mut tied = HashSet::new();
+    let mut unchecked = 0;
+    for target in &targets {
+        if started.elapsed() >= FILE_REPORT_TIME_LIMIT {
+            unchecked += 1;
+            continue;
+        }
+        let Ok(report) = reference_report_for_impact(conn, &workspace.root, target) else {
+            continue;
+        };
+        if report.counts.proven + report.counts.likely > 0 {
+            tied.insert((target.path.replace('\\', "/"), target.start_line));
+        }
+        if report.tests.iter().all(|test| test.name_only) {
+            continue;
+        }
+        let name = member_display_name(conn, target)?;
+        for test in report.tests.into_iter().filter(|test| !test.name_only) {
+            if seen.insert((test.path.clone(), test.line)) {
+                tests.push(TestTarget {
+                    reason: format!("calls `{name}` (find_references)"),
+                    name: test.name,
+                    path: test.path,
+                    line: test.line,
+                });
+            }
+        }
+    }
+    let mut res = queries::compute_blast_radius_for_files(
+        conn,
+        &[file],
+        depth,
+        limit,
+        include_low_signal,
+        &tests,
+    )?;
+    res.open_ends
+        .retain(|end| !tied.contains(&(end.path.clone(), end.line)));
+    res.report_symbols_unchecked = (unchecked > 0).then_some(unchecked);
+    Ok(res)
+}
+
+/// `Owner.name` for a member of a class or another code type, else the name.
+fn member_display_name(conn: &Connection, symbol: &Symbol) -> Result<String, OpError> {
+    let owner = match symbol.parent_symbol_id.as_deref() {
+        Some(parent) => queries::get_symbol_by_id(conn, parent)?,
+        None => None,
+    };
+    Ok(match owner {
+        Some(owner)
+            if matches!(
+                owner.kind.as_str(),
+                "class"
+                    | "struct"
+                    | "interface"
+                    | "trait"
+                    | "enum"
+                    | "record"
+                    | "object"
+                    | "protocol"
+                    | "union"
+            ) =>
+        {
+            format!("{}.{}", owner.name, symbol.name)
+        }
+        _ => symbol.name.clone(),
+    })
 }
 
 fn report_test(test: CallingTest) -> TestTarget {

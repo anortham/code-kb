@@ -401,6 +401,10 @@ pub struct BlastRadiusResult {
     /// The path and line of each test that `tests_past_depth` counts.
     #[serde(skip)]
     pub(crate) past_depth_tests: Vec<(String, usize)>,
+    /// The symbols of a file target whose callers report did not run within the time limit, so
+    /// the tests that only their reports tie to the target are missing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub report_symbols_unchecked: Option<usize>,
 }
 
 /// A symbol where the walk stopped because the index shows no caller of it, such as a method
