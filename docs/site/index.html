@@ -41,7 +41,7 @@
     </p>
     <p class="spec-line">
       <span>61–99% fewer tokens than a file read</span>
-      <span>1–50 ms for most queries</span>
+      <span>1–100 ms for most queries</span>
       <span>about 25–40 MB of memory</span>
       <span>42 languages</span>
     </p>
@@ -143,7 +143,7 @@ get_symbol_context("sanitize_error_message")</pre>
             <dl>
               <dt>Skeleton</dt><dd>≈ 2,400 tokens, 88% less</dd>
               <dt>Context slice</dt><dd>≈ 170 tokens, 99% less</dd>
-              <dt>Query time</dt><dd>3 ms skeleton, 69 ms context</dd>
+              <dt>Query time</dt><dd>≈ 5 ms skeleton, ≈ 80 ms context</dd>
             </dl>
           </div>
         </div>
@@ -272,7 +272,7 @@ get_symbol_context("sanitize_error_message")</pre>
               </tr>
               <tr>
                 <td>Query time</td>
-                <td class="kept">1–50 ms for most warm queries</td>
+                <td class="kept">1–100 ms for most warm queries; <code>check_edit</code> takes seconds on a real diff</td>
                 <td>Depends on the file and search command</td>
               </tr>
               <tr>
