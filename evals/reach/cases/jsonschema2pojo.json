@@ -619,18 +619,6 @@
       "truth_source": "scip",
       "truth": [
         {
-          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/FragmentResolver.java",
-          "line": 31
-        },
-        {
-          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/FragmentResolver.java",
-          "line": 45
-        },
-        {
-          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/FragmentResolver.java",
-          "line": 53
-        },
-        {
           "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/SchemaStore.java",
           "line": 72
         },
@@ -1492,44 +1480,12 @@
           "line": 144
         },
         {
-          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/AdditionalPropertiesRule.java",
-          "line": 113
-        },
-        {
-          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/ArrayRule.java",
-          "line": 89
-        },
-        {
-          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/PropertyRule.java",
-          "line": 84
-        },
-        {
-          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/PropertyRule.java",
-          "line": 211
-        },
-        {
-          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/SchemaRule.java",
-          "line": 71
-        },
-        {
-          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/ReflectionHelper.java",
-          "line": 73
-        },
-        {
-          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/ReflectionHelper.java",
-          "line": 189
-        },
-        {
           "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/SchemaStoreTest.java",
           "line": 42
         },
         {
           "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/SchemaStoreTest.java",
           "line": 57
-        },
-        {
-          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/SchemaStoreTest.java",
-          "line": 58
         },
         {
           "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/SchemaStoreTest.java",
@@ -1545,27 +1501,11 @@
         },
         {
           "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/SchemaStoreTest.java",
-          "line": 96
-        },
-        {
-          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/SchemaStoreTest.java",
           "line": 108
         },
         {
           "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/SchemaStoreTest.java",
-          "line": 109
-        },
-        {
-          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/SchemaStoreTest.java",
-          "line": 110
-        },
-        {
-          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/SchemaStoreTest.java",
           "line": 122
-        },
-        {
-          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/SchemaStoreTest.java",
-          "line": 123
         },
         {
           "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/SchemaStoreTest.java",

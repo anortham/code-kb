@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Build reach-gate truth and case samples from SCIP indexes.
 
-A truth line is a reference occurrence of a symbol (overloads unioned), minus definitions and
+A truth line is a reference occurrence of a symbol (each Java, Kotlin, Scala, C#, VB.NET, or C++
+overload on its own, other overloads unioned), minus definitions and
 import or `use` lines. SCIP document paths must be repo-relative; pass --path-prefix when the
 indexer ran in a subfolder (for example `Src/Newtonsoft.Json/`).
 
@@ -36,6 +37,7 @@ MANY_REFS = 20
 COMMON_NAME_DEFINITIONS = 3
 MAX_STATEMENT_LINES = 200
 STRATA = ("common-name", "overridden", "many-refs", "value-ref", "decorator", "plain")
+OVERLOAD_SCHEMES = {"semanticdb", "scip-java", "scip-dotnet", "cxx"}
 
 SKIPPED_NAME = re.compile(r"^(__\w+__|<.*)$")
 TEST_PATH = re.compile(
@@ -139,7 +141,9 @@ def repo_files(root):
 
 @cache
 def group_key(symbol):
-    """Overloads share a key: the package name and the descriptor names without disambiguators."""
+    """The package name and the descriptor names without disambiguators, plus the whole descriptor
+    for an indexer whose languages bind a call to one overload (`OVERLOAD_SCHEMES`), so each such
+    overload is its own group; other overloads (a TypeScript or Python overload signature) share a key."""
     parts = symbol.split(" ", 4)
     if len(parts) < 5:
         return None
@@ -147,7 +151,10 @@ def group_key(symbol):
         descriptors = tuple(scip_decode.descriptors(symbol))
     except ValueError:
         return None
-    return (parts[2], descriptors) if descriptors else None
+    if not descriptors:
+        return None
+    overload = parts[4] if parts[0] in OVERLOAD_SCHEMES else ""
+    return (parts[2], descriptors, overload)
 
 
 class Group:

@@ -1277,12 +1277,7 @@
         "common-name"
       ],
       "truth_source": "scip",
-      "truth": [
-        {
-          "path": "Src/Newtonsoft.Json/Linq/JToken.cs",
-          "line": 2263
-        }
-      ],
+      "truth": [],
       "adjudicated": []
     },
     {
@@ -1529,98 +1524,61 @@
       "kind": "method",
       "tags": [],
       "truth_source": "scip",
-      "truth": [
-        {
-          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
-          "line": 532
-        },
-        {
-          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
-          "line": 548
-        },
-        {
-          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
-          "line": 566
-        },
-        {
-          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
-          "line": 585
-        },
-        {
-          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
-          "line": 602
-        },
-        {
-          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
-          "line": 644
-        },
-        {
-          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
-          "line": 947
-        },
-        {
-          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
-          "line": 963
-        },
-        {
-          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
-          "line": 1078
-        }
-      ],
+      "truth": [],
       "adjudicated": [
         {
           "path": "Src/Newtonsoft.Json/JsonConvert.cs",
           "line": 532,
-          "verdict": "true",
-          "note": "code-kb miss: call to a JsonConvert.SerializeObject overload from inside JsonConvert; overloads are unioned"
+          "verdict": "false",
+          "note": "calls another SerializeObject overload (3 or 4 arguments); each C# overload has its own truth"
         },
         {
           "path": "Src/Newtonsoft.Json/JsonConvert.cs",
           "line": 548,
-          "verdict": "true",
-          "note": "code-kb miss: call to a JsonConvert.SerializeObject overload from inside JsonConvert; overloads are unioned"
+          "verdict": "false",
+          "note": "calls another SerializeObject overload (3 or 4 arguments); each C# overload has its own truth"
         },
         {
           "path": "Src/Newtonsoft.Json/JsonConvert.cs",
           "line": 566,
-          "verdict": "true",
-          "note": "code-kb miss: call to a JsonConvert.SerializeObject overload from inside JsonConvert; overloads are unioned"
+          "verdict": "false",
+          "note": "calls another SerializeObject overload (3 or 4 arguments); each C# overload has its own truth"
         },
         {
           "path": "Src/Newtonsoft.Json/JsonConvert.cs",
           "line": 585,
-          "verdict": "true",
-          "note": "code-kb miss: call to a JsonConvert.SerializeObject overload from inside JsonConvert; overloads are unioned"
+          "verdict": "false",
+          "note": "calls another SerializeObject overload (3 or 4 arguments); each C# overload has its own truth"
         },
         {
           "path": "Src/Newtonsoft.Json/JsonConvert.cs",
           "line": 602,
-          "verdict": "true",
-          "note": "code-kb miss: call to a JsonConvert.SerializeObject overload from inside JsonConvert; overloads are unioned"
+          "verdict": "false",
+          "note": "calls another SerializeObject overload (3 or 4 arguments); each C# overload has its own truth"
         },
         {
           "path": "Src/Newtonsoft.Json/JsonConvert.cs",
           "line": 644,
-          "verdict": "true",
-          "note": "code-kb miss: call to a JsonConvert.SerializeObject overload from inside JsonConvert; overloads are unioned"
+          "verdict": "false",
+          "note": "calls another SerializeObject overload (3 or 4 arguments); each C# overload has its own truth"
         },
         {
           "path": "Src/Newtonsoft.Json/JsonConvert.cs",
           "line": 947,
-          "verdict": "true",
-          "note": "code-kb miss: call to a JsonConvert.SerializeObject overload from inside JsonConvert; overloads are unioned"
+          "verdict": "false",
+          "note": "calls another SerializeObject overload (3 or 4 arguments); each C# overload has its own truth"
         },
         {
           "path": "Src/Newtonsoft.Json/JsonConvert.cs",
           "line": 963,
-          "verdict": "true",
-          "note": "code-kb miss: call to a JsonConvert.SerializeObject overload from inside JsonConvert; overloads are unioned"
+          "verdict": "false",
+          "note": "calls another SerializeObject overload (3 or 4 arguments); each C# overload has its own truth"
         },
         {
           "path": "Src/Newtonsoft.Json/JsonConvert.cs",
           "line": 1078,
-          "verdict": "true",
-          "note": "code-kb miss: call to a JsonConvert.SerializeObject overload from inside JsonConvert; overloads are unioned"
+          "verdict": "false",
+          "note": "calls another SerializeObject overload (3 or 4 arguments); each C# overload has its own truth"
         }
       ]
     },
@@ -2389,14 +2347,14 @@
         {
           "path": "Src/Newtonsoft.Json/Utilities/AsyncUtils.cs",
           "line": 50,
-          "verdict": "true",
-          "note": "SCIP miss: call to the generic overload AsyncUtils.FromCanceled<T>; same owner and name, and overloads are unioned"
+          "verdict": "false",
+          "note": "calls the generic overload FromCanceled<T>; each C# overload has its own truth"
         },
         {
           "path": "Src/Newtonsoft.Json/Utilities/AsyncUtils.cs",
           "line": 95,
-          "verdict": "true",
-          "note": "SCIP miss: call to the generic overload AsyncUtils.FromCanceled<int>; same owner and name, and overloads are unioned"
+          "verdict": "false",
+          "note": "calls the generic overload FromCanceled<T>; each C# overload has its own truth"
         },
         {
           "path": "Src/Newtonsoft.Json/Utilities/Base64Encoder.cs",
@@ -2463,10 +2421,6 @@
         {
           "path": "Src/Newtonsoft.Json/Utilities/DynamicProxyMetaObject.cs",
           "line": 152
-        },
-        {
-          "path": "Src/Newtonsoft.Json/Utilities/DynamicProxyMetaObject.cs",
-          "line": 159
         },
         {
           "path": "Src/Newtonsoft.Json/Utilities/DynamicProxyMetaObject.cs",

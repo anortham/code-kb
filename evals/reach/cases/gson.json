@@ -2182,119 +2182,11 @@
       "truth": [
         {
           "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 40
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 41
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 42
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
           "line": 93
         },
         {
           "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 114
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 129
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
           "line": 191
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 198
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 205
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 213
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 214
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 215
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 216
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 217
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 218
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 229
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 230
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 231
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 232
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 233
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 234
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 244
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 246
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 248
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 249
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 251
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 253
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 263
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
-          "line": 266
         }
       ],
       "adjudicated": [

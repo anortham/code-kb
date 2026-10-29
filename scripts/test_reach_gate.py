@@ -864,11 +864,23 @@ class TruthTest(unittest.TestCase):
             [("pkg/use.py", 7), ("pkg/use.py", 12), ("pkg/use.py", 13)],
         )
 
-    def test_overloads_with_the_same_owner_and_name_are_unioned(self):
+    def test_each_java_overload_is_its_own_group(self):
         index = reach_truth.ScipIndex(self.index_path)
-        group = reach_truth.find_group(index, "bar", "src/Foo.java", 3)
-        self.assertEqual(len(group.symbols), 2)
-        self.assertEqual(index.truth_lines(group, self.repo), [("src/Use.java", 4), ("src/Use.java", 5)])
+        first = reach_truth.find_group(index, "bar", "src/Foo.java", 2)
+        second = reach_truth.find_group(index, "bar", "src/Foo.java", 3)
+        self.assertEqual(len(second.symbols), 1)
+        self.assertEqual(index.truth_lines(first, self.repo), [("src/Use.java", 4)])
+        self.assertEqual(index.truth_lines(second, self.repo), [("src/Use.java", 5)])
+
+    def test_overload_signatures_of_other_indexers_share_a_group(self):
+        for scheme in ("scip-typescript npm", "scip-python python"):
+            plain = reach_truth.group_key(f"{scheme} demo 1.0 `a.ts`/f().")
+            other = reach_truth.group_key(f"{scheme} demo 1.0 `a.ts`/f(+1).")
+            self.assertEqual(plain, other)
+        for scheme in ("semanticdb maven", "scip-dotnet nuget", "cxx ."):
+            plain = reach_truth.group_key(f"{scheme} demo 1.0 demo/Foo#f().")
+            other = reach_truth.group_key(f"{scheme} demo 1.0 demo/Foo#f(+1).")
+            self.assertNotEqual(plain, other)
 
     def test_path_prefix_is_added_to_every_document_path(self):
         index = reach_truth.ScipIndex(self.index_path, prefix="Src/")

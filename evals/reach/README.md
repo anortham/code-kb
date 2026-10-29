@@ -131,7 +131,7 @@ Holdout symbols are not listed in the report or in `disagreements` output unless
 
 Truth is every reference occurrence of the symbol minus definitions, and minus import, `use`, and `using` lines.
 SCIP also lists some lines that belong to a definition (a Python property setter, an `@overload` stub, a TypeScript object-literal method that implements an interface member); the case files adjudicate them false.
-Overloads with the same owner and name are unioned. Cases skip test files and generated or build folders.
+Each Java, Kotlin, Scala, C#, VB.NET, and C++ overload has its own truth, because the compiler binds a call to one overload and code-kb excludes a call that binds another (`OVERLOAD_SCHEMES` in `reach_truth.py`: scip-java, scip-dotnet, scip-clang). Other overloads with the same owner and name (TypeScript and Python overload signatures, which share one body) are unioned. Cases skip test files and generated or build folders.
 A name with more than 250 reference lines is not sampled.
 
 | Project | Indexer | Command (run in the project copy) |
