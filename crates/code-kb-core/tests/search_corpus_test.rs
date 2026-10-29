@@ -1118,6 +1118,191 @@ fn a_member_of_a_module_takes_the_name_of_that_module() {
 }
 
 #[test]
+fn a_swift_file_takes_the_name_of_the_package_target_that_holds_it() {
+    let (_dir, db) = scanned_repo(&[
+        (
+            "app/Package.swift",
+            "// swift-tools-version:5.9\nimport PackageDescription\n\nlet package = Package(\n    name: \"Blog\",\n    targets: [\n        .target(name: \"BlogKit\"),\n        .target(name: \"Feeds\", path: \"Custom/FeedCode\"),\n        .executableTarget(name: \"Tool\", path: \"Sources/Tool\"),\n    ]\n)\n",
+        ),
+        (
+            "app/Sources/BlogKit/Views/Post.swift",
+            "func publish(text: String) -> String { return text }\n",
+        ),
+        (
+            "app/Custom/FeedCode/Reader.swift",
+            "func fetch(url: String) -> String { return url }\n",
+        ),
+        (
+            "app/Sources/Tool/main.swift",
+            "func launch(name: String) -> String { return name }\n",
+        ),
+        (
+            "notes/Package.swift",
+            "// swift-tools-version:5.9\nimport PackageDescription\n\nlet package = Package(\n    name: \"Notes\",\n    targets: [.target(name: \"NoteKit\")]\n)\n",
+        ),
+        (
+            "notes/src/NoteKit/Store.swift",
+            "func save(note: String) -> String { return note }\n",
+        ),
+        (
+            "mixed/Package.swift",
+            "// swift-tools-version:5.9\nimport PackageDescription\n\nlet package = Package(\n    name: \"Mixed\",\n    targets: [.target(name: \"Alpha\"), .target(name: \"Beta\")]\n)\n",
+        ),
+        (
+            "mixed/Sources/Alpha/A.swift",
+            "func align(x: Int) -> Int { return x }\n",
+        ),
+        (
+            "mixed/src/Beta/B.swift",
+            "func bake(x: Int) -> Int { return x }\n",
+        ),
+        (
+            "loose/Sources/Gadget/Gadget.swift",
+            "func spin(x: Int) -> Int { return x }\n",
+        ),
+    ]);
+
+    let post = "app/Sources/BlogKit/Views/Post.swift";
+    assert_eq!(
+        module_credit(&db, "publish blog kit", post, "publish", "kit"),
+        "path"
+    );
+    assert_eq!(
+        module_credit(&db, "publish post", post, "publish", "post"),
+        "path"
+    );
+    let reader = "app/Custom/FeedCode/Reader.swift";
+    assert_eq!(
+        module_credit(&db, "fetch feeds", reader, "fetch", "feeds"),
+        "path"
+    );
+    let main = "app/Sources/Tool/main.swift";
+    assert_eq!(
+        module_credit(&db, "launch tool", main, "launch", "tool"),
+        "path"
+    );
+    let store = "notes/src/NoteKit/Store.swift";
+    assert_eq!(
+        module_credit(&db, "save note kit", store, "save", "kit"),
+        "path"
+    );
+    assert_eq!(
+        module_credit(
+            &db,
+            "align alpha",
+            "mixed/Sources/Alpha/A.swift",
+            "align",
+            "alpha"
+        ),
+        "path"
+    );
+    assert_eq!(
+        module_credit(&db, "bake beta", "mixed/src/Beta/B.swift", "bake", "beta"),
+        "none"
+    );
+    let gadget = "loose/Sources/Gadget/Gadget.swift";
+    assert_eq!(
+        module_credit(&db, "spin gadget", gadget, "spin", "gadget"),
+        "path"
+    );
+    assert_eq!(
+        module_credit(&db, "spin sources", gadget, "spin", "sources"),
+        "none"
+    );
+}
+
+#[test]
+fn a_zig_root_source_file_takes_the_name_that_build_zig_gives_it() {
+    let (_dir, db) = scanned_repo(&[
+        (
+            "pkg/build.zig",
+            "const std = @import(\"std\");\n\npub fn build(b: *std.Build) void {\n    _ = b.addModule(\"blogz\", .{ .root_source_file = b.path(\"./src/root.zig\") });\n    const exe = b.addExecutable(.{ .name = \"tool\", .root_source_file = b.path(\"src/main.zig\") });\n    const tests = b.addTest(.{ .root_source_file = b.path(\"src/root.zig\") });\n    _ = exe;\n    _ = tests;\n}\n",
+        ),
+        (
+            "pkg/src/root.zig",
+            "pub fn render(post: []const u8) []const u8 {\n    return post;\n}\n",
+        ),
+        (
+            "pkg/src/main.zig",
+            "pub fn launch(name: []const u8) []const u8 {\n    return name;\n}\n",
+        ),
+        (
+            "pkg/src/util.zig",
+            "pub fn trim(text: []const u8) []const u8 {\n    return text;\n}\n",
+        ),
+        (
+            "plain/src/root.zig",
+            "pub fn paint(post: []const u8) []const u8 {\n    return post;\n}\n",
+        ),
+    ]);
+
+    let root = "pkg/src/root.zig";
+    assert_eq!(
+        module_credit(&db, "render blogz", root, "render", "blogz"),
+        "path"
+    );
+    assert_eq!(
+        module_credit(&db, "render pkg", root, "render", "pkg"),
+        "none"
+    );
+    let main = "pkg/src/main.zig";
+    assert_eq!(
+        module_credit(&db, "launch tool", main, "launch", "tool"),
+        "path"
+    );
+    let util = "pkg/src/util.zig";
+    assert_eq!(
+        module_credit(&db, "trim blogz", util, "trim", "blogz"),
+        "none"
+    );
+    assert_eq!(
+        module_credit(&db, "trim util", util, "trim", "util"),
+        "path"
+    );
+    assert_eq!(
+        module_credit(&db, "paint plain", "plain/src/root.zig", "paint", "plain"),
+        "path"
+    );
+}
+
+#[test]
+fn a_dart_library_directive_names_the_module_of_its_file_and_its_parts() {
+    let (_dir, db) = scanned_repo(&[
+        (
+            "app/lib/src/posts_impl.dart",
+            "/// The posts library.\nlibrary blog.posts;\n\npart 'drafts.dart';\n\nString publish(String text) => text;\n",
+        ),
+        (
+            "app/lib/src/drafts.dart",
+            "part of blog.posts;\n\nString draft(String text) => text;\n",
+        ),
+        (
+            "app/lib/feed.dart",
+            "library;\n\nString fetch(String url) => url;\n",
+        ),
+    ]);
+
+    let library = "app/lib/src/posts_impl.dart";
+    assert_eq!(
+        module_credit(&db, "publish posts", library, "publish", "posts"),
+        "path"
+    );
+    assert_eq!(
+        module_credit(&db, "publish blog", library, "publish", "blog"),
+        "none"
+    );
+    let part = "app/lib/src/drafts.dart";
+    assert_eq!(
+        module_credit(&db, "draft posts", part, "draft", "posts"),
+        "path"
+    );
+    assert_eq!(
+        module_credit(&db, "fetch feed", "app/lib/feed.dart", "fetch", "feed"),
+        "path"
+    );
+}
+
+#[test]
 fn a_qmldir_row_takes_the_name_of_its_module_line() {
     let (_dir, db) = scanned_repo(&[
         ("qml/Blog/qmldir", "module Org.Gallery\nPost 1.0 Post.qml\n"),

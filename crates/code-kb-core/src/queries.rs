@@ -1182,8 +1182,10 @@ pub(crate) struct Candidate {
     pub owner: Option<String>,
     /// Weak context from a highly ranked code type; never substitutes for a member's own hit.
     owner_context: Option<String>,
-    /// The module that the file declares: a Go package clause, a qmldir `module` line, or the
-    /// `name` line of the Cargo package (or its `[lib]`) for a Rust crate root.
+    /// The module that the file declares or that a manifest gives it: a Go package clause, a
+    /// qmldir `module` line, the `name` line of the Cargo package (or its `[lib]`) for a Rust
+    /// crate root, a Dart `library` name, the SwiftPM target that holds a Swift file, or the
+    /// `build.zig` module or artifact of a Zig root source file.
     pub file_module: Option<String>,
     /// The module or namespace the row is a direct member of, when code names the row through
     /// it: an Elixir, Ruby, F#, or Erlang module, a Rust `mod`, a TypeScript namespace, or a
@@ -1218,8 +1220,18 @@ fn candidate_columns(conn: &Connection) -> String {
 /// The module a file declares. A Go file names its package and a qmldir file its module on
 /// one top-level `module` row. A Rust crate root (`src/lib.rs`, `src/main.rs`) takes the
 /// `name` of the `[lib]` or `[package]` table of the `Cargo.toml` beside its `src` folder; the
-/// signature of that row is `name = "my-crate"`.
+/// signature of that row is `name = "my-crate"`. A Dart file names its library on a top-level
+/// `namespace` row of type `library` (`library blog.posts;`), and a part names it on its
+/// `part of blog.posts;` import row; a part that names its library by URI names no module.
 const FILE_MODULE_COLUMN: &str = "CASE
+      WHEN s.language = 'dart' THEN
+        (SELECT f.name FROM symbols f WHERE f.file_id = s.file_id AND f.parent_symbol_id IS NULL
+           AND CASE WHEN json_valid(f.metadata_json) THEN
+                 CASE json_extract(f.metadata_json, '$.type')
+                   WHEN 'library' THEN f.kind = 'namespace'
+                   WHEN 'part_of' THEN f.kind = 'import' AND f.name NOT GLOB '*[/:]*'
+                     AND f.name NOT GLOB '*.dart' END END
+         ORDER BY f.start_line LIMIT 1)
       WHEN s.language IN ('go', 'qmldir') THEN
         (SELECT f.name FROM symbols f WHERE f.file_id = s.file_id AND f.kind = 'module'
            AND f.parent_symbol_id IS NULL ORDER BY f.start_line LIMIT 1)
@@ -1261,7 +1273,7 @@ const MODULE_OWNER_LANGUAGES: &[&str] = &[
 /// Whether `FILE_MODULE_COLUMN` can name a module for a row of this file.
 fn may_declare_file_module(language: &str, path: &str) -> bool {
     match language {
-        "go" | "qmldir" => true,
+        "go" | "qmldir" | "dart" => true,
         "rust" => {
             let path = path.replace('\\', "/");
             ["src/lib.rs", "src/main.rs"]
@@ -1272,14 +1284,203 @@ fn may_declare_file_module(language: &str, path: &str) -> bool {
     }
 }
 
+/// The most package manifest rows that one search reads.
+const MANIFEST_MODULE_ROWS: i64 = 4096;
+
+/// The module names that package manifests give to source files, read once per search and only
+/// for a language that has a candidate: a SwiftPM target names every file in its folder, and a
+/// `build.zig` module or artifact names its root source file.
+#[derive(Default)]
+struct ManifestModules {
+    swift_targets: Option<Vec<(String, String)>>,
+    zig_roots: Option<HashMap<String, String>>,
+}
+
+impl ManifestModules {
+    /// The target whose folder holds `path`; the deepest folder wins.
+    fn swift_target(
+        &mut self,
+        conn: &Connection,
+        path: &str,
+    ) -> Result<Option<String>, QueryError> {
+        if self.swift_targets.is_none() {
+            self.swift_targets = Some(swift_target_folders(conn)?);
+        }
+        let path = path.replace('\\', "/");
+        Ok(self
+            .swift_targets
+            .iter()
+            .flatten()
+            .filter(|(folder, _)| path.starts_with(&format!("{folder}/")))
+            .max_by_key(|(folder, _)| folder.len())
+            .map(|(_, name)| name.clone()))
+    }
+
+    fn zig_module(&mut self, conn: &Connection, path: &str) -> Result<Option<String>, QueryError> {
+        if self.zig_roots.is_none() {
+            self.zig_roots = Some(zig_root_modules(conn)?);
+        }
+        let path = path.replace('\\', "/");
+        Ok(self
+            .zig_roots
+            .as_ref()
+            .and_then(|roots| roots.get(&path).cloned()))
+    }
+}
+
+/// `path` without `.` segments and with each `name/..` removed, or `None` when it leaves the root.
+fn normalized_relative_path(path: &str) -> Option<String> {
+    let mut segments: Vec<&str> = Vec::new();
+    for segment in path.split(['/', '\\']) {
+        match segment {
+            "" | "." => {}
+            ".." => {
+                segments.pop()?;
+            }
+            segment => segments.push(segment),
+        }
+    }
+    (!segments.is_empty()).then(|| segments.join("/"))
+}
+
+fn joined_path(folder: &str, relative: &str) -> Option<String> {
+    normalized_relative_path(&format!("{folder}/{relative}"))
+}
+
+/// The folder and name of each SwiftPM target (`swiftpm.target.v1`). A target without `path:`
+/// lives in `Sources/<name>` (`Tests/<name>` for a test target), and SwiftPM takes the first of
+/// `Sources`, `Source`, `src`, and `srcs` (`Tests` first for a test target) that the package
+/// holds; julie does not read the disk, so an indexed file under the folder shows that it exists.
+fn swift_target_folders(conn: &Connection) -> Result<Vec<(String, String)>, QueryError> {
+    if !has_table(conn, "structural_facts") {
+        return Ok(Vec::new());
+    }
+    let mut stmt = conn.prepare(
+        "SELECT path, metadata_json FROM structural_facts
+         WHERE pattern_id = 'swiftpm.target.v1' AND language = 'swift'
+           AND json_valid(metadata_json)
+         ORDER BY path, start_line LIMIT ?1",
+    )?;
+    let facts = stmt
+        .query_map([MANIFEST_MODULE_ROWS], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut holds_files =
+        conn.prepare("SELECT 1 FROM files WHERE path > ?1 AND path < ?2 LIMIT 1")?;
+    let mut existing: HashMap<String, bool> = HashMap::new();
+    let mut folders = Vec::new();
+    for (manifest, metadata) in facts {
+        let Ok(fact) = serde_json::from_str::<serde_json::Value>(&metadata) else {
+            continue;
+        };
+        let (Some(name), Some(effective)) =
+            (fact["name"].as_str(), fact["effective_path"].as_str())
+        else {
+            continue;
+        };
+        let package = crate::db::parent_folder(&manifest).replace('\\', "/");
+        let folder = match effective.split_once('/') {
+            Some((root, rest)) if fact["path_origin"].as_str() == Some("default") => {
+                let roots: &[&str] = match root {
+                    "Sources" => &["Sources", "Source", "src", "srcs"],
+                    "Tests" => &["Tests", "Sources", "Source", "src", "srcs"],
+                    _ => &[],
+                };
+                let mut chosen = root;
+                for candidate in roots {
+                    let Some(prefix) = joined_path(&package, candidate) else {
+                        continue;
+                    };
+                    let exists = match existing.get(&prefix) {
+                        Some(exists) => *exists,
+                        None => {
+                            let exists = holds_files
+                                .exists(params![format!("{prefix}/"), format!("{prefix}0")])?;
+                            existing.insert(prefix, exists);
+                            exists
+                        }
+                    };
+                    if exists {
+                        chosen = candidate;
+                        break;
+                    }
+                }
+                joined_path(&package, &format!("{chosen}/{rest}"))
+            }
+            _ => joined_path(&package, effective),
+        };
+        if let Some(folder) = folder {
+            folders.push((folder, name.to_string()));
+        }
+    }
+    Ok(folders)
+}
+
+/// The root source file of each `build.zig` module (`b.addModule("blogz", …)`) and, when no
+/// module names it, of each artifact other than a test (`b.addExecutable(.{ .name = "tool", … })`),
+/// with that name. The path in `build.zig` is relative to its folder.
+fn zig_root_modules(conn: &Connection) -> Result<HashMap<String, String>, QueryError> {
+    let mut roots = HashMap::new();
+    if !has_table(conn, "structural_facts") {
+        return Ok(roots);
+    }
+    let mut stmt = conn.prepare(
+        "SELECT path, metadata_json FROM structural_facts
+         WHERE pattern_id IN ('zig.build_module.v1', 'zig.build_artifact.v1') AND language = 'zig'
+           AND json_valid(metadata_json)
+         ORDER BY pattern_id DESC, path, start_line LIMIT ?1",
+    )?;
+    let facts = stmt
+        .query_map([MANIFEST_MODULE_ROWS], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    for (build, metadata) in facts {
+        let Ok(fact) = serde_json::from_str::<serde_json::Value>(&metadata) else {
+            continue;
+        };
+        let name = fact["module_name"].as_str().or_else(|| {
+            (fact["artifact_kind"].as_str() != Some("test"))
+                .then(|| fact["artifact_name"].as_str())
+                .flatten()
+        });
+        let (Some(name), Some(root)) = (name, fact["root_source_file"].as_str()) else {
+            continue;
+        };
+        if let Some(root) = joined_path(crate::db::parent_folder(&build), root) {
+            roots.entry(root).or_insert_with(|| name.to_string());
+        }
+    }
+    Ok(roots)
+}
+
 /// Fills the module facts of each candidate with one primary-key query per row that can have
-/// one, so the cost follows the admitted candidates, not the rows a branch scans.
+/// one, so the cost follows the admitted candidates, not the rows a branch scans. A Swift or Zig
+/// row takes its module from the package manifests instead.
 fn load_module_facts(conn: &Connection, candidates: &mut [Candidate]) -> Result<(), QueryError> {
+    let file_module_column = if has_column(conn, "symbols", "metadata_json") {
+        FILE_MODULE_COLUMN
+    } else {
+        "NULL"
+    };
     let mut stmt = conn.prepare(&format!(
-        "SELECT {FILE_MODULE_COLUMN}, {MODULE_OWNER_COLUMN} FROM symbols s WHERE s.symbol_id = ?1"
+        "SELECT {file_module_column}, {MODULE_OWNER_COLUMN} FROM symbols s WHERE s.symbol_id = ?1"
     ))?;
+    let mut manifests = ManifestModules::default();
     for candidate in candidates {
         let symbol = &candidate.result.symbol;
+        match symbol.language.as_str() {
+            "swift" => {
+                candidate.file_module = manifests.swift_target(conn, &symbol.path)?;
+                continue;
+            }
+            "zig" => {
+                candidate.file_module = manifests.zig_module(conn, &symbol.path)?;
+                continue;
+            }
+            _ => {}
+        }
         let may_have_module_owner = symbol.parent_symbol_id.is_some()
             && MODULE_OWNER_LANGUAGES.contains(&symbol.language.as_str());
         if !may_have_module_owner && !may_declare_file_module(&symbol.language, &symbol.path) {
@@ -2328,7 +2529,21 @@ fn module_names(
             .any(|(lang, name)| *lang == language && name.eq_ignore_ascii_case(file))
     };
     let mut names: Vec<&str> = Vec::new();
-    if entry_of(PACKAGE_ROOT_FILES) {
+    if language == "zig"
+        && let Some(module) = file_module
+    {
+        names.push(module);
+        if !entry_of(PACKAGE_ROOT_FILES) {
+            names.push(stem);
+        }
+    } else if language == "swift"
+        && let Some(target) = file_module
+    {
+        names.push(target);
+        if !entry_of(LANGUAGE_INDEX_FILES) {
+            names.push(stem);
+        }
+    } else if entry_of(PACKAGE_ROOT_FILES) {
         if folder.is_some_and(|f| f.eq_ignore_ascii_case("src")) {
             let package_folder = folders.len().checked_sub(2).map(|i| folders[i]);
             names.extend(file_module.and_then(toml_string_value).or(package_folder));
@@ -2345,6 +2560,9 @@ fn module_names(
         }
         names.push(stem);
     } else if language == "qmldir" {
+        names.extend(file_module.map(last_module_segment));
+    } else if language == "dart" {
+        names.push(stem);
         names.extend(file_module.map(last_module_segment));
     } else {
         names.push(stem);
@@ -12108,6 +12326,19 @@ mod tests {
     }
 
     #[test]
+    fn a_manifest_path_is_read_relative_to_its_folder_without_dot_segments() {
+        assert_eq!(
+            joined_path("pkg", "./src/../src/root.zig").as_deref(),
+            Some("pkg/src/root.zig")
+        );
+        assert_eq!(
+            joined_path("", "src/main.zig").as_deref(),
+            Some("src/main.zig")
+        );
+        assert_eq!(joined_path("", "../outside.zig"), None);
+    }
+
+    #[test]
     fn each_language_names_the_module_of_its_entry_files() {
         let names = |path: &str, language: &str| module_names(path, language, None, None);
         let with = |path: &str, language: &str, file: Option<&str>, owner: Option<&str>| {
@@ -12156,6 +12387,18 @@ mod tests {
         let qmldir = with("qml/Blog/qmldir", "qmldir", Some("Org.Blog"), None);
         assert_eq!(qmldir, ["Blog"]);
         assert_eq!(names("lib/blog.dart", "dart"), ["blog"]);
+        let library = with("lib/src/posts_impl.dart", "dart", Some("blog.posts"), None);
+        assert_eq!(library, ["posts_impl", "posts"]);
+        let target = with("Sources/BlogKit/Post.swift", "swift", Some("BlogKit"), None);
+        assert_eq!(target, ["BlogKit", "Post"]);
+        let executable = with("Sources/Tool/main.swift", "swift", Some("Tool"), None);
+        assert_eq!(executable, ["Tool"]);
+        assert_eq!(
+            with("pkg/src/root.zig", "zig", Some("blogz"), None),
+            ["blogz"]
+        );
+        let module_root = with("pkg/src/lib.zig", "zig", Some("blogz"), None);
+        assert_eq!(module_root, ["blogz", "lib"]);
         assert_eq!(names("src/Blog/Post.php", "php"), ["Post"]);
         assert!(with("tests/blog/init.lua", "lua", None, Some("Blog")).is_empty());
     }

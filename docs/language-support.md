@@ -221,7 +221,7 @@ facts that julie 3.9.1 writes for such a call:
 Search credits 0.5 to a query word that names the row's module and that no
 other field of the row holds (`path` in `--explain`). The module is the name
 that code uses for the row. `module_names` in `queries.rs` takes it from a
-julie fact where julie 3.9.1 writes one, and from the language's file
+julie fact where julie writes one, and from the language's file
 convention otherwise. A namespace or package that wraps whole files credits
 nothing, because code names the type in it and a broad folder credit made the
 search evaluations worse. The regressions are in
@@ -234,19 +234,19 @@ search evaluations worse. The regressions are in
 | Lua | `init.lua` takes its folder (`require("blog")`). | Convention. | `a_lua_init_file_takes_the_name_of_its_folder` |
 | Python | `__init__.py`, `__init__.pyi`, and `__main__.py` take their folder. | Convention. | `python_swift_zig_and_scala_entry_files_take_the_name_of_their_package` |
 | JavaScript, TypeScript, JSX, TSX, Vue | `index.*` and a Deno `mod.ts` take their folder. A row in a TypeScript or TSX `namespace` also takes the namespace. | Convention, and the `namespace` row. | `a_member_of_a_module_takes_the_name_of_that_module` |
-| Swift | `main.swift` takes its folder, the target. Other files keep their stem: the target folder holds every file of the module. | Convention. julie writes no fact for a `Package.swift` target. | `python_swift_zig_and_scala_entry_files_take_the_name_of_their_package` |
-| Zig | `src/root.zig` and `src/main.zig` take the package folder; elsewhere their folder. | Convention. The module name is a string argument in `build.zig` (`b.addModule("name", …)`); julie writes no fact that ties it to the root file. | `python_swift_zig_and_scala_entry_files_take_the_name_of_their_package` |
+| Swift | A file in the folder of a SwiftPM target takes the target's name and keeps its stem; `main.swift` takes only the target. The deepest target folder wins. A target without `path:` lives in `Sources/<name>`, or in the first of `Source`, `src`, and `srcs` that holds an indexed file (`Tests` comes first for a test target), as SwiftPM picks it. Without a manifest, `main.swift` takes its folder and other files keep their stem. | Fact: `swiftpm.target.v1` (`name`, `effective_path`, `path_origin`) of `Package.swift` or `Package@swift-<version>.swift`. Convention without one. | `a_swift_file_takes_the_name_of_the_package_target_that_holds_it`, `python_swift_zig_and_scala_entry_files_take_the_name_of_their_package` |
+| Zig | The root source file of a `build.zig` module takes the module's name (`b.addModule("blogz", …)`); with no module, the root file of an artifact other than a test takes the artifact's name (`b.addExecutable(.{ .name = "tool", … })`). The path is relative to the folder of `build.zig`. Only the root file takes it: code reaches the other files through `@import("file.zig")`, so they keep their stem. Without a fact, `src/root.zig` and `src/main.zig` take the package folder; elsewhere their folder. | Fact: `zig.build_module.v1` and `zig.build_artifact.v1` (`module_name`, `artifact_name`, `artifact_kind`, `root_source_file`). Convention without one. | `a_zig_root_source_file_takes_the_name_that_build_zig_gives_it`, `python_swift_zig_and_scala_entry_files_take_the_name_of_their_package` |
 | Scala | `package.scala` takes its folder, and a row of a package object takes the object. A `package a.b` clause credits nothing. | Convention, and the `namespace` row with the signature `package object feed`. | `python_swift_zig_and_scala_entry_files_take_the_name_of_their_package` |
 | Elixir, Ruby, F#, Erlang | The file stem, and the last segment of the module that the row is a direct member of (`Post` for `MyApp.Blog.Post`, `Inner` for an F# `module Inner =`). | Fact: the `module` row. An Erlang `-module` equals the stem. | `a_member_of_a_module_takes_the_name_of_that_module` |
 | QML `qmldir` | The last segment of the `module` line. | Fact: the `module` row. | `a_qmldir_row_takes_the_name_of_its_module_line` |
 | C#, VB.NET, F# namespaces, PHP, Java, Kotlin, C++ | The file stem (the type name by convention). The namespace or package credits nothing. A VB.NET `Module` is a `class` row, so its members take the owner credit instead. | Not applicable: the construct wraps whole files. | `a_namespace_or_package_that_wraps_whole_files_credits_nothing` |
-| Dart | The file stem: `lib/<name>.dart` is the package's library by convention. | Convention. julie writes `library blog;` as a `variable` row, so code-kb does not read it. | Unit test `each_language_names_the_module_of_its_entry_files` |
+| Dart | The file stem (`lib/<name>.dart` is the package's library by convention), and the last segment of the file's library name: `library blog.posts;` gives `posts`, and a part with `part of blog.posts;` takes the same. An unnamed `library;` and a `part of 'posts.dart';` add nothing. | Fact: the top-level `namespace` row of type `library`, and the import row of type `part_of`. | `a_dart_library_directive_names_the_module_of_its_file_and_its_parts` |
 | C, Bash, PowerShell, R, GDScript, QML files, SQL, and the data, markup, and document languages | The file stem; an `index.*` page takes its folder. | Convention. | Unit test `each_language_names_the_module_of_its_entry_files` |
 
-Extractor gaps: julie 3.9.1 writes no fact for a Swift package target or a Zig
-`build.zig` module, and it writes a Dart `library` directive as a `variable`
-row. code-kb does not read a Cargo `[[bin]]` name or a Rust `#[path]`
-attribute; such a file keeps its stem or folder. A test path, a path
+Gaps: julie writes no `build.zig` fact for a computed name or path or for a
+module passed through a variable, and no SwiftPM folder for a computed `path:`;
+such a file keeps the convention. code-kb does not read a Cargo `[[bin]]` name
+or a Rust `#[path]` attribute; such a file keeps its stem or folder. A test path, a path
 through a `fixtures`, `vendor`, `vendored`, or `third_party` folder, and a row
 of a Rust test module earn no module credit.
 
