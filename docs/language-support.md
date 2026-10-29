@@ -31,7 +31,7 @@ works; it does not establish complete grammar or project-wide language support.
 | `javascript` | `javascript/sample.js` | `anchor_javascript` (`function`) | `SIPRT` | `L/O/B/C/R/I/U/E` |
 | `jsx` | `jsx/sample.jsx` | `anchor_jsx` (`function`) | `SIPRT` | `L/O/B/C/R/I/U/E` |
 | `html` | `html/sample.html` | `anchor_html` (`function`) | `SIPRT` | `L/O/B/C/R/I/U/E` |
-| `css` | `css/sample.css` | `.button` (`property`) | `SIPR` | `L/O/B/C/R/I/U/E`, plus custom-property navigation and ASCII/Unicode/escaped custom-function calls resolved from bounded indexed evidence |
+| `css` | `css/sample.css` | `.button` (`property`) | `SIPR` | `L/O/B/C/R/I/U/E`, plus custom-property navigation and ASCII, Unicode, and escaped custom-function calls in the same stylesheet and from another stylesheet |
 | `vue` | `vue/sample.vue` | `anchor_vue` (`function`) | `SIPRT` | `L/O/B/C/R/I/U/E` |
 | `python` | `python/sample.py` | `anchor_python` (`function`) | `SIPRT` | `L/O/B/C/R/I/U/E` |
 | `java` | `java/Sample.java` | `anchor_java` (`method`) | `SIPRT` | `L/O/B/C/R/I/U/E` |
@@ -79,7 +79,7 @@ The operation codes describe fixture assertions:
 - Every symbol-bearing fixture checks exact lookup, skeleton visibility, body retrieval, context retrieval, and an incremental refresh. Caller fixtures additionally check caller references, impact, and edit detection. The structural fixtures intentionally have no caller or cross-symbol reference to exercise; those specific checks are semantic N/A for the fixture, not claims that the language can never express references.
 - The XML fixture uses a valid MSBuild project file so the extractor has script symbols and a same-file call to navigate. It does not stand in for every XML vocabulary.
 - The XML edit fixture is one physical line, so the line-based diff reports its `caller_xml` site as `in_diff`; this is expected for a call on the changed line. Separate-line callers in the other fixtures must still be proven or likely.
-- CSS uses a selector, a public custom property, a `var()` reference, and explicit `@function` custom functions. ASCII, Unicode, and escaped function declarations are checked through lookup, skeleton, body, and context APIs. The ASCII, Unicode, and escaped calls are checked across references, context, and impact; all resolve through the same-file indexed evidence rule. Julie 3.9.1 emits malformed raw call identifier names for the Unicode and escaped forms (`--` and `name_css`); code-kb recovers the canonical names only when the exact raw token is inside the indexed caller body, contains the extracted identifier span, is immediately followed by `(`, and has one matching same-file declaration. The adapter preserves each identifier's original ID and span and does not add a stored relationship. The fixture reports nine CSS parse diagnostics while still extracting the selected symbols; this is limited syntax coverage. The fixture's ordinary declarations are not expanded into standalone symbols.
+- CSS uses a selector, a public custom property, a `var()` reference, and explicit `@function` custom functions. Julie writes each `@function --name(...)` as a `function` row named by its decoded name (`--escaped\ name_css` is `--escaped name_css`; the signature and the skeleton keep the written spelling), and each call as a `call` identifier with that decoded name and `arg_count`. ASCII, Unicode, and escaped declarations are checked through lookup, skeleton, body, and context, and their calls across references, context, and impact. [`result-call.css`](../evals/languages/tests/css/result-call.css) checks a `result:` call whose name extends a shorter function's name (`--foo名` and `--foo`), and [`other-stylesheet.css`](../evals/languages/tests/css/other-stylesheet.css) checks a call of a function that another stylesheet declares. The fixture reports CSS parse diagnostics while still extracting the selected symbols; this is limited syntax coverage. The fixture's ordinary declarations are not expanded into standalone symbols.
 - Erlang's exported function name occurs in both the export attribute and declaration. Its refresh changes both declaration-bearing occurrences while leaving the caller's old call in place so edit-check evidence remains meaningful.
 - `gosum` is an intentional no-symbol fixture. Its checksum is changed and rescanned; no symbol, body, or caller is expected.
 
@@ -127,38 +127,32 @@ object still counts as local; a caller can reach it only through a private funct
 returns the object. Julie must give these members an owner of their own (the anonymous class or
 object) before code-kb can keep both forms right.
 
-### CSS call with no extracted identifier
+### CSS custom functions
 
-The passing Unicode and escaped CSS cases have malformed identifier names that
-the bounded adapter can recover from their preserved spans. A separate pinned
-Julie 3.9.1 case emits no identifier row at all:
+Custom functions are global across the stylesheets that a page loads. Julie
+writes a `calls` relationship for a call whose file declares the function, and a
+pending call for one whose file does not. code-kb reads these facts as they are:
 
-```css
-@function --foo() { result: 1; }
-@function --foo名() { result: 2; }
-@function --caller_css() { result: --foo名(); }
-```
+- A call of a function in its own file is `proven` (`same file`).
+- A call of a function that another stylesheet declares is `likely` (`name
+  only`) when one stylesheet declares it, and `unresolved` when two or more do,
+  because the order in which the page loads them decides. A CSS custom function
+  is the one CSS row that counts as another definition of a site.
+- Names compare after julie decodes their escapes, and a name with U+2000 (EN
+  QUAD) is kept whole. The text scan of the callers report looks for the decoded
+  name, so it does not count a line that writes the name with an escape.
+- A call shows its `arg_count`, but no count excludes a site: julie writes no
+  parameter rows for a custom function.
+- Julie limits: an `@function` with a `returns` clause has no symbol, and a call
+  outside every rule has no caller, so it is no site.
 
-| Expected | Julie 3.9.1 actual | Consumer result |
-| --- | --- | --- |
-| `--caller_css` has a call site to `--foo名`, with a proven reference, a callee signature in context, and an impact edge. | Three raw `namespace` declarations (`@function --foo()`, `@function --foo名()`, and `@function --caller_css()`); zero `identifiers` rows. | `ReferenceReport`: 0 sites for `--foo名` and the shorter `--foo`; caller context has no callee signatures; impact has 0 callers for either target. |
-
-The test records this as a missing extractor fact, not N/A. The compatibility
-adapter leaves it unlinked because no indexed span anchors the source token.
-Julie must emit a call identifier with its source range before code-kb can bind
-this form without scanning or guessing. The exact limitation fixture is
-[`no-call-identifier.css`](../evals/languages/tests/css/no-call-identifier.css),
-covered by [`css_custom_function_call_evidence_agrees_and_missing_identifier_stays_unresolved`](../crates/code-kb-core/tests/language_conformance_test.rs) test.
-
-A separate declaration fact remains lossy for U+2000 (EN QUAD) in a CSS
-identifier. For source `@function -- _css() { result: 1; }`, Julie preserves
-the U+2000 spelling in the signature but constructs the extracted namespace
-name as `@function -- _css()`. Code-kb requires the indexed name and signature
-token to agree before normalizing a custom function, so it leaves this row
-unchanged. The compatibility test
-[`extractor_compat_test.rs`](../crates/code-kb-core/tests/extractor_compat_test.rs)
-checks CSS token handling; the mismatched extractor fact remains a gap that
-requires Julie to preserve the declaration name consistently.
+Examples: `a_css_call_reaches_a_function_declared_in_another_stylesheet`,
+`a_css_call_that_two_other_stylesheets_can_satisfy_is_unresolved`,
+`a_result_call_with_a_longer_unicode_name_reaches_only_that_function`, and
+`an_updated_stylesheet_moves_a_call_to_the_renamed_function` in
+[`css_custom_function_test.rs`](../crates/code-kb-core/tests/css_custom_function_test.rs),
+and `css_custom_function_calls_reach_their_functions_in_this_and_other_stylesheets`
+in [`language_conformance_test.rs`](../crates/code-kb-core/tests/language_conformance_test.rs).
 
 ## Consumer gaps recorded from the initial fixture run
 
@@ -189,19 +183,10 @@ The CSS custom-function source is:
 @function --caller_escaped_css() { result: --escaped\ name_css(); }
 ```
 
-The expected semantic names are unambiguous in Julie's preserved signatures:
-the token following `@function` names each function. The ASCII caller contains
-the identifier `--anchor_css` with kind `call`. The Unicode and escaped call
-rows remain in the real-extractor fixture; their expected canonical identifiers,
-original extracted spans, proven reference sites, caller contexts, and impact
-edges are asserted. Julie's initial call facts lose the intended names, while
-code-kb repairs only these exact bounded cases through indexed declaration and
-caller evidence. Calls that do not meet those constraints remain unlinked. An absent identifier
-produces no indexed site, so it is not counted as an `unresolved` site. A
-separate tokenizer regression confirms CSS non-ASCII token handling; when
-Julie loses a U+2000 whitespace-like character from the extracted declaration
-name so it disagrees with the preserved signature, code-kb leaves that
-ambiguous declaration unnormalized.
+Julie 3.10.0 names these declarations and calls by their decoded names, so
+code-kb reads them as they are. Earlier code-kb versions repaired the Julie
+3.9.1 rows with an adapter; the version guard rebuilds every index that another
+Julie version wrote, so the adapter is gone.
 
 The baseline rows remain here as regression history. Current status is
 determined by the conformance test and the implementation at the pinned
@@ -210,9 +195,9 @@ revision; a recorded baseline is not evidence that the gap remains open.
 Assertions are in `crates/code-kb-core/tests/language_conformance_test.rs`:
 `real_extractor_fixtures_cover_navigation_slices_references_impact_and_refresh`
 covers all 42 IDs and refreshes, while
-`css_custom_function_call_evidence_agrees_and_missing_identifier_stays_unresolved`
-checks the supported ASCII call across reference, context, and impact, and
-records the separate missing-identifier limitation without inventing an edge.
+`css_custom_function_calls_reach_their_functions_in_this_and_other_stylesheets`
+checks same-file, `result:`, and cross-stylesheet calls across reference,
+context, and impact.
 
 ## Calls with no static callee
 
@@ -271,8 +256,8 @@ applicable gap. Julie 3.9.1 marks function parameter variables with
 `isParameter=true`, while procedure parsing can emit error-recovery rows. It
 does not identify the database dialect. A reusable dialect and parameter
 contract is needed before code-kb can apply a database's defaults, modes, and
-overload rules without guessing. CSS custom functions also lack formal-parameter
-facts; repaired navigation does not establish argument-check support.
+overload rules without guessing. CSS custom functions have no parameter rows, so a call's `arg_count` supports no
+argument check.
 
 ## Cross-language consumers and test scope
 

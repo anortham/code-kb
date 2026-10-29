@@ -117,7 +117,6 @@
       "--anchor_css",
       "--caller_css",
       "--名_css",
-      "--escaped\\ name_css",
       "--caller_unicode_css",
       "--caller_escaped_css"
     ],
@@ -138,7 +137,7 @@
         "signature": "@function --名_css()"
       },
       {
-        "name": "--escaped\\ name_css",
+        "name": "--escaped name_css",
         "signature": "@function --escaped\\ name_css()"
       },
       {
@@ -155,20 +154,22 @@
         "target": "--名_css",
         "caller": "--caller_unicode_css",
         "identifier": "--名_css",
+        "written": "--名_css",
         "span": {
           "start_line": 7,
           "start_column": 43,
           "end_line": 7,
-          "end_column": 45
+          "end_column": 52
         }
       },
       {
-        "target": "--escaped\\ name_css",
+        "target": "--escaped name_css",
         "caller": "--caller_escaped_css",
-        "identifier": "--escaped\\ name_css",
+        "identifier": "--escaped name_css",
+        "written": "--escaped\\ name_css",
         "span": {
           "start_line": 8,
-          "start_column": 54,
+          "start_column": 43,
           "end_line": 8,
           "end_column": 62
         }

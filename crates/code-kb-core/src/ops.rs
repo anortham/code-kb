@@ -500,50 +500,13 @@ pub fn get_context_slice_selected_op(
     let (target_symbol, target_body) =
         get_symbol_body_selected_op(workspace, db_path, conn, selector, file_path)?;
 
-    let mut callee_signatures = queries::find_callee_signatures(
+    let callee_signatures = queries::find_callee_signatures(
         conn,
         &target_symbol.name,
         &target_symbol.symbol_id,
         10,
         include_external,
     )?;
-    if callee_signatures.len() < 10 {
-        let identifier_callees = queries::css_call_identifier_callee_candidates(
-            conn,
-            &target_symbol,
-            10 - callee_signatures.len(),
-        )?;
-        for (callee, line, column) in identifier_callees {
-            let Ok(report) = reference_report_for_impact(conn, &workspace.root, &callee) else {
-                continue;
-            };
-            let path = target_symbol.path.replace('\\', "/");
-            if !report.sites.iter().any(|site| {
-                site.label == SiteLabel::Proven
-                    && site.site.kind == "calls"
-                    && site.site.from_symbol_id == target_symbol.symbol_id
-                    && site.site.path.replace('\\', "/") == path
-                    && site.site.start_line == Some(line)
-                    && site.site.start_column == Some(column)
-            }) {
-                continue;
-            }
-            let raw_signature = callee.signature.as_deref().unwrap_or(&callee.name);
-            let signature = crate::formatters::container_signature(raw_signature, &callee);
-            let signature = format!(
-                "{signature} ({}:{})",
-                callee.path.replace('\\', "/"),
-                callee.start_line
-            );
-            if !callee_signatures.contains(&signature) {
-                callee_signatures.push(signature);
-            }
-            if callee_signatures.len() == 10 {
-                break;
-            }
-        }
-    }
-
     let related_types = queries::find_related_types(conn, &target_symbol, 10)?;
     let related_tests = queries::find_related_tests(conn, &target_symbol, 5)?;
 

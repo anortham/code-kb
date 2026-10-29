@@ -417,18 +417,12 @@ fn real_extractor_fixtures_cover_navigation_slices_references_impact_and_refresh
     let declaration = exact_symbol(&db_path, &conn, declaration_name, path);
     let caller = exact_symbol(&db_path, &conn, caller_name, path);
     if declaration.is_none() {
-        let raw_name = "@function --anchor_css()";
-        let raw = exact_symbol(&db_path, &conn, raw_name, path);
         consumer_gaps.push(format!(
-            "CSS lookup omitted canonical {declaration_kind} {declaration_name}; raw Julie row was {raw:?}"
+            "CSS lookup omitted {declaration_kind} {declaration_name}"
         ));
     }
     if caller.is_none() {
-        let raw_name = "@function --caller_css()";
-        let raw = exact_symbol(&db_path, &conn, raw_name, path);
-        consumer_gaps.push(format!(
-            "CSS lookup omitted canonical function {caller_name}; raw Julie row was {raw:?}"
-        ));
+        consumer_gaps.push(format!("CSS lookup omitted function {caller_name}"));
     }
     let call_rows: i64 = conn
         .query_row(
@@ -491,10 +485,7 @@ fn real_extractor_fixtures_cover_navigation_slices_references_impact_and_refresh
         let signature = expected["signature"].as_str().unwrap();
         let symbol = exact_symbol(&db_path, &conn, name, path);
         if symbol.is_none() {
-            let raw = exact_symbol(&db_path, &conn, signature, path);
-            consumer_gaps.push(format!(
-                "CSS lookup omitted function {name}; raw Julie row was {raw:?}"
-            ));
+            consumer_gaps.push(format!("CSS lookup omitted function {name}"));
             continue;
         }
         let symbol = symbol.unwrap();
@@ -508,7 +499,7 @@ fn real_extractor_fixtures_cover_navigation_slices_references_impact_and_refresh
                 "CSS custom function {name} has unexpected extracted shape: {symbol:#?}"
             ));
         }
-        if !css_skeleton.contains(name) {
+        if !css_skeleton.contains(signature) {
             consumer_gaps.push(format!(
                 "CSS skeleton omitted custom function {name}: {css_skeleton}"
             ));
@@ -527,6 +518,7 @@ fn real_extractor_fixtures_cover_navigation_slices_references_impact_and_refresh
         let target_name = expected["target"].as_str().unwrap();
         let caller_name = expected["caller"].as_str().unwrap();
         let identifier_name = expected["identifier"].as_str().unwrap();
+        let written_name = expected["written"].as_str().unwrap();
         let target = exact_symbol(&db_path, &conn, target_name, path);
         let caller = exact_symbol(&db_path, &conn, caller_name, path);
         if target.is_none() || caller.is_none() {
@@ -579,7 +571,7 @@ fn real_extractor_fixtures_cover_navigation_slices_references_impact_and_refresh
         if !context
             .callee_signatures
             .iter()
-            .any(|signature| signature.contains(target_name))
+            .any(|signature| signature.contains(written_name))
         {
             consumer_gaps.push(format!(
                 "CSS context for {caller_name} omitted callee {target_name}: {context:#?}"
@@ -752,19 +744,22 @@ fn real_extractor_fixtures_cover_navigation_slices_references_impact_and_refresh
 }
 
 #[test]
-fn css_custom_function_call_evidence_agrees_and_missing_identifier_stays_unresolved() {
+fn css_custom_function_calls_reach_their_functions_in_this_and_other_stylesheets() {
     let case = fixture_cases().remove("css").unwrap();
     let mut cases = serde_json::Map::new();
     cases.insert("css".to_owned(), case.clone());
     let temp = safe_tempdir();
     let root = temp.path().to_path_buf();
     copy_fixture_files(&root, &cases);
-    let missing_fact_path = "css/no-call-identifier.css";
-    fs::copy(
-        repository_root().join("evals/languages/tests/css/no-call-identifier.css"),
-        root.join(missing_fact_path),
-    )
-    .unwrap();
+    for extra in ["result-call.css", "other-stylesheet.css"] {
+        fs::copy(
+            repository_root()
+                .join("evals/languages/tests/css")
+                .join(extra),
+            root.join("css").join(extra),
+        )
+        .unwrap();
+    }
     git(&root, &["init", "--quiet", "--initial-branch=main"]);
     git(&root, &["config", "user.name", "Language Conformance"]);
     git(
@@ -781,106 +776,70 @@ fn css_custom_function_call_evidence_agrees_and_missing_identifier_stays_unresol
     let db_path = root.join(".code-kb/artifact.db");
     scan_workspace(&workspace, &db_path, true).unwrap();
     let conn = open_read_only(&db_path).unwrap();
-    let path = fixture_path(&case);
-    let custom_function = &case["custom_function"];
-    let declaration_name = custom_function["declaration_name"].as_str().unwrap();
-    let caller_name = custom_function["caller_name"].as_str().unwrap();
-    let declaration = exact_symbol(&db_path, &conn, declaration_name, path).unwrap();
-    let caller = exact_symbol(&db_path, &conn, caller_name, path).unwrap();
-    let identifier_rows: Vec<(String, String, Option<String>, i64)> = {
-        let mut statement = conn
-            .prepare("SELECT name, kind, containing_symbol_id, start_line FROM identifiers WHERE path = ?1 AND containing_symbol_id = ?2 ORDER BY start_line, start_column")
-            .unwrap();
-        statement
-            .query_map(params![path, caller.symbol_id], |row| {
-                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
-            })
-            .unwrap()
-            .collect::<Result<_, _>>()
-            .unwrap()
-    };
-    let report = reference_report(&conn, &workspace.root, &declaration, false).unwrap();
-    let context =
-        get_context_slice_op(&workspace, &db_path, &conn, caller_name, Some(path), false).unwrap();
-    let impact = blast_radius_op(&workspace, &conn, Some(declaration_name), None, 2, 20).unwrap();
-    let has_reference = report
-        .sites
-        .iter()
-        .any(|site| site.site.from_symbol_name == caller_name && site.site.path == path);
-    let has_callee = context
-        .callee_signatures
-        .iter()
-        .any(|signature| signature.contains(declaration_name));
-    let has_impact = impact
-        .impacted_symbols
-        .iter()
-        .any(|symbol| symbol.name == caller_name && symbol.path == path);
-    if std::env::var_os("CODE_KB_CONFORMANCE_EVIDENCE").is_some() {
-        eprintln!(
-            "CSS evidence root={} selected={declaration_name} file={path}\nidentifier rows: {identifier_rows:#?}\nselected target: {declaration:#?}\nReferenceReport: {report:#?}\nContextSlice: {context:#?}\nBlastRadius: {impact:#?}",
-            root.display()
-        );
-    }
-
-    assert!(
-        has_reference && has_callee && has_impact,
-        "CSS call evidence disagreed for {} in {}\nidentifier rows: {identifier_rows:#?}\nselected target: {declaration:#?}\nReferenceReport: {report:#?}\nContextSlice: {context:#?}\nBlastRadius: {impact:#?}",
-        declaration_name,
-        path
-    );
-
-    let missing_target = exact_symbol(&db_path, &conn, "--foo名", missing_fact_path).unwrap();
-    let shorter_target = exact_symbol(&db_path, &conn, "--foo", missing_fact_path).unwrap();
-    let missing_caller = exact_symbol(&db_path, &conn, "--caller_css", missing_fact_path).unwrap();
-    let missing_identifiers: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM identifiers WHERE path = ?1 AND kind = 'call' AND containing_symbol_id = ?2",
-            params![missing_fact_path, missing_caller.symbol_id],
-            |row| row.get(0),
+    let sample = fixture_path(&case);
+    let result_call = "css/result-call.css";
+    let other = "css/other-stylesheet.css";
+    for (target_name, target_path, caller_name, caller_path, label) in [
+        (
+            "--anchor_css",
+            sample,
+            "--caller_css",
+            sample,
+            code_kb_core::SiteLabel::Proven,
+        ),
+        (
+            "--foo名",
+            result_call,
+            "--caller_css",
+            result_call,
+            code_kb_core::SiteLabel::Proven,
+        ),
+        (
+            "--anchor_css",
+            sample,
+            ".panel",
+            other,
+            code_kb_core::SiteLabel::Likely,
+        ),
+    ] {
+        let target = exact_symbol(&db_path, &conn, target_name, target_path).unwrap();
+        let report = reference_report(&conn, &workspace.root, &target, false).unwrap();
+        let context = get_context_slice_op(
+            &workspace,
+            &db_path,
+            &conn,
+            caller_name,
+            Some(caller_path),
+            false,
         )
         .unwrap();
-    let missing_report = reference_report(&conn, &workspace.root, &missing_target, false).unwrap();
-    let shorter_report = reference_report(&conn, &workspace.root, &shorter_target, false).unwrap();
-    let missing_context = get_context_slice_op(
-        &workspace,
-        &db_path,
-        &conn,
-        "--caller_css",
-        Some(missing_fact_path),
-        false,
-    )
-    .unwrap();
-    let missing_impact = blast_radius_op(&workspace, &conn, Some("--foo名"), None, 2, 20).unwrap();
-    let shorter_impact = blast_radius_op(&workspace, &conn, Some("--foo"), None, 2, 20).unwrap();
-    let has_missing_fact_reference = missing_report
-        .sites
-        .iter()
-        .any(|site| site.site.from_symbol_name == "--caller_css");
-    let has_missing_fact_callee = missing_context
-        .callee_signatures
-        .iter()
-        .any(|signature| signature.contains("--foo名"));
-    let has_missing_fact_impact = missing_impact
-        .impacted_symbols
-        .iter()
-        .any(|symbol| symbol.name == "--caller_css" && symbol.path == missing_fact_path);
-    let has_shorter_fact_reference = shorter_report
-        .sites
-        .iter()
-        .any(|site| site.site.from_symbol_name == "--caller_css");
-    let has_shorter_fact_impact = shorter_impact
-        .impacted_symbols
-        .iter()
-        .any(|symbol| symbol.name == "--caller_css" && symbol.path == missing_fact_path);
-    if std::env::var_os("CODE_KB_CONFORMANCE_EVIDENCE").is_some() {
-        eprintln!(
-            "CSS missing-fact evidence path={missing_fact_path}\ncall identifiers: {missing_identifiers}\nReferenceReport for --foo名: {missing_report:#?}\nReferenceReport for --foo: {shorter_report:#?}\nContextSlice: {missing_context:#?}\nBlastRadius for --foo名: {missing_impact:#?}\nBlastRadius for --foo: {shorter_impact:#?}"
+        let impact = blast_radius_op(&workspace, &conn, Some(target_name), None, 2, 20).unwrap();
+        assert!(
+            report
+                .sites
+                .iter()
+                .any(|site| site.site.from_symbol_name == caller_name
+                    && site.site.path == caller_path
+                    && site.label == label),
+            "{caller_name} in {caller_path} is no {label:?} site of {target_name}: {report:#?}"
+        );
+        assert!(
+            context
+                .callee_signatures
+                .iter()
+                .any(|signature| signature.contains(target_name)),
+            "{caller_name} context omitted {target_name}: {context:#?}"
+        );
+        assert!(
+            impact
+                .impacted_symbols
+                .iter()
+                .any(|symbol| symbol.name == caller_name && symbol.path == caller_path),
+            "{target_name} impact omitted {caller_name}: {impact:#?}"
         );
     }
-    assert_eq!(missing_identifiers, 0);
-    assert!(!has_missing_fact_reference);
-    assert!(!has_missing_fact_callee);
-    assert!(!has_missing_fact_impact);
-    assert!(!has_shorter_fact_reference);
-    assert!(!has_shorter_fact_impact);
+
+    let shorter = exact_symbol(&db_path, &conn, "--foo", result_call).unwrap();
+    let shorter_report = reference_report(&conn, &workspace.root, &shorter, false).unwrap();
+    assert!(shorter_report.sites.is_empty(), "{shorter_report:#?}");
 }

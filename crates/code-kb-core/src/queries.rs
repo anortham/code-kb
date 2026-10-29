@@ -2939,27 +2939,11 @@ pub fn get_symbol_by_id(conn: &Connection, symbol_id: &str) -> Result<Option<Sym
     .map_err(QueryError::from)
 }
 
-const CSS_CONTEXT_SIGNATURE_PREFIX_CHARS: usize = 1024;
-const CSS_CONTEXT_SYMBOL_BY_ID_SQL: &str = "SELECT symbol_id, file_id, path, language, name, kind,
-        substr(signature, 1, ?2) AS signature, NULL AS doc_comment,
-        visibility, parent_symbol_id, start_line, start_column, end_line, end_column,
-        start_byte, end_byte, body_start_line, body_start_column, body_end_line,
-        body_end_column, body_start_byte, body_end_byte, body_hash, semantic_group,
-        is_test, test_container
- FROM symbols WHERE symbol_id = ?1";
-
-fn get_css_context_symbol_by_id(
-    conn: &Connection,
-    symbol_id: &str,
-) -> Result<Option<Symbol>, QueryError> {
-    conn.query_row(
-        CSS_CONTEXT_SYMBOL_BY_ID_SQL,
-        params![symbol_id, CSS_CONTEXT_SIGNATURE_PREFIX_CHARS as i64],
-        map_symbol,
-    )
-    .optional()
-    .map_err(QueryError::from)
-}
+/// The signature of a callee row. A CSS rule's signature is its whole text, so a CSS callee shows
+/// the head before its `{` from a bounded prefix.
+const CALLEE_SIGNATURE_SQL: &str = "CASE WHEN s_to.language = 'css'
+    THEN rtrim(substr(s_to.signature, 1, instr(substr(s_to.signature, 1, 1024) || '{', '{') - 1))
+    ELSE s_to.signature END";
 
 /// Split `Outer::Inner::run` or `Outer.Inner.run` into its ancestor segments, outermost first, and the terminal name.
 fn split_qualified_name(name: &str) -> (Vec<&str>, &str) {
@@ -3758,41 +3742,6 @@ fn find_callees_page_internal(
     Ok((sites, total))
 }
 
-const CSS_CALL_IDENTIFIER_SITES_SQL: &str = "
-    SELECT target.symbol_id,
-           target.name AS to_symbol_name,
-           caller.name AS from_symbol_name,
-           caller.symbol_id AS from_symbol_id,
-           i.path,
-           i.start_line,
-           i.start_column,
-           i.identifier_id
-    FROM identifiers i
-    JOIN symbols caller ON caller.symbol_id = i.containing_symbol_id
-    JOIN symbols target
-      ON target.name = i.name
-     AND target.path = i.path
-     AND target.language = i.language
-     AND target.kind = 'function'
-     AND target.parent_symbol_id IS NULL
-    WHERE caller.language = 'css'
-      AND caller.kind = 'function'
-      AND caller.path = i.path
-      AND i.language = 'css'
-      AND i.kind = 'call'
-      AND i.name LIKE '--%'
-      AND (SELECT COUNT(*) FROM symbols candidate
-           WHERE candidate.name = i.name
-             AND candidate.path = i.path
-             AND candidate.language = i.language
-             AND candidate.kind = 'function'
-             AND candidate.parent_symbol_id IS NULL) = 1";
-
-fn has_css_call_identifier_site_schema(conn: &Connection) -> bool {
-    has_column(conn, "identifiers", "containing_symbol_id")
-        && has_column(conn, "identifiers", "identifier_id")
-}
-
 fn callee_page_cte(conn: &Connection, include_external: bool, symbol_id: Option<&str>) -> String {
     let pending_language = pending_relationship_language_filter("p.kind", "s_from", "s_to");
     let pending_predicate = if include_external || !has_pending_namespace_column(conn) {
@@ -3872,24 +3821,10 @@ fn callee_page_cte(conn: &Connection, include_external: bool, symbol_id: Option<
                        AND {pending_language})"
         )
     };
-    let css_candidate_sites = if has_css_call_identifier_site_schema(conn) {
-        format!("css_candidate_sites AS ({CSS_CALL_IDENTIFIER_SITES_SQL}),")
-    } else {
-        String::new()
-    };
-    let css_call_sites = if has_css_call_identifier_site_schema(conn) {
-        "UNION ALL
-             SELECT from_symbol_name, from_symbol_id, to_symbol_name, 'calls' AS kind,
-                    path, start_line, start_column
-             FROM css_candidate_sites
-             WHERE from_symbol_name = ?1 AND (?2 IS NULL OR from_symbol_id = ?2)"
-    } else {
-        ""
-    };
     let relationship_call_language =
         call_languages_compatible_sql("s_from.language", "s_to.language");
     format!(
-        "WITH {css_candidate_sites} raw_sites AS (
+        "WITH raw_sites AS (
              SELECT s_from.name AS from_symbol_name,
                     r.from_symbol_id AS from_symbol_id,
                     s_to.name AS to_symbol_name,
@@ -3904,7 +3839,6 @@ fn callee_page_cte(conn: &Connection, include_external: bool, symbol_id: Option<
                AND (r.kind != 'calls' OR {relationship_call_language})
              UNION ALL
              {pending}
-             {css_call_sites}
          ), merged_sites AS (
              SELECT from_symbol_name, from_symbol_id, to_symbol_name, kind, path,
                     start_line, MIN(start_column) AS start_column
@@ -5910,59 +5844,6 @@ fn merge_same_site(sites: Vec<ReferenceSite>) -> Vec<ReferenceSite> {
     merged
 }
 
-/// CSS call identifier targets in the caller's file; each target must be a unique top-level CSS function.
-pub(crate) fn css_call_identifier_callee_candidates(
-    conn: &Connection,
-    caller: &Symbol,
-    limit: usize,
-) -> Result<Vec<(Symbol, usize, usize)>, QueryError> {
-    if caller.language != "css" || caller.kind != "function" || limit == 0 {
-        return Ok(Vec::new());
-    }
-    if !has_css_call_identifier_site_schema(conn) {
-        return Ok(Vec::new());
-    }
-    let mut stmt = conn.prepare(&format!(
-        "WITH css_candidate_sites AS ({CSS_CALL_IDENTIFIER_SITES_SQL}),
-         candidate_sites AS (
-             SELECT symbol_id, to_symbol_name AS name, start_line, start_column,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY symbol_id
-                        ORDER BY start_line, start_column, identifier_id
-                    ) AS site_rank
-             FROM css_candidate_sites
-             WHERE from_symbol_id = ?1 AND path = ?2
-         )
-         SELECT symbol_id, start_line, start_column
-         FROM candidate_sites
-         WHERE site_rank = 1
-         ORDER BY start_line, start_column, name
-         LIMIT ?3"
-    ))?;
-    let rows = stmt.query_map(
-        params![
-            caller.symbol_id,
-            caller.path,
-            limit.min(MAX_RESULT_LIMIT) as i64
-        ],
-        |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, i64>(1)?.max(0) as usize,
-                row.get::<_, i64>(2)?.max(0) as usize,
-            ))
-        },
-    )?;
-    let mut candidates = Vec::new();
-    for row in rows {
-        let (symbol_id, line, column) = row?;
-        if let Some(symbol) = get_css_context_symbol_by_id(conn, &symbol_id)? {
-            candidates.push((symbol, line, column));
-        }
-    }
-    Ok(candidates)
-}
-
 /// Resolve callee signatures directly in a single joined query, avoiding N+1 queries
 /// and preserving ambiguous methods across types. Prioritizes functions/methods over enum variants.
 pub fn find_callee_signatures(
@@ -5975,7 +5856,7 @@ pub fn find_callee_signatures(
     let relationship_call_language =
         call_languages_compatible_sql("s_from.language", "s_to.language");
     let mut stmt = conn.prepare(&format!(
-        "SELECT DISTINCT s_to.name, s_to.signature, s_to.path, s_to.start_line, s_to.kind
+        "SELECT DISTINCT s_to.name, {CALLEE_SIGNATURE_SQL}, s_to.path, s_to.start_line, s_to.kind
          FROM relationships r
          JOIN symbols s_from ON r.from_symbol_id = s_from.symbol_id
          JOIN symbols s_to ON r.to_symbol_id = s_to.symbol_id
@@ -6026,7 +5907,7 @@ pub fn find_callee_signatures(
         let pending_language = pending_relationship_language_filter("p.kind", "s_from", "s_to");
         let p_rows: Vec<(String, Option<String>, String, usize, String)> =
             if has_pending_namespace_column(conn) {
-                let pending_sql = format!("SELECT DISTINCT s_to.name, s_to.signature, s_to.path, s_to.start_line, s_to.kind
+                let pending_sql = format!("SELECT DISTINCT s_to.name, {CALLEE_SIGNATURE_SQL}, s_to.path, s_to.start_line, s_to.kind
                  FROM pending_relationships p
                  JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
                  JOIN symbols s_to ON s_to.name = p.target_terminal_name
@@ -6051,7 +5932,7 @@ pub fn find_callee_signatures(
                 rows.flatten().collect()
             } else {
                 let mut p_stmt = conn.prepare(&format!(
-                "SELECT DISTINCT s_to.name, s_to.signature, s_to.path, s_to.start_line, s_to.kind
+                "SELECT DISTINCT s_to.name, {CALLEE_SIGNATURE_SQL}, s_to.path, s_to.start_line, s_to.kind
                  FROM pending_relationships p
                  JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
                  JOIN symbols s_to ON s_to.name = p.target_terminal_name
@@ -9924,142 +9805,6 @@ mod tests {
 
     use super::*;
     use crate::db::{ensure_fts_index, open_read_write};
-
-    #[test]
-    fn css_context_candidates_keep_only_a_bounded_signature_prefix() {
-        let conn = Connection::open_in_memory().unwrap();
-        conn.execute_batch(
-            "CREATE TABLE symbols (
-                symbol_id TEXT, file_id TEXT, path TEXT, language TEXT, name TEXT,
-                kind TEXT, signature TEXT, doc_comment TEXT, visibility TEXT,
-                parent_symbol_id TEXT, start_line INTEGER, start_column INTEGER,
-                end_line INTEGER, end_column INTEGER, start_byte INTEGER, end_byte INTEGER,
-                body_start_line INTEGER, body_start_column INTEGER, body_end_line INTEGER,
-                body_end_column INTEGER, body_start_byte INTEGER, body_end_byte INTEGER,
-                body_hash TEXT, semantic_group TEXT, is_test INTEGER, test_container INTEGER
-            );
-            CREATE TABLE identifiers (
-                identifier_id INTEGER PRIMARY KEY, name TEXT, path TEXT, language TEXT,
-                kind TEXT, start_line INTEGER, start_column INTEGER, containing_symbol_id TEXT
-            );
-            CREATE TABLE relationships (
-                from_symbol_id TEXT, to_symbol_id TEXT, kind TEXT, path TEXT,
-                start_line INTEGER, start_column INTEGER
-            );
-            CREATE TABLE pending_relationships (
-                from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT, path TEXT,
-                start_line INTEGER, start_column INTEGER
-            );
-            CREATE INDEX idx_symbols_id ON symbols(symbol_id);
-            CREATE INDEX idx_symbols_name_kind ON symbols(name, kind);
-            CREATE INDEX idx_identifiers_containing ON identifiers(containing_symbol_id);
-            CREATE INDEX idx_relationships_from ON relationships(from_symbol_id);
-            CREATE INDEX idx_pending_from ON pending_relationships(from_symbol_id);",
-        )
-        .unwrap();
-        let large_body = "x".repeat(1_000_000);
-        conn.execute(
-            "INSERT INTO symbols VALUES (
-                'caller', 'f', 'sample.css', 'css', '--caller_css', 'function',
-                '@function --caller_css()', NULL, NULL, NULL, 4, 0, 4, 70, 200, 270,
-                4, 30, 4, 69, 230, 269, 'caller-hash', NULL, 0, 0
-            )",
-            [],
-        )
-        .unwrap();
-        conn.execute(
-            "INSERT INTO symbols VALUES (
-                'callee', 'f', 'sample.css', 'css', '--anchor_css', 'function',
-                '@function --anchor_css() { ' || ?1 || ' }', ?2, NULL, NULL,
-                3, 0, 3, 1, 100, 1_000_200, 3, 28, 3, 1_000_199,
-                128, 1_000_199, 'callee-hash', NULL, 0, 0
-            )",
-            [&large_body, &large_body],
-        )
-        .unwrap();
-        conn.execute(
-            "INSERT INTO identifiers VALUES (1, '--anchor_css', 'sample.css', 'css', 'call', 4, 35, 'caller')",
-            [],
-        )
-        .unwrap();
-        let caller = get_symbol_by_id(&conn, "caller").unwrap().unwrap();
-
-        let candidates = css_call_identifier_callee_candidates(&conn, &caller, 10).unwrap();
-
-        assert_eq!(candidates.len(), 1);
-        let (callee, line, column) = &candidates[0];
-        assert_eq!(callee.symbol_id, "callee");
-        assert_eq!(*line, 4);
-        assert_eq!(*column, 35);
-        assert_eq!(callee.body_start_byte, Some(128));
-        assert_eq!(callee.body_end_byte, Some(1_000_199));
-        assert!(callee.doc_comment.is_none());
-        assert!(callee.signature.as_ref().unwrap().len() <= 1024);
-        let (stored_signature_len, stored_doc_comment_len): (i64, i64) = conn
-            .query_row(
-                "SELECT length(signature), length(doc_comment) FROM symbols WHERE symbol_id = 'callee'",
-                [],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .unwrap();
-        assert!(stored_signature_len > 1_000_000);
-        assert_eq!(stored_doc_comment_len, 1_000_000);
-
-        let mut stmt = conn
-            .prepare(&format!(
-                "EXPLAIN QUERY PLAN WITH css_candidate_sites AS ({CSS_CALL_IDENTIFIER_SITES_SQL})
-                 SELECT symbol_id FROM css_candidate_sites
-                 WHERE from_symbol_id = ?1 AND path = ?2"
-            ))
-            .unwrap();
-        let plan = stmt
-            .query_map(params!["caller", "sample.css"], |row| {
-                row.get::<_, String>(3)
-            })
-            .unwrap()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap()
-            .join("\n");
-        assert!(plan.contains("idx_identifiers_containing"), "{plan}");
-        assert!(plan.contains("idx_symbols_id"), "{plan}");
-
-        let cte = callee_page_cte(&conn, false, None);
-        let mut stmt = conn
-            .prepare(&format!(
-                "EXPLAIN QUERY PLAN {cte}
-                 SELECT from_symbol_name, from_symbol_id, to_symbol_name, kind, path,
-                        start_line, start_column
-                 FROM merged_sites
-                 ORDER BY path, start_line, start_column, to_symbol_name, kind, from_symbol_id
-                 LIMIT ?3 OFFSET ?4"
-            ))
-            .unwrap();
-        let plan = stmt
-            .query_map(params!["--caller_css", "caller", 10, 0], |row| {
-                row.get::<_, String>(3)
-            })
-            .unwrap()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap()
-            .join("\n");
-        assert!(plan.contains("idx_identifiers_containing"), "{plan}");
-
-        let mut stmt = conn
-            .prepare(&format!(
-                "EXPLAIN QUERY PLAN {CSS_CONTEXT_SYMBOL_BY_ID_SQL}"
-            ))
-            .unwrap();
-        let plan = stmt
-            .query_map(
-                params!["callee", CSS_CONTEXT_SIGNATURE_PREFIX_CHARS as i64],
-                |row| row.get::<_, String>(3),
-            )
-            .unwrap()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap()
-            .join("\n");
-        assert!(plan.contains("idx_symbols_id"), "{plan}");
-    }
 
     #[test]
     fn callee_page_query_uses_source_indexes_before_offset() {

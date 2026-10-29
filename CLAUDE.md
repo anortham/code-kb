@@ -178,15 +178,6 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   clears a link when it rewrites the type's file, and the next run links it again. A skeleton
   shows a method whose parent is in another file as a top-level row.
 
-- `normalize_extractor_facts` also corrects explicit CSS custom-function names and callable
-  kinds from the pinned extractor. Malformed call names are repaired only when an indexed
-  caller span and an exact same-file declaration token establish the written name. IDs,
-  source spans, and written signatures stay intact; no relationship is fabricated. Queries,
-  signature heads, and source reads are bounded, and the CSS-owner and identifier-containing
-  indexes avoid a repository-wide identifier scan. Missing or ambiguous facts remain gaps.
-  The pass runs for existing indexes, fresh scans, worktree copies, updates, and deletions.
-  Regression cases and remaining extractor limits are in `docs/language-support.md`.
-
 ### 3. Token-Dense Progressive Disclosure
 - Always return the most compact representation that answers the query.
 - Strip implementation bodies in `file_skeleton`.

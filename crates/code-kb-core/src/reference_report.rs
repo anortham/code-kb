@@ -2113,6 +2113,8 @@ impl<'a> Accounting<'a> {
         Ok(rows)
     }
 
+    /// The definitions of a name outside the documentation languages, and CSS custom functions,
+    /// which every loaded stylesheet can call.
     fn definitions_sql(&self) -> String {
         let decorated_start = if has_column(self.conn, "structural_facts", "end_byte")
             && has_column(self.conn, "symbols", "end_byte")
@@ -2134,7 +2136,7 @@ impl<'a> Accounting<'a> {
                     COALESCE(par.signature, ''), par.start_line, par.end_line
              FROM symbols s LEFT JOIN symbols par ON par.symbol_id = s.parent_symbol_id
              WHERE s.name = ?1 AND s.kind NOT IN ('import', 'export')
-               AND s.language NOT IN ({})",
+               AND (s.language NOT IN ({}) OR s.language = 'css' AND s.kind = 'function')",
             documentation_language_list()
         )
     }
