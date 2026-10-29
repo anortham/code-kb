@@ -136,7 +136,7 @@
       "_meta": {
         "anthropic/alwaysLoad": true
       },
-      "description": "Callers of a symbol: every indexed site with its name, each labeled proven, likely, unresolved, or excluded by its evidence, plus a whole-word text count that accounts for every line of the name. Use instead of rg or grep on a name. Callees: the calls a symbol makes. Pass file_path or a qualified name for a common name.",
+      "description": "Callers of a symbol: every indexed site with its name, each labeled proven, likely, unresolved, or excluded by its evidence, plus a whole-word text count that accounts for every line of the name. Use instead of rg or grep on a name. Callees: the calls a symbol makes. Pass file_path or a qualified name for a common name. Text reports support bounded per-section pages; each call reads the current index, keep the same project_root and filter, and restart at offset 0 after index changes. Page limit is at most 200; offset may extend beyond 200.",
       "inputSchema": {
         "properties": {
           "direction": {
@@ -148,7 +148,7 @@
             "type": "string"
           },
           "file_path": {
-            "description": "File that holds the symbol.",
+            "description": "File or folder that holds the symbol.",
             "type": "string"
           },
           "include_external": {
@@ -158,6 +158,11 @@
           "limit": {
             "description": "Default: 20.",
             "maximum": 200,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Text page offset in each report section (default: 0). restart at offset 0 after an index change. The offset may exceed 200.",
             "minimum": 0,
             "type": "integer"
           },
@@ -185,20 +190,30 @@
       "_meta": {
         "anthropic/alwaysLoad": true
       },
-      "description": "The symbols a change affects and the tests to run. With no symbol, symbol_id, or file, it reads the uncommitted git changes.",
+      "description": "The symbols a change affects and the tests to run. With no symbol, symbol_id, or file, it reads the uncommitted git changes. Text output supports bounded per-section pages and optional low-signal import, variable, parameter, field, property, module, and namespace rows. Each call reads the current index; keep the same project_root and filter, and restart at offset 0 after index changes. The page limit is at most 200; discovery stops at 200 rows and larger offsets return no rows.",
       "inputSchema": {
         "properties": {
           "depth": {
-            "description": "Hops (default: 2).",
+            "description": "Hops (default: 2, at most 5).",
+            "maximum": 5,
             "type": "integer"
           },
           "file": {
             "description": "File path.",
             "type": "string"
           },
+          "include_low_signal": {
+            "description": "Include low-signal import, variable, parameter, field, property, module, and namespace impact rows (default: false).",
+            "type": "boolean"
+          },
           "limit": {
             "description": "Per section (default: 20).",
             "maximum": 200,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Text page offset in the test and impact sections (default: 0). restart at offset 0 after an index change. Larger offsets return no rows after the 200-row discovery ceiling.",
             "minimum": 0,
             "type": "integer"
           },
@@ -226,12 +241,23 @@
       "_meta": {
         "anthropic/alwaysLoad": true
       },
-      "description": "After you edit: the symbols whose shape changed against the session base (or base, or HEAD) and every site of each that your diff did not reach. Run it before you say a change is done.",
+      "description": "After you edit: the symbols whose shape changed against the session base (or base, or HEAD) and every site of each that your diff did not reach. Run it before you say a change is done. Text output supports bounded pages for each folded section; each call reads the current index, keep the same project_root and base, and restart at offset 0 after index changes. The default page size is 12; page limit is at most 200 and offset may extend beyond 200.",
       "inputSchema": {
         "properties": {
           "base": {
             "description": "Git revision to compare with (default: the session base, else HEAD).",
             "type": "string"
+          },
+          "limit": {
+            "description": "Page size per folded section (default: 12 when paging is requested; maximum 200).",
+            "maximum": 200,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Text page offset per folded section (default: 0). restart at offset 0 after an index change. The offset may exceed 200.",
+            "minimum": 0,
+            "type": "integer"
           },
           "project_root": {
             "description": "Absolute path of the project or git worktree you work in. Change it when you move to another.",

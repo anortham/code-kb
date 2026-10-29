@@ -582,6 +582,31 @@ fn test_cli_skeleton() {
 }
 
 #[test]
+fn test_cli_json_skeleton_of_a_folder_lists_its_files() {
+    let repo = setup_test_repo();
+    let root = repo.path();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("skeleton")
+        .arg("src")
+        .output()
+        .expect("Failed to execute skeleton");
+
+    assert!(output.status.success());
+    let files: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let paths: Vec<&str> = files
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|file| file["path"].as_str())
+        .collect();
+    assert!(paths.contains(&"src/workspace.rs"), "{paths:?}");
+}
+
+#[test]
 fn test_cli_json_skeleton_propagates_freshness_failure() {
     let repo = setup_test_repo();
     let root = repo.path();
@@ -3002,9 +3027,12 @@ fn test_cli_names_the_scan_remedy_when_an_unreadable_index_cannot_be_rebuilt() {
     let root = code_kb_core::Workspace::new(project.path().to_path_buf()).canonical_root;
     assert!(!output.status.success(), "{stderr}");
     assert!(stderr.contains("simulated scan failure"), "{stderr}");
+    let exe = std::path::Path::new(env!("CARGO_BIN_EXE_code-kb"));
+    assert!(stderr.contains("Run `"), "{stderr}");
     assert!(
         stderr.contains(&format!(
-            "Run `code-kb scan --root {}` to rebuild the index.",
+            "{} scan --root {}` to rebuild the index.",
+            exe.file_name().unwrap().to_string_lossy(),
             root.display()
         )),
         "{stderr}"

@@ -686,7 +686,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     assert!(
         resp["result"]["instructions"]
             .as_str()
-            .is_some_and(|instructions| instructions == "Pass project_root, the absolute path of the project or git worktree you work in, on every call. Call file_skeleton before you read a source file, then get_symbol_body or get_symbol_context for the symbols you need. Use lookup_symbol for a name or a concept and find_references instead of grep on a name, and blast_radius to pick the tests to run.")
+            .is_some_and(|instructions| instructions == "Pass project_root, the absolute path of the project or git worktree you work in, on every call. Call file_skeleton before you read a source file, then get_symbol_body or get_symbol_context for the symbols you need. Use lookup_symbol for a name or a concept and find_references instead of grep on a name, and blast_radius to pick the tests to run. After you edit, call check_edit before you say the change is done.")
     );
 
     // 2. Send tools/list
@@ -3364,7 +3364,7 @@ fn test_mcp_check_edit_is_described_and_takes_an_optional_base() {
 
     assert_eq!(
         check["description"],
-        "After you edit: the symbols whose shape changed against the session base (or base, or HEAD) and every site of each that your diff did not reach. Run it before you say a change is done. Text output supports bounded pages for each folded section; each call reads the current index, keep the same project_root and filter, and restart at offset 0 after index changes. The default page size is 12; page limit is at most 200 and offset may extend beyond 200."
+        "After you edit: the symbols whose shape changed against the session base (or base, or HEAD) and every site of each that your diff did not reach. Run it before you say a change is done. Text output supports bounded pages for each folded section; each call reads the current index, keep the same project_root and base, and restart at offset 0 after index changes. The default page size is 12; page limit is at most 200 and offset may extend beyond 200."
     );
     let properties = check["inputSchema"]["properties"].as_object().unwrap();
     let mut names: Vec<&str> = properties.keys().map(String::as_str).collect();
@@ -4958,10 +4958,7 @@ fn test_mcp_names_the_scan_remedy_when_an_unreadable_index_cannot_be_rebuilt() {
     corrupt_index(target.path());
 
     let arguments = json!({"query": "never_indexed", "project_root": target.path()});
-    let remedy = format!(
-        "Run `code-kb scan --root {}` to rebuild the index.",
-        canonical_root(target.path()).display()
-    );
+    let remedy = scan_remedy_tail(target.path());
 
     let first = session.call("lookup_symbol", arguments.clone());
     let second = session.call("lookup_symbol", arguments);
@@ -4969,7 +4966,76 @@ fn test_mcp_names_the_scan_remedy_when_an_unreadable_index_cannot_be_rebuilt() {
     for result in [&first, &second] {
         let text = result_text(result);
         assert_eq!(result["isError"], true, "{result}");
+        assert!(text.contains("Run `"), "{text}");
         assert!(text.contains(&remedy), "{text}");
         assert!(text.contains("simulated scan failure"), "{text}");
     }
+}
+
+/// The end of the scan remedy: the server binary's file name, then the scan of `root`.
+fn scan_remedy_tail(root: &Path) -> String {
+    format!(
+        "{} scan --root {}` to rebuild the index.",
+        Path::new(env!("CARGO_BIN_EXE_code-kb"))
+            .file_name()
+            .unwrap()
+            .to_string_lossy(),
+        canonical_root(root).display()
+    )
+}
+
+#[cfg(unix)]
+#[test]
+fn test_mcp_does_not_rebuild_an_unreadable_index_again_until_a_scan_repairs_it() {
+    let launch = setup_test_repo();
+    let target = cargo_project("pub fn repaired_by_scan() {}\n");
+    let tools = tempfile::tempdir().unwrap();
+    let rebuilds = tools.path().join("rebuilds");
+    let wrapper = extractor_wrapper(
+        tools.path(),
+        &format!(
+            "side=0; target=0\nfor arg in \"$@\"; do case \"$arg\" in *artifact.db.rebuild|*artifact.db.rescan-*) side=1;; '{target_root}') target=1;; esac; done\nif [ $side = 1 ] && [ $target = 1 ]; then echo rebuild >> '{rebuilds}'; echo 'simulated rebuild failure' >&2; exit 2; fi",
+            target_root = canonical_root(target.path()).display(),
+            rebuilds = rebuilds.display()
+        ),
+    );
+    let mut command = serve_command(launch.path());
+    command
+        .env("JULIE_EXTRACT_BIN", &wrapper)
+        .env("CODE_KB_INDEX_WAIT_MS", "60000");
+    let mut session = McpSession::start(command);
+    corrupt_index(target.path());
+    let arguments = json!({"query": "repaired_by_scan", "project_root": target.path()});
+
+    for _ in 0..3 {
+        let result = session.call("lookup_symbol", arguments.clone());
+        let text = result_text(&result);
+        assert_eq!(result["isError"], true, "{result}");
+        assert!(text.contains(&scan_remedy_tail(target.path())), "{text}");
+        assert!(text.contains("simulated rebuild failure"), "{text}");
+    }
+    assert_eq!(
+        std::fs::read_to_string(&rebuilds).unwrap().lines().count(),
+        1
+    );
+
+    let scan = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("CODE_KB_TELEMETRY_DIR", tools.path().join("telemetry"))
+        .arg("--root")
+        .arg(target.path())
+        .arg("scan")
+        .output()
+        .unwrap();
+    assert!(scan.status.success(), "{scan:?}");
+
+    let repaired = session.call("lookup_symbol", arguments);
+    assert_ne!(repaired["isError"], true, "{repaired}");
+    assert!(
+        result_text(&repaired).contains("function `repaired_by_scan` ["),
+        "{repaired}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&rebuilds).unwrap().lines().count(),
+        1
+    );
 }

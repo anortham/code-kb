@@ -733,7 +733,7 @@ fn test_reconcile_offline_edits_continues_when_individual_update_fails() {
     let error = result.unwrap_err().to_string();
     assert!(error.contains(&root.display().to_string()), "{error}");
     assert!(error.contains("src/unreadable.rs"), "{error}");
-    assert!(error.contains("code-kb scan --root"), "{error}");
+    assert!(error.contains(&scan_remedy_tail(&ws)), "{error}");
     assert!(
         get_symbol_by_name(&conn, "another_symbol", Some("src/another.rs"))
             .unwrap()
@@ -790,7 +790,7 @@ fn test_reconcile_offline_edits_fails_when_hash_read_fails() {
     let error = result.unwrap_err().to_string();
     assert!(error.contains(&root.display().to_string()), "{error}");
     assert!(error.contains("src/same_size.rs"), "{error}");
-    assert!(error.contains("code-kb scan --root"), "{error}");
+    assert!(error.contains(&scan_remedy_tail(&ws)), "{error}");
     assert!(
         get_symbol_by_name(&conn, "old_name", Some("src/same_size.rs"))
             .unwrap()
@@ -1230,13 +1230,18 @@ fn test_failed_rebuild_of_an_index_that_is_not_a_database_names_the_scan_remedy(
         .unwrap_err()
         .to_string();
 
-    assert!(
-        error.contains(&format!(
-            "Run `code-kb scan --root {}` to rebuild the index.",
-            ws.canonical_root.display()
-        )),
-        "{error}"
-    );
+    assert!(error.contains("Run `"), "{error}");
+    assert!(error.contains(&scan_remedy_tail(&ws)), "{error}");
+}
+
+/// The end of the scan remedy: the running binary's file name, then the scan of the root.
+fn scan_remedy_tail(ws: &Workspace) -> String {
+    let exe = std::env::current_exe().unwrap();
+    format!(
+        "{} scan --root {}` to rebuild the index.",
+        exe.file_name().unwrap().to_string_lossy(),
+        ws.canonical_root.display()
+    )
 }
 
 #[test]

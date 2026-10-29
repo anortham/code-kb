@@ -97,7 +97,7 @@ pub enum Command {
     Facts(FactsArgs),
     /// Run initial or full workspace scan.
     Scan(ScanArgs),
-    /// Stream server activity logs from background file watcher and reconciliation.
+    /// Print the log directory and the last lines of the latest log file (watcher, reconciliation, and tool calls).
     Logs(LogsArgs),
     /// View tool usage telemetry and token efficiency summary.
     Stats(StatsArgs),
@@ -125,7 +125,7 @@ pub struct OutlineArgs {
 
 #[derive(Debug, Args)]
 pub struct SkeletonArgs {
-    /// Relative or absolute path to source file.
+    /// Relative or absolute path to a source file, or a folder for its outline.
     pub file: String,
 }
 
@@ -174,6 +174,7 @@ pub struct SearchArgs {
 pub struct BodyArgs {
     /// Full or qualified symbol name.
     pub symbol: Option<String>,
+    /// The id from `code-kb lookup`; pass this or SYMBOL.
     #[arg(long)]
     pub symbol_id: Option<String>,
     /// Optional file path for disambiguation.
@@ -185,6 +186,7 @@ pub struct BodyArgs {
 pub struct SliceArgs {
     /// Target symbol name.
     pub symbol: Option<String>,
+    /// The id from `code-kb lookup`; pass this or SYMBOL.
     #[arg(long)]
     pub symbol_id: Option<String>,
     /// Optional file path for disambiguation.
@@ -201,6 +203,7 @@ pub type ContextArgs = SliceArgs;
 pub struct RefsArgs {
     /// Target symbol name.
     pub symbol: Option<String>,
+    /// The id from `code-kb lookup`; pass this or SYMBOL.
     #[arg(long)]
     pub symbol_id: Option<String>,
     /// Optional file path for disambiguation.
@@ -224,12 +227,13 @@ pub struct RefsArgs {
 pub struct BlastRadiusArgs {
     /// Optional symbol name to seed blast radius walk.
     pub symbol: Option<String>,
+    /// The id from `code-kb lookup`; pass this or SYMBOL.
     #[arg(long)]
     pub symbol_id: Option<String>,
     /// Optional file path to seed blast radius walk.
     #[arg(long, short = 'f', alias = "path", alias = "file-path")]
     pub file: Option<String>,
-    /// Maximum relationship hops (default: 2).
+    /// Maximum relationship hops (default: 2, at most 5).
     #[arg(long, short = 'd', default_value_t = 2)]
     pub depth: usize,
     /// Maximum results to return, 0-200 (default: 20).
@@ -585,10 +589,15 @@ fn main() -> anyhow::Result<ExitCode> {
         }
         Command::Skeleton(args) => {
             if cli.json {
-                let (_, rel_path) = workspace.resolve_path(Path::new(&args.file))?;
-                ensure_fresh_file(&workspace, &db_path, &conn, &rel_path)?;
-                let symbols = load_file_symbols(&conn, &rel_path)?;
-                println!("{}", serde_json::to_string_pretty(&symbols)?);
+                let (abs_path, rel_path) = workspace.resolve_path(Path::new(&args.file))?;
+                if abs_path.is_dir() {
+                    let files = queries::load_scoped_files(&conn, Some(&rel_path))?;
+                    println!("{}", serde_json::to_string_pretty(&files)?);
+                } else {
+                    ensure_fresh_file(&workspace, &db_path, &conn, &rel_path)?;
+                    let symbols = load_file_symbols(&conn, &rel_path)?;
+                    println!("{}", serde_json::to_string_pretty(&symbols)?);
+                }
             } else {
                 let skeleton = file_skeleton_op(&workspace, &db_path, &conn, &args.file)?;
                 print!("{skeleton}");

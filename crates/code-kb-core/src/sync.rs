@@ -440,12 +440,28 @@ pub fn ensure_index_matches_extractor(
     Ok(true)
 }
 
-/// The command that rebuilds the index of `root` from scratch.
+/// The command that rebuilds the index of `root` from scratch. It names the running binary,
+/// because a plugin install does not put `code-kb` on `PATH`.
 pub fn scan_remedy(root: &Path) -> String {
     format!(
-        "Run `code-kb scan --root {}` to rebuild the index.",
+        "Run `{} scan --root {}` to rebuild the index.",
+        running_binary(),
         root.display()
     )
+}
+
+/// The path of the running `code-kb` binary, or `code-kb` when the platform cannot tell.
+fn running_binary() -> String {
+    let Ok(exe) = std::env::current_exe() else {
+        return "code-kb".to_string();
+    };
+    let exe = dunce::simplified(&exe).display().to_string();
+    // Linux appends this to the path of a binary that a rebuild or an update replaced on disk
+    // after it started; the path itself names the binary that replaced it.
+    match exe.strip_suffix(" (deleted)") {
+        Some(path) => path.to_string(),
+        None => exe,
+    }
 }
 
 /// True when the index records a `julie-extract` version or extraction level other than the ones

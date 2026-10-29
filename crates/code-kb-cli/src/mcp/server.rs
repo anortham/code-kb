@@ -58,6 +58,10 @@ pub struct McpServer {
     prepared: bool,
     /// `clientInfo.name` of the `initialize` request, for telemetry.
     client: Option<String>,
+    /// Roots whose unreadable index failed to rebuild, with the error that call returned. The
+    /// server does not rebuild such an index again while it stays unreadable; each call returns
+    /// that error, which names the scan that rebuilds it.
+    failed_rebuilds: Vec<(PathBuf, String)>,
 }
 
 /// Resolves `input` like `Workspace::from_project_root`, except that a launch root with
@@ -212,6 +216,7 @@ impl McpServer {
             parked: Vec::new(),
             prepared,
             client: None,
+            failed_rebuilds: Vec::new(),
         })
     }
 
@@ -255,10 +260,28 @@ impl McpServer {
             .iter()
             .position(|(root, _)| paths_equal(root, &workspace.canonical_root))
             .map(|index| self.parked.swap_remove(index).1);
-        self.reconcile = parked.or_else(|| spawn_index_prepare(&workspace, &db_path));
         self.prepared = true;
         self.workspace = workspace;
         self.db_path = db_path;
+        self.reconcile = match parked {
+            Some(prepare) => Some(prepare),
+            None if self.failed_rebuild_error().is_some() => None,
+            None => spawn_index_prepare(&self.workspace, &self.db_path),
+        };
+    }
+
+    /// The error of the failed rebuild of the active root's index while that index stays
+    /// unreadable. A readable index, such as one that `code-kb scan` rebuilt, clears the record.
+    fn failed_rebuild_error(&mut self) -> Option<String> {
+        let index = self
+            .failed_rebuilds
+            .iter()
+            .position(|(root, _)| paths_equal(root, &self.workspace.canonical_root))?;
+        if is_unreadable_database(&self.db_path) {
+            return Some(self.failed_rebuilds[index].1.clone());
+        }
+        self.failed_rebuilds.swap_remove(index);
+        None
     }
 
     /// Drops each parked prepare that has finished, and with it the watcher it started for a
@@ -406,7 +429,7 @@ impl McpServer {
                         "symbol_id": { "type": "string", "description": "The id from lookup_symbol; pass exactly one of this or symbol_name." },
                         "file_path": {
                             "type": "string",
-                            "description": "File that holds the symbol."
+                            "description": "File or folder that holds the symbol."
                         },
                         "direction": {
                             "type": "string",
@@ -448,7 +471,8 @@ impl McpServer {
                         },
                         "depth": {
                             "type": "integer",
-                            "description": "Hops (default: 2)."
+                            "maximum": 5,
+                            "description": "Hops (default: 2, at most 5)."
                         },
                         "limit": {
                             "type": "integer",
@@ -470,7 +494,7 @@ impl McpServer {
             },
             Tool {
                 name: "check_edit".to_string(),
-                description: "After you edit: the symbols whose shape changed against the session base (or base, or HEAD) and every site of each that your diff did not reach. Run it before you say a change is done. Text output supports bounded pages for each folded section; each call reads the current index, keep the same project_root and filter, and restart at offset 0 after index changes. The default page size is 12; page limit is at most 200 and offset may extend beyond 200.".to_string(),
+                description: "After you edit: the symbols whose shape changed against the session base (or base, or HEAD) and every site of each that your diff did not reach. Run it before you say a change is done. Text output supports bounded pages for each folded section; each call reads the current index, keep the same project_root and base, and restart at offset 0 after index changes. The default page size is 12; page limit is at most 200 and offset may extend beyond 200.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -765,17 +789,30 @@ impl McpServer {
             let msg = if is_unreadable_database(&self.db_path) {
                 let remedy = scan_remedy(&self.workspace.canonical_root);
                 let e = e.trim_end();
-                if e.contains(&remedy) {
+                let msg = if e.contains(&remedy) {
                     format!("Index preparation of '{root}' failed: {e}")
                 } else {
                     format!("Index preparation of '{root}' failed: {e}. {remedy}")
-                }
+                };
+                let active = &self.workspace.canonical_root;
+                self.failed_rebuilds
+                    .retain(|(failed, _)| !paths_equal(failed, active));
+                self.failed_rebuilds.push((active.clone(), msg.clone()));
+                msg
             } else {
                 self.reconcile = spawn_index_prepare(&self.workspace, &self.db_path);
                 format!(
                     "Index preparation of '{root}' failed: {e}; it will be retried on the next tool call"
                 )
             };
+            tracing::error!("{}", msg);
+            let mut err_res = CallToolResult::error(msg);
+            err_res.reconcile_ms = reconcile_ms;
+            err_res.query_ms = Some(0);
+            return err_res;
+        }
+
+        if let Some(msg) = self.failed_rebuild_error() {
             tracing::error!("{}", msg);
             let mut err_res = CallToolResult::error(msg);
             err_res.reconcile_ms = reconcile_ms;
@@ -1371,7 +1408,7 @@ impl McpServer {
                         "name": "code-kb",
                         "version": env!("CARGO_PKG_VERSION")
                     },
-                    "instructions": "Pass project_root, the absolute path of the project or git worktree you work in, on every call. Call file_skeleton before you read a source file, then get_symbol_body or get_symbol_context for the symbols you need. Use lookup_symbol for a name or a concept and find_references instead of grep on a name, and blast_radius to pick the tests to run."
+                    "instructions": "Pass project_root, the absolute path of the project or git worktree you work in, on every call. Call file_skeleton before you read a source file, then get_symbol_body or get_symbol_context for the symbols you need. Use lookup_symbol for a name or a concept and find_references instead of grep on a name, and blast_radius to pick the tests to run. After you edit, call check_edit before you say the change is done."
                 });
                 Some(JsonRpcResponse::success(id, init_result))
             }
@@ -1441,6 +1478,7 @@ mod prepare_tests {
             parked: Vec::new(),
             prepared: true,
             client: None,
+            failed_rebuilds: Vec::new(),
         };
         let arguments = json!({
             "project_root": root,
@@ -1606,6 +1644,7 @@ mod tests {
             parked: Vec::new(),
             prepared: true,
             client: None,
+            failed_rebuilds: Vec::new(),
         };
         assert!(
             !server
