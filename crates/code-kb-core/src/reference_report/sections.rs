@@ -3523,6 +3523,12 @@ fn with_commands(
                 test_case: test.language == "python" && bases.derives(&class.id)?,
             });
         }
+        let module = match (&test.parent_id, test.parent_kind.as_deref()) {
+            (Some(parent), Some("module" | "namespace")) => {
+                load_test_symbol(load, parent)?.map(|module| module.name)
+            }
+            _ => None,
+        };
         let command = finder.command(&TestSpec {
             language: &test.language,
             kind: &test.kind,
@@ -3530,6 +3536,7 @@ fn with_commands(
             line: test.line,
             name: &test.name,
             classes: &classes,
+            module: module.as_deref(),
         });
         rows.push(CallingTest {
             command,

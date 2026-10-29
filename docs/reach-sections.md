@@ -300,8 +300,12 @@ and neither are helpers inside them or the target itself. `CommandFinder` in
 folder once, never looks above the root, and returns no command for an unknown language or
 runner. A command runs from the project root. When its marker file is in a folder below the
 root, the command starts with `cd dir && ` (`dir` is quoted like a path). The markers are
-`go.mod`, `package.json`, `Cargo.toml`, `pom.xml`, `build.gradle`, and `build.gradle.kts`, and
-a root `Cargo.toml` with a `[workspace]` table needs no `cd`, because `cargo test -p package`
+`go.mod`, `package.json`, `Cargo.toml`, `pom.xml`, `build.gradle`, `build.gradle.kts`,
+`build.sbt`, `Gemfile`, `.rspec`, `Rakefile`, `bin/rails`, `Package.swift`, `pubspec.yaml`,
+`CMakeLists.txt`, `composer.json`, `phpunit.xml`, `mix.exs`, `rebar.config`, `.busted`, a
+`*.rockspec`, an R `DESCRIPTION`, and `project.godot`. The nearest marker of a language is its
+package boundary: when it configures no runner the test has no command, and the finder never
+borrows a runner from a folder above it. A root `Cargo.toml` with a `[workspace]` table needs no `cd`, because `cargo test -p package`
 finds the member from the root. `pytest` reads no marker, so it takes no `cd`, except for a
 folder that a node id cannot hold (below). A path in a command stays as written when it holds only
 `A-Z a-z 0-9 _ . / -`; any other path is wrapped in single quotes, and each `'` in it is
@@ -340,13 +344,71 @@ compiles it and runs nothing). JavaScript and TypeScript follow the nearest `pac
 `plain one more`), and anything else gives no command; `path` is
 relative to that folder. `jest` reads a bare path as a regular expression and `node --test`
 reads it as a glob, so a path with `( ) [ ] + $` or `{ } * ? !` could run 0 tests;
-`--runTestsByPath` and running the file itself avoid that. Java is
-`mvn test -Dtest=Class#name` under a `pom.xml` and `./gradlew test --tests 'Class.name'` under
-a Gradle build (`gradle` without a `gradlew`). Both run from the folder of the nearest build
-file (`cd dir && …`), and the wrapper is named by its path from that folder (`./gradlew`,
-`../gradlew`). `Class` is the enclosing classes joined with `$`, outermost first
-(`Outer$Inner`), and the quoting stops the shell from reading the `$`. C# is `dotnet test --filter "FullyQualifiedName~Class.name"` with the innermost
-class. Java and C# need the class.
+`--runTestsByPath` and running the file itself avoid that. Java, Kotlin, and Scala are
+`mvn test -Dtest=Class#name` under a `pom.xml`, `./gradlew test --tests 'Class.name'` under
+a Gradle build, and `sbt 'testOnly *Class'` under a `build.sbt`. Each runs from the folder of
+the nearest build file (`cd dir && …`). The Gradle program is the one the broader command
+uses: the nearest `gradlew` at or above that folder, named by its path from it (`./gradlew`,
+`../gradlew`); on Windows the nearest `gradlew.bat` first (`gradlew.bat`, `..\gradlew.bat`);
+and `gradle` when no wrapper fits the platform, so a project with only `gradlew.bat` gets
+`gradle` on Unix. `Class` is the enclosing classes joined with `$`, outermost first
+(`Outer$Inner`), and the quoting stops the shell from reading the `$`. Maven and Gradle select
+a JUnit method, so a Kotlin or Scala test that julie records as a `function` in a class (a
+ScalaTest `test("label")` or a Kotest label) has no command there. sbt runs the whole class;
+for a Scala label it adds ScalaTest's `-- -z "label"` when `build.sbt` names `scalatest` and
+the label holds no `"` or `\`. A folder with two of the three build files has no broader
+command. C#, F#, and VB.NET are `dotnet test --filter "FullyQualifiedName~Owner.name"`. `Owner`
+is the innermost class, or for F# and VB.NET the module that holds the test
+(`Demo.Tests.adds two`); F# drops the double backticks around a name. Java and C# need the
+class.
+
+Other languages need the marker of their runner, and a test with no such marker has no
+command:
+
+- Ruby: under the nearest folder with a `Gemfile`, `.rspec`, `Rakefile`, or `bin/rails`, a
+  `_spec.rb` example is `rspec path:line` (`bundle exec rspec` with a `Gemfile`) when that
+  folder has `.rspec` or its `Gemfile` names `rspec`. Another test is
+  `bin/rails test path:line` with `bin/rails`, or, for a `test_` method in a class when the
+  `Rakefile` names `TestTask`, `rake test TEST=path TESTOPTS='--name=name'`.
+- Swift: `swift test --filter 'Class/name\b'` under the nearest `Package.swift`, with every
+  enclosing class joined with `/`, or `'[./]name\b'` for a test outside a class. The filter
+  is a regular expression over `Target.Class/name` (XCTest) or `Target.Suite/name()` (Swift
+  Testing), and the escapes keep each name literal.
+- Dart: `dart test path --plain-name 'name'` when the nearest `pubspec.yaml` has a `test:`
+  dependency, `flutter test …` when it names `flutter_test`. `--plain-name` matches a substring
+  of the full name, groups included. A name with `$` or `\` runs the whole file.
+- C++: `ctest --test-dir build -R '^Suite\.Name$'` for a GoogleTest `TEST` or `TEST_F` (julie
+  names it `Suite.Name`), and `-R '/Suite\.Name/'` for a `TEST_P`, whose discovered names hold
+  a prefix and an index. It needs a `CMakeLists.txt` at or above the test that calls
+  `gtest_discover_tests` or `gtest_add_tests`, and exactly one folder below the nearest CMake
+  folder with a `CTestTestfile.cmake` (a configured build). The command runs from that CMake
+  folder. A typed test and C have no command.
+- PHP: `vendor/bin/phpunit --filter 'Class::name\b' path` under the nearest `composer.json`
+  that names `phpunit/phpunit`, or `phpunit …` under a `phpunit.xml`, `phpunit.xml.dist`, or
+  `phpunit.dist.xml` without a `composer.json`. PHPUnit wraps the filter in `/…/i`.
+- Elixir: `mix test path:line` under the nearest `mix.exs`.
+- Erlang: under the nearest `rebar.config`, a case of a `_SUITE` module is
+  `rebar3 ct --suite=dir/mod_SUITE --case=name`, a `_test` function is
+  `rebar3 eunit --test='mod:name'`, and a `_test_` generator is
+  `rebar3 eunit --generator='mod:name'`. The module is the file stem.
+- Lua: `busted path --filter='name$'` under the nearest `.busted` file or a rockspec that names
+  `busted`. The filter is a Lua pattern over the full name, so each of `^$()%.[]*+-?` gets a
+  `%` before it. A name with `\` has no command.
+- R: under the nearest `DESCRIPTION` that names `testthat`,
+  `Rscript -e 'testthat::test_file("path", desc = "name", package = "pkg", load_package = "source")'`,
+  where `pkg` is its `Package:`. `desc` needs testthat 3.2. A name with `\` has no command.
+- PowerShell: a test in a `.Tests.ps1` file (Pester's own naming) is
+  `pwsh -NoProfile -Command "Invoke-Pester -Path 'path' -FullNameFilter '*.name'"`, with a
+  backtick before each of `` [ ] * ? ` `` in the name.
+- Bash: a test in a `.bats` file is `bats path --filter '^name$'`, the name escaped as a
+  regular expression. A name with `\` has no command.
+- GDScript: a test method under the nearest `project.godot` whose folder has
+  `addons/gut/gut_cmdln.gd` is
+  `godot --headless -s addons/gut/gut_cmdln.gd '-gtest=res://path' '-gunit_test_name=name' -gexit`.
+
+Zig (`test "name"`), QML (`TestCase`), C, gdUnit4, and the frameworks above that the list does
+not name (Kotest by label, MUnit by name, test-unit) have no command. `check_edit` lists such a
+test by its place (`docs/edit-check.md`).
 julie gives a JavaScript or TypeScript test name as the text of its source literal, so the
 command first cuts `name` at each `${…}` hole of a template literal and decodes the escapes in
 each part. A hole runs to its matching `}`. It counts nested braces and skips the strings

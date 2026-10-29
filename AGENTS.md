@@ -585,9 +585,11 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   struct, or record, or the variants of an enum. Each change lists the sites the diff reached, the
   `proven` and `likely` sites it did not reach, a count of the `unresolved` ones, and the tests to run:
   the tests that call a changed symbol, then the tests that the `blast_radius` walk reaches from the
-  callers of its `proven` and `likely` sites, up to depth 5. The check keeps 50; a line after them
-  gives the count and each reason the list can be incomplete (the walk's ceiling, depth, or open ends)
-  with the broader test command. The Stop hooks skip that walk, since their reason lists no tests.
+  callers of its `proven` and `likely` sites, up to depth 5. The check keeps 50 commands. A test that no
+  runner the project configures runs alone keeps its place on its own line (`Tests with no run command`),
+  and the check keeps 50 of those. A line after them gives the count and each reason the list can be
+  incomplete (tests with no run command, the walk's ceiling, depth, or open ends) with the broader test
+  command. The Stop hooks skip that walk, since their reason lists no tests.
   `code-kb check` exits 0 with or without such sites and 1 on an error; with `--fail-on-proven` it
   exits 3 after the report when a change has a `proven` site outside the diff. MCP `check_edit` has
   no such option.

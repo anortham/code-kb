@@ -2383,6 +2383,21 @@ pub fn format_edit_check(check: &EditCheck) -> String {
         }
         out.push('\n');
     }
+    if !check.tests_without_command.is_empty() {
+        let shown = check.tests_without_command.len().min(EDIT_TESTS_LISTED);
+        let places: Vec<String> = check.tests_without_command[..shown]
+            .iter()
+            .map(test_place)
+            .collect();
+        out.push_str(&format!("Tests with no run command: {}", places.join("; ")));
+        let found = check
+            .tests_without_command_found
+            .max(check.tests_without_command.len());
+        if shown < found {
+            out.push_str(&format!("; … {} more", found - shown));
+        }
+        out.push('\n');
+    }
     push_tests_incomplete(&mut out, check);
     out.push_str(
         "Not checked: calls inside macro arguments, callback invocation contracts. Indexed callable values are advisory dependencies.\n",
@@ -2444,6 +2459,27 @@ pub fn format_edit_check_page(check: &EditCheck, offset: usize, limit: usize) ->
             out.push('\n');
         }
     }
+    if !check.tests_without_command.is_empty() {
+        let kept = check.tests_without_command.len();
+        let (start, end) = page_bounds(kept, offset, limit);
+        let found = check.tests_without_command_found.max(kept);
+        if found > kept {
+            out.push_str(&format!(
+                "Tests with no run command ({found} found, {kept} kept):\n"
+            ));
+        } else {
+            out.push_str(&format!("Tests with no run command ({kept}):\n"));
+        }
+        page_caption(&mut out, kept, start, end, offset);
+        if start < end {
+            let places: Vec<String> = check.tests_without_command[start..end]
+                .iter()
+                .map(test_place)
+                .collect();
+            out.push_str(&places.join("; "));
+            out.push('\n');
+        }
+    }
     push_tests_incomplete(&mut out, check);
     out.push_str(
         "Not checked: calls inside macro arguments, callback invocation contracts. Indexed callable values are advisory dependencies.\n",
@@ -2451,11 +2487,21 @@ pub fn format_edit_check_page(check: &EditCheck, offset: usize, limit: usize) ->
     out
 }
 
+/// A test that has no run command, as `` `name` [path:line] ``.
+fn test_place(test: &CallingTest) -> String {
+    format!(
+        "`{}` [{}:{}]",
+        on_one_line(&test.name),
+        test.path,
+        test.line
+    )
+}
+
 fn push_tests_incomplete(out: &mut String, check: &EditCheck) {
     if check.tests_incomplete.is_empty() {
         return;
     }
-    let lead = if check.tests.is_empty() {
+    let lead = if check.tests.is_empty() && check.tests_without_command.is_empty() {
         "No test reaches the changed symbols through the index"
     } else {
         "Tests to run may be incomplete"

@@ -1197,6 +1197,99 @@ fn a_caller_that_no_indexed_call_reaches_names_the_broader_scope_instead_of_test
     );
 }
 
+const ZIG_CALC: &str = "const std = @import(\"std\");\n\nfn target(a: i32) i32 {\n    return a;\n}\n\ntest \"adds two\" {\n    try std.testing.expectEqual(@as(i32, 1), target(1));\n}\n";
+
+#[test]
+fn a_test_with_no_run_command_is_listed_by_place_with_the_reason() {
+    let repo = committed_repo(&[("src/calc.zig", ZIG_CALC)]);
+    write(
+        &repo.root,
+        "src/calc.zig",
+        &ZIG_CALC.replace("fn target(a: i32) i32", "fn target(a: i32, b: i32) i32"),
+    );
+    let check = run_check(&repo, None);
+    let text = format_edit_check(&check);
+
+    assert!(check.tests.is_empty(), "{:?}", check.tests);
+    assert_eq!(check.tests_without_command_found, 1);
+    assert_has(
+        &text,
+        "Tests with no run command: `adds two` [src/calc.zig:7]\n",
+    );
+    assert_has(
+        &text,
+        "Tests to run may be incomplete: 1 test found has no run command, because no runner the project configures runs it alone. Run the full test suite.\n",
+    );
+    assert_lacks(&text, "No test reaches");
+    assert_has(
+        &code_kb_core::formatters::format_edit_check_page(&check, 0, 5),
+        "Tests with no run command (1):\n  Page offset 0: rows 1-1 of 1.\n`adds two` [src/calc.zig:7]\n",
+    );
+}
+
+#[test]
+fn a_test_the_walk_reaches_keeps_its_place_when_no_runner_runs_it() {
+    let repo = committed_repo(&[
+        ("Gemfile", "gem \"rake\"\n"),
+        (
+            "lib/calc.rb",
+            "def helper(a)\n  a\nend\n\ndef wrap\n  helper(1)\nend\n",
+        ),
+        (
+            "spec/calc_spec.rb",
+            "require \"calc\"\n\nRSpec.describe \"calc\" do\n  it \"wraps\" do\n    expect(wrap).to eq(1)\n  end\nend\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "lib/calc.rb",
+        "def helper(a, b)\n  a + b\nend\n\ndef wrap\n  helper(1)\nend\n",
+    );
+    let check = run_check(&repo, None);
+
+    assert!(check.tests.is_empty(), "{:?}", check.tests);
+    assert_eq!(
+        check
+            .tests_without_command
+            .iter()
+            .map(|test| (test.name.as_str(), test.path.as_str(), test.line))
+            .collect::<Vec<_>>(),
+        [("wraps", "spec/calc_spec.rb", 4)],
+        "{check:#?}"
+    );
+    assert_has(
+        &format_edit_check(&check),
+        "Tests with no run command: `wraps` [spec/calc_spec.rb:4]\n",
+    );
+}
+
+#[test]
+fn a_test_with_a_command_and_one_without_are_listed_on_their_own_lines() {
+    let repo = committed_repo(&[
+        ("Gemfile", "gem \"rspec\"\n"),
+        ("lib/calc.rb", "def helper(a)\n  a\nend\n"),
+        (
+            "spec/calc_spec.rb",
+            "require \"calc\"\n\nRSpec.describe \"calc\" do\n  it \"helps\" do\n    expect(helper(1)).to eq(1)\n  end\nend\n",
+        ),
+        (
+            "test/calc_test.rb",
+            "require \"calc\"\n\nclass CalcTest < Minitest::Test\n  def test_helper\n    assert_equal 1, helper(1)\n  end\nend\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "lib/calc.rb",
+        "def helper(a, b)\n  a + b\nend\n",
+    );
+    let text = text_of(&repo);
+
+    assert_has(
+        &text,
+        "Tests to run: bundle exec rspec spec/calc_spec.rb:4\nTests with no run command: `test_helper` [test/calc_test.rb:4]\n",
+    );
+}
+
 #[test]
 fn a_test_list_past_the_kept_fifty_states_the_count_and_the_broader_scope() {
     let mut tests = String::from("from app import App\n\n");

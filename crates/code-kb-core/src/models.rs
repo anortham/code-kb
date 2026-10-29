@@ -215,7 +215,7 @@ pub struct Registration {
 /// A test that reaches the target through a proven or likely site: a test function or method, or
 /// the test that holds a helper which has the site. `command` runs that test when the markers of
 /// the project name the runner.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CallingTest {
     pub symbol_id: String,
     pub name: String,

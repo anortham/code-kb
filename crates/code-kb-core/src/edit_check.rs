@@ -25,7 +25,7 @@ use tracing::warn;
 use crate::db::{DbError, ensure_fts_index_path, open_read_only};
 use crate::formatters::displayed_symbol_name;
 use crate::models::{
-    ConstructionSite, LabeledSite, ReferenceReport, SiteLabel, Symbol, VariantUse,
+    CallingTest, ConstructionSite, LabeledSite, ReferenceReport, SiteLabel, Symbol, VariantUse,
     is_generated_lambda_name,
 };
 use crate::queries::{
@@ -181,6 +181,13 @@ pub struct EditCheck {
     /// The command that runs the tests around the found ones, when `tests_incomplete` has a reason.
     #[serde(default)]
     pub broader_test_command: Option<String>,
+    /// The tests that reach a changed symbol but that no known runner runs alone, by place, the
+    /// first [`MAX_TESTS`] of them.
+    #[serde(default)]
+    pub tests_without_command: Vec<CallingTest>,
+    /// How many different tests without a run command the check found.
+    #[serde(default)]
+    pub tests_without_command_found: usize,
     pub cuts: Vec<String>,
     pub diff_hash: String,
 }
@@ -410,6 +417,8 @@ impl PendingCheck {
             tests_found: 0,
             tests_incomplete: Vec::new(),
             broader_test_command: None,
+            tests_without_command: Vec::new(),
+            tests_without_command_found: 0,
             cuts: files_cut.into_iter().collect(),
             diff_hash,
         };
@@ -469,6 +478,9 @@ impl PendingCheck {
             }
             match lister.list(&candidate) {
                 Ok(listed) => {
+                    found
+                        .paths
+                        .extend(listed.tests.iter().map(|test| test.path.clone()));
                     found.direct.extend(listed.tests);
                     found.paths.push(candidate.path.clone());
                     found.add_walk(listed.walked);
@@ -504,7 +516,7 @@ impl PendingCheck {
 /// What the walk from the callers of one change's proven and likely sites found.
 #[derive(Default)]
 struct WalkedTests {
-    commands: Vec<String>,
+    tests: Vec<CallingTest>,
     paths: Vec<String>,
     seeds_cut: Option<(usize, usize)>,
     ceiling: bool,
@@ -517,8 +529,8 @@ struct WalkedTests {
 /// reaches from the callers of its sites, and what kept the walk from finding them all.
 #[derive(Default)]
 struct FoundTests {
-    direct: Vec<String>,
-    walked: Vec<String>,
+    direct: Vec<CallingTest>,
+    walked: Vec<CallingTest>,
     paths: Vec<String>,
     seeds_cut: Vec<(usize, usize)>,
     ceiling: bool,
@@ -529,7 +541,7 @@ struct FoundTests {
 
 impl FoundTests {
     fn add_walk(&mut self, walked: WalkedTests) {
-        self.walked.extend(walked.commands);
+        self.walked.extend(walked.tests);
         self.paths.extend(walked.paths);
         self.seeds_cut.extend(walked.seeds_cut);
         self.failures.extend(walked.failure);
@@ -544,18 +556,42 @@ impl FoundTests {
 
     fn fill(self, root: &Path, check: &mut EditCheck) {
         let mut seen = HashSet::new();
-        for command in self.direct.into_iter().chain(self.walked) {
-            if seen.insert(command.clone()) && check.tests.len() < MAX_TESTS {
-                check.tests.push(command);
+        let mut places = HashSet::new();
+        for test in self.direct.into_iter().chain(self.walked) {
+            match &test.command {
+                Some(command) => {
+                    if seen.insert(command.clone()) && check.tests.len() < MAX_TESTS {
+                        check.tests.push(command.clone());
+                    }
+                }
+                None => {
+                    if places.insert((test.path.clone(), test.line))
+                        && check.tests_without_command.len() < MAX_TESTS
+                    {
+                        check.tests_without_command.push(test);
+                    }
+                }
             }
         }
         check.tests_found = seen.len();
+        check.tests_without_command_found = places.len();
         let reasons = &mut check.tests_incomplete;
         if check.tests_found > MAX_TESTS {
             reasons.push(format!(
                 "the check keeps {MAX_TESTS} of {}",
                 check.tests_found
             ));
+        }
+        if !places.is_empty() {
+            let count = places.len();
+            reasons.push(if count == 1 {
+                "1 test found has no run command, because no runner the project configures runs it alone"
+                    .to_string()
+            } else {
+                format!(
+                    "{count} tests found have no run command, because no runner the project configures runs them alone"
+                )
+            });
         }
         for (walked, callers) in self.seeds_cut {
             reasons.push(format!(
@@ -1923,7 +1959,7 @@ impl Placed {
 
 struct Listed {
     placed: Placed,
-    tests: Vec<String>,
+    tests: Vec<CallingTest>,
     walked: WalkedTests,
 }
 
@@ -2087,11 +2123,7 @@ impl<'a> SiteLister<'a> {
                 self.variant_uses(&report, &candidate.subject, added, removed)?
             }
         };
-        let tests = report
-            .tests
-            .iter()
-            .filter_map(|test| test.command.clone())
-            .collect();
+        let tests = report.tests.clone();
         let walked = if self.walk_tests {
             self.walked_tests(&report)
                 .unwrap_or_else(|error| WalkedTests {
@@ -2153,7 +2185,7 @@ impl<'a> SiteLister<'a> {
                 .map(|test| test.path.clone())
                 .chain(open_ends.iter().map(|(path, _)| path.clone()))
                 .collect(),
-            commands: tests.into_iter().filter_map(|test| test.command).collect(),
+            tests,
             seeds_cut,
             ceiling: walk.traversal_ceiling_reached || walk.likely_tests_truncated,
             stopped_at_depth: walk.stopped_at_depth.is_some(),

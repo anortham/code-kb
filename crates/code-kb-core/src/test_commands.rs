@@ -20,6 +20,8 @@ pub struct TestSpec<'a> {
     pub line: usize,
     pub name: &'a str,
     pub classes: &'a [TestClass<'a>],
+    /// The module or namespace that holds the test directly, such as an F# module.
+    pub module: Option<&'a str>,
 }
 
 /// Finds test commands. Runner markers and pytest configuration are read at most once per folder
@@ -43,6 +45,29 @@ enum Runner {
 enum Build {
     Maven,
     Gradle,
+    Sbt,
+}
+
+#[derive(Clone, Copy)]
+enum DartRunner {
+    Dart,
+    Flutter,
+}
+
+/// The Ruby runners a folder with a `Gemfile`, `.rspec`, `Rakefile`, or `bin/rails` configures.
+#[derive(Clone)]
+struct Ruby {
+    gemfile: bool,
+    rspec: bool,
+    rails: bool,
+    rake_test_task: bool,
+}
+
+/// A folder with a `composer.json` or a PHPUnit configuration file.
+#[derive(Clone)]
+struct Php {
+    composer: bool,
+    phpunit: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -97,6 +122,7 @@ impl TestFamily {
                     folder.build.map(|build| match build {
                         Build::Maven => "mvn test".to_string(),
                         Build::Gradle => gradle.unwrap_or("gradle test").to_string(),
+                        Build::Sbt => "sbt test".to_string(),
                     })
                 }
             }
@@ -129,6 +155,7 @@ impl TestFamily {
                         Some(match build {
                             Build::Maven => "mvn test".to_string(),
                             Build::Gradle => gradle.unwrap_or("gradle test").to_string(),
+                            Build::Sbt => "sbt test".to_string(),
                         })
                     })
                 }
@@ -175,6 +202,18 @@ struct Folder {
     python_project_marker: bool,
     dotnet_project_marker: bool,
     dotnet_test_scope: bool,
+    sbt_scalatest: bool,
+    ruby: Option<Ruby>,
+    swift_package: bool,
+    dart: Option<Option<DartRunner>>,
+    cmake_gtest: bool,
+    ctest_build_dir: Option<String>,
+    php: Option<Php>,
+    mix: bool,
+    rebar: bool,
+    busted: Option<bool>,
+    testthat: Option<Option<String>>,
+    gut: Option<bool>,
 }
 
 impl Folder {
@@ -210,8 +249,12 @@ impl Folder {
             || has("setup.py");
         let maven = has("pom.xml");
         let gradle = has("build.gradle") || has("build.gradle.kts");
+        let build_sbt = text("build.sbt");
+        let cmake = text("CMakeLists.txt");
         let mut dotnet_project_marker = false;
         let mut dotnet_test_scope = false;
+        let mut rockspec = None;
+        let mut ctest_build_dirs = Vec::new();
         for entry in fs::read_dir(dir)
             .ok()
             .into_iter()
@@ -219,7 +262,14 @@ impl Folder {
             .filter_map(Result::ok)
         {
             let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
-            if is_dotnet_solution_marker(&name) {
+            if cmake.is_some() && entry.path().join("CTestTestfile.cmake").is_file() {
+                ctest_build_dirs.push(entry.file_name().to_string_lossy().into_owned());
+            }
+            if name.ends_with(".rockspec") {
+                let mentions_busted =
+                    fs::read_to_string(entry.path()).is_ok_and(|source| source.contains("busted"));
+                rockspec = Some(rockspec.unwrap_or(false) || mentions_busted);
+            } else if is_dotnet_solution_marker(&name) {
                 dotnet_test_scope = true;
             } else if is_dotnet_project_marker(&name) {
                 dotnet_project_marker = true;
@@ -231,6 +281,34 @@ impl Folder {
                 }
             }
         }
+        let gemfile = text("Gemfile");
+        let rails = has("bin/rails");
+        let rakefile = text("Rakefile");
+        let ruby =
+            (gemfile.is_some() || rakefile.is_some() || has(".rspec") || rails).then(|| Ruby {
+                gemfile: gemfile.is_some(),
+                rspec: has(".rspec")
+                    || gemfile
+                        .as_deref()
+                        .is_some_and(|text| text.contains("rspec")),
+                rails,
+                rake_test_task: rakefile
+                    .as_deref()
+                    .is_some_and(|text| text.contains("TestTask")),
+            });
+        let composer = text("composer.json");
+        let phpunit_config = ["phpunit.xml", "phpunit.xml.dist", "phpunit.dist.xml"]
+            .iter()
+            .any(|name| has(name));
+        let php = (composer.is_some() || phpunit_config).then(|| Php {
+            composer: composer.is_some(),
+            phpunit: phpunit_config
+                || composer
+                    .as_deref()
+                    .is_some_and(|text| text.contains("phpunit/phpunit")),
+        });
+        let busted = if has(".busted") { Some(true) } else { rockspec };
+        let gut = has("project.godot").then(|| has("addons/gut/gut_cmdln.gd"));
         Folder {
             cargo: text("Cargo.toml").map(|toml| Cargo {
                 package: package_name(&toml),
@@ -245,18 +323,68 @@ impl Folder {
                 Some(Build::Maven)
             } else if gradle {
                 Some(Build::Gradle)
+            } else if build_sbt.is_some() {
+                Some(Build::Sbt)
             } else {
                 None
             },
-            jvm_build_ambiguous: maven && gradle,
+            jvm_build_ambiguous: [maven, gradle, build_sbt.is_some()]
+                .iter()
+                .filter(|found| **found)
+                .count()
+                > 1,
             gradlew: has("gradlew"),
             gradlew_bat: has("gradlew.bat"),
             pytest_config,
             python_project_marker,
             dotnet_project_marker,
             dotnet_test_scope,
+            sbt_scalatest: build_sbt
+                .as_deref()
+                .is_some_and(|text| text.contains("scalatest")),
+            ruby,
+            swift_package: has("Package.swift"),
+            dart: text("pubspec.yaml").map(|text| dart_runner(&text)),
+            cmake_gtest: cmake.as_deref().is_some_and(|text| {
+                text.contains("gtest_discover_tests") || text.contains("gtest_add_tests")
+            }),
+            ctest_build_dir: (ctest_build_dirs.len() == 1).then(|| ctest_build_dirs.remove(0)),
+            php,
+            mix: has("mix.exs"),
+            rebar: has("rebar.config"),
+            busted,
+            testthat: text("DESCRIPTION").map(|text| testthat_package(&text)),
+            gut,
         }
     }
+}
+
+/// The runner a `pubspec.yaml` names: `flutter test` with `flutter_test`, `dart test` with a
+/// `test` dependency, else none.
+fn dart_runner(pubspec: &str) -> Option<DartRunner> {
+    if pubspec.contains("flutter_test") {
+        Some(DartRunner::Flutter)
+    } else if pubspec
+        .lines()
+        .any(|line| line.starts_with(char::is_whitespace) && line.trim_start().starts_with("test:"))
+    {
+        Some(DartRunner::Dart)
+    } else {
+        None
+    }
+}
+
+/// The `Package:` of an R `DESCRIPTION` that names `testthat`.
+fn testthat_package(description: &str) -> Option<String> {
+    if !description.contains("testthat") {
+        return None;
+    }
+    description.lines().find_map(|line| {
+        line.strip_prefix("Package:")
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .map(str::to_string)
+    })
 }
 
 /// The `name` key of the `[package]` table.
@@ -306,9 +434,10 @@ fn is_dotnet_test_project(source: &str) -> bool {
         || normalized.contains("microsoft.net.test.sdk")
 }
 
-/// `gradle test` for the build in `dir` through the nearest wrapper at or above it, given the
-/// folders that hold `gradlew` and `gradlew.bat`. Windows takes `gradlew.bat` when there is one.
-fn gradle_test_command(
+/// The Gradle program for the build in `dir`: the nearest wrapper at or above it, given the
+/// folders that hold `gradlew` and `gradlew.bat`, else `gradle`. Windows takes `gradlew.bat` when
+/// there is one.
+fn gradle_tool(
     windows: bool,
     dir: &str,
     gradlew: Option<&str>,
@@ -316,12 +445,22 @@ fn gradle_test_command(
 ) -> String {
     match (windows, gradlew_bat, gradlew) {
         (true, Some(wrapper_dir), _) => match depth(dir) - depth(wrapper_dir) {
-            0 => "gradlew.bat test".to_string(),
-            up => format!("{}gradlew.bat test", "..\\".repeat(up)),
+            0 => "gradlew.bat".to_string(),
+            up => format!("{}gradlew.bat", "..\\".repeat(up)),
         },
-        (_, _, Some(wrapper_dir)) => format!("{} test", wrapper_path(dir, wrapper_dir)),
-        _ => "gradle test".to_string(),
+        (_, _, Some(wrapper_dir)) => wrapper_path(dir, wrapper_dir),
+        _ => "gradle".to_string(),
     }
+}
+
+#[cfg(test)]
+fn gradle_test_command(
+    windows: bool,
+    dir: &str,
+    gradlew: Option<&str>,
+    gradlew_bat: Option<&str>,
+) -> String {
+    format!("{} test", gradle_tool(windows, dir, gradlew, gradlew_bat))
 }
 
 fn runner(package_json: &str) -> Option<Runner> {
@@ -770,11 +909,20 @@ impl CommandFinder {
             "rust" => Some(self.rust(test)),
             "go" => self.go(test),
             "javascript" | "typescript" | "tsx" | "jsx" => self.script(test),
-            "java" => self.java(test),
-            "csharp" => test.classes.last().map(|class| {
-                let filter = double_quoted(&format!("{}.{}", class.name, test.name));
-                format!("dotnet test --filter \"FullyQualifiedName~{filter}\"")
-            }),
+            "java" | "kotlin" | "scala" => self.jvm(test),
+            "csharp" | "fsharp" | "vbnet" => dotnet(test),
+            "ruby" => self.ruby(test),
+            "swift" => self.swift(test),
+            "dart" => self.dart(test),
+            "cpp" => self.ctest(test),
+            "php" => self.phpunit(test),
+            "elixir" => self.mix(test),
+            "erlang" => self.rebar(test),
+            "lua" => self.busted(test),
+            "r" => self.testthat(test),
+            "powershell" => pester(test),
+            "bash" => bats(test),
+            "gdscript" => self.gut(test),
             _ => None,
         }
     }
@@ -838,9 +986,14 @@ impl CommandFinder {
         if !matches!(self.folder(dir).build, Some(Build::Gradle)) {
             return None;
         }
+        Some(format!("{} test", self.gradle_tool(dir)))
+    }
+
+    /// The Gradle program for the build in `dir` on this platform.
+    fn gradle_tool(&mut self, dir: &str) -> String {
         let gradlew = self.nearest(dir, |folder| folder.gradlew.then_some(()));
         let gradlew_bat = self.nearest(dir, |folder| folder.gradlew_bat.then_some(()));
-        Some(gradle_test_command(
+        gradle_tool(
             cfg!(windows),
             dir,
             gradlew
@@ -849,7 +1002,7 @@ impl CommandFinder {
             gradlew_bat
                 .as_ref()
                 .map(|(wrapper_dir, _)| wrapper_dir.as_str()),
-        ))
+        )
     }
 
     fn folder(&mut self, dir: &str) -> &Folder {
@@ -1017,10 +1170,15 @@ impl CommandFinder {
         Some(in_folder(&dir, command))
     }
 
-    fn java(&mut self, test: &TestSpec) -> Option<String> {
+    /// A JUnit-style test of Java, Kotlin, or Scala through the nearest Maven, Gradle, or sbt
+    /// build. sbt runs the whole class, with ScalaTest's `-z` filter for a Scala test label when
+    /// `build.sbt` names ScalaTest. Maven and Gradle select JUnit methods only, so a Kotlin or
+    /// Scala test label (a `function` in a class) has no command there.
+    fn jvm(&mut self, test: &TestSpec) -> Option<String> {
         if test.classes.is_empty() {
             return None;
         }
+        let label = test.language != "java" && test.kind == "function";
         let class = test
             .classes
             .iter()
@@ -1029,22 +1187,337 @@ impl CommandFinder {
             .join("$");
         let (dir, build) = self.nearest(parent_dir(test.path), |folder| folder.build)?;
         let command = match build {
+            Build::Maven | Build::Gradle if label => return None,
             Build::Maven => format!(
                 "mvn test -Dtest={}#{}",
                 shell_word(&class),
                 shell_word(test.name)
             ),
             Build::Gradle => {
-                let tool = match self.nearest(&dir, |folder| folder.gradlew.then_some(())) {
-                    Some((wrapper_dir, _)) => wrapper_path(&dir, &wrapper_dir),
-                    None => "gradle".to_string(),
-                };
+                let tool = self.gradle_tool(&dir);
                 let filter = single_quoted(&format!("{class}.{}", test.name));
                 format!("{tool} test --tests {filter}")
+            }
+            Build::Sbt => {
+                let mut task = format!("testOnly *{class}");
+                if label
+                    && test.language == "scala"
+                    && self.folder(&dir).sbt_scalatest
+                    && !test.name.contains(['"', '\\'])
+                {
+                    task.push_str(&format!(" -- -z \"{}\"", test.name));
+                }
+                format!("sbt {}", single_quoted(&task))
             }
         };
         Some(in_folder(&dir, command))
     }
+
+    /// RSpec runs a `_spec.rb` example by its line; Rails and a Rake `TestTask` run a Minitest
+    /// test. The nearest folder with a `Gemfile`, `.rspec`, `Rakefile`, or `bin/rails` decides.
+    fn ruby(&mut self, test: &TestSpec) -> Option<String> {
+        let (dir, ruby) = self.nearest(parent_dir(test.path), |folder| folder.ruby.clone())?;
+        let path = shell_word(relative(&dir, test.path));
+        let bundle = if ruby.gemfile { "bundle exec " } else { "" };
+        let command = if test.path.ends_with("_spec.rb") {
+            if !ruby.rspec {
+                return None;
+            }
+            format!("{bundle}rspec {path}:{}", test.line)
+        } else if ruby.rails {
+            format!("bin/rails test {path}:{}", test.line)
+        } else if ruby.rake_test_task && test.kind == "method" && !test.classes.is_empty() {
+            format!(
+                "{bundle}rake test TEST={path} TESTOPTS={}",
+                shell_word(&format!("--name={}", test.name))
+            )
+        } else {
+            return None;
+        };
+        Some(in_folder(&dir, command))
+    }
+
+    /// `swift test --filter` under the nearest `Package.swift`, as a regular expression over
+    /// `Target.Class/name` (XCTest) or `Target.Suite/name()` (Swift Testing).
+    fn swift(&mut self, test: &TestSpec) -> Option<String> {
+        let (dir, ()) = self.nearest(parent_dir(test.path), |folder| {
+            folder.swift_package.then_some(())
+        })?;
+        let mut filter = String::new();
+        if test.classes.is_empty() {
+            filter.push_str("[./]");
+        } else {
+            for class in test.classes {
+                regex_escaped_into(&mut filter, class.name);
+                filter.push('/');
+            }
+        }
+        regex_escaped_into(&mut filter, test.name);
+        filter.push_str("\\b");
+        Some(in_folder(
+            &dir,
+            format!("swift test --filter {}", single_quoted(&filter)),
+        ))
+    }
+
+    /// `dart test` or `flutter test` with `--plain-name`, a substring of the full test name, under
+    /// the nearest `pubspec.yaml`. A name with an escape or an interpolation runs the whole file.
+    fn dart(&mut self, test: &TestSpec) -> Option<String> {
+        let (dir, runner) = self.nearest(parent_dir(test.path), |folder| folder.dart)?;
+        let tool = match runner? {
+            DartRunner::Dart => "dart test",
+            DartRunner::Flutter => "flutter test",
+        };
+        let path = shell_word(relative(&dir, test.path));
+        let command = if test.name.contains(['$', '\\']) {
+            format!("{tool} {path}")
+        } else {
+            format!("{tool} {path} --plain-name {}", single_quoted(test.name))
+        };
+        Some(in_folder(&dir, command))
+    }
+
+    /// `ctest -R` for a GoogleTest `TEST`, `TEST_F`, or `TEST_P` that a `CMakeLists.txt` at or
+    /// above the test discovers, in the one CTest build folder below the nearest CMake folder.
+    fn ctest(&mut self, test: &TestSpec) -> Option<String> {
+        let (suite, case) = test.name.split_once('.')?;
+        let identifier = |text: &str| {
+            !text.is_empty() && text.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        };
+        if !identifier(suite) || !identifier(case) {
+            return None;
+        }
+        let macro_name = self
+            .source(test.path)
+            .get(test.line.saturating_sub(1))
+            .and_then(|line| line.trim_start().split_once('('))
+            .map(|(name, _)| name.trim().to_string())?;
+        let pattern = match macro_name.as_str() {
+            "TEST" | "TEST_F" => format!("^{suite}\\.{case}$"),
+            "TEST_P" => format!("/{suite}\\.{case}/"),
+            _ => return None,
+        };
+        self.nearest(parent_dir(test.path), |folder| {
+            folder.cmake_gtest.then_some(())
+        })?;
+        let (dir, build) = self.nearest(parent_dir(test.path), |folder| {
+            folder.ctest_build_dir.clone()
+        })?;
+        Some(in_folder(
+            &dir,
+            format!(
+                "ctest --test-dir {} -R {}",
+                shell_word(&build),
+                single_quoted(&pattern)
+            ),
+        ))
+    }
+
+    /// PHPUnit's `--filter` on `Class::name` under the nearest `composer.json` or PHPUnit
+    /// configuration, with `vendor/bin/phpunit` when Composer installs it.
+    fn phpunit(&mut self, test: &TestSpec) -> Option<String> {
+        let class = test.classes.last()?;
+        let (dir, php) = self.nearest(parent_dir(test.path), |folder| folder.php.clone())?;
+        if !php.phpunit {
+            return None;
+        }
+        let tool = if php.composer {
+            "vendor/bin/phpunit"
+        } else {
+            "phpunit"
+        };
+        let filter = format!("{}::{}\\b", class.name, test.name);
+        Some(in_folder(
+            &dir,
+            format!(
+                "{tool} --filter {} {}",
+                single_quoted(&filter),
+                shell_word(relative(&dir, test.path))
+            ),
+        ))
+    }
+
+    /// `mix test path:line` under the nearest `mix.exs`.
+    fn mix(&mut self, test: &TestSpec) -> Option<String> {
+        let (dir, ()) = self.nearest(parent_dir(test.path), |folder| folder.mix.then_some(()))?;
+        Some(in_folder(
+            &dir,
+            format!(
+                "mix test {}:{}",
+                shell_word(relative(&dir, test.path)),
+                test.line
+            ),
+        ))
+    }
+
+    /// Common Test for a case of a `_SUITE` module, else EUnit for a `_test` function or a
+    /// `_test_` generator, through `rebar3` under the nearest `rebar.config`.
+    fn rebar(&mut self, test: &TestSpec) -> Option<String> {
+        let (dir, ()) = self.nearest(parent_dir(test.path), |folder| folder.rebar.then_some(()))?;
+        let path = relative(&dir, test.path);
+        let module_path = path.strip_suffix(".erl")?;
+        let module = module_path.rsplit('/').next()?;
+        let command = if module.ends_with("_SUITE") {
+            format!(
+                "rebar3 ct --suite={} --case={}",
+                shell_word(module_path),
+                shell_word(test.name)
+            )
+        } else if test.name.ends_with("_test_") {
+            format!(
+                "rebar3 eunit --generator={}",
+                shell_word(&format!("{module}:{}", test.name))
+            )
+        } else if test.name.ends_with("_test") {
+            format!(
+                "rebar3 eunit --test={}",
+                shell_word(&format!("{module}:{}", test.name))
+            )
+        } else {
+            return None;
+        };
+        Some(in_folder(&dir, command))
+    }
+
+    /// `busted --filter` with the name as a Lua pattern anchored at the end of the full name,
+    /// under the nearest `.busted` file or a rockspec that names busted.
+    fn busted(&mut self, test: &TestSpec) -> Option<String> {
+        let (dir, configured) = self.nearest(parent_dir(test.path), |folder| folder.busted)?;
+        if !configured || test.name.contains('\\') {
+            return None;
+        }
+        let mut pattern = String::new();
+        for c in test.name.chars() {
+            if "^$()%.[]*+-?".contains(c) {
+                pattern.push('%');
+            }
+            pattern.push(c);
+        }
+        pattern.push('$');
+        Some(in_folder(
+            &dir,
+            format!(
+                "busted {} --filter={}",
+                shell_word(relative(&dir, test.path)),
+                single_quoted(&pattern)
+            ),
+        ))
+    }
+
+    /// `testthat::test_file` with `desc` under the nearest R `DESCRIPTION` that names testthat,
+    /// loading the package from source.
+    fn testthat(&mut self, test: &TestSpec) -> Option<String> {
+        let (dir, package) =
+            self.nearest(parent_dir(test.path), |folder| folder.testthat.clone())?;
+        let package = package?;
+        if test.name.contains('\\') {
+            return None;
+        }
+        let code = format!(
+            "testthat::test_file({}, desc = {}, package = {}, load_package = \"source\")",
+            r_string(relative(&dir, test.path)),
+            r_string(test.name),
+            r_string(&package)
+        );
+        Some(in_folder(
+            &dir,
+            format!("Rscript -e {}", single_quoted(&code)),
+        ))
+    }
+
+    /// GUT's command line for a test method under the nearest `project.godot` that has the GUT
+    /// add-on.
+    fn gut(&mut self, test: &TestSpec) -> Option<String> {
+        let (dir, installed) = self.nearest(parent_dir(test.path), |folder| folder.gut)?;
+        if !installed || test.kind != "method" {
+            return None;
+        }
+        Some(in_folder(
+            &dir,
+            format!(
+                "godot --headless -s addons/gut/gut_cmdln.gd {} {} -gexit",
+                shell_word(&format!("-gtest=res://{}", relative(&dir, test.path))),
+                shell_word(&format!("-gunit_test_name={}", test.name))
+            ),
+        ))
+    }
+}
+
+/// `dotnet test --filter` on `Owner.name`: the innermost class, or for F# and VB.NET the module
+/// that holds the test. F# writes a name with spaces between double backticks.
+fn dotnet(test: &TestSpec) -> Option<String> {
+    let owner = match test.classes.last() {
+        Some(class) => class.name,
+        None if test.language != "csharp" => test.module?,
+        None => return None,
+    };
+    let name = test
+        .name
+        .strip_prefix("``")
+        .and_then(|name| name.strip_suffix("``"))
+        .unwrap_or(test.name);
+    let filter = double_quoted(&format!("{owner}.{name}"));
+    Some(format!(
+        "dotnet test --filter \"FullyQualifiedName~{filter}\""
+    ))
+}
+
+/// Pester's `-FullNameFilter` for an `It` block of a `.Tests.ps1` file, as a wildcard over the
+/// full name `Describe.Context.It`.
+fn pester(test: &TestSpec) -> Option<String> {
+    if !test.path.to_ascii_lowercase().ends_with(".tests.ps1") {
+        return None;
+    }
+    let mut filter = String::from("*.");
+    for c in test.name.chars() {
+        if matches!(c, '[' | ']' | '*' | '?' | '`') {
+            filter.push('`');
+        }
+        filter.push(c);
+    }
+    let script = format!(
+        "Invoke-Pester -Path {} -FullNameFilter {}",
+        powershell_string(test.path),
+        powershell_string(&filter)
+    );
+    Some(format!(
+        "pwsh -NoProfile -Command \"{}\"",
+        double_quoted(&script)
+    ))
+}
+
+/// `bats --filter` with the test name as an anchored regular expression.
+fn bats(test: &TestSpec) -> Option<String> {
+    if !test.path.ends_with(".bats") || test.name.contains('\\') {
+        return None;
+    }
+    let mut filter = String::from("^");
+    regex_escaped_into(&mut filter, test.name);
+    filter.push('$');
+    Some(format!(
+        "bats {} --filter {}",
+        shell_word(test.path),
+        single_quoted(&filter)
+    ))
+}
+
+fn regex_escaped_into(out: &mut String, text: &str) {
+    for c in text.chars() {
+        if "\\^$.*+?()[]{}|/".contains(c) {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+}
+
+/// `text` as an R double-quoted string.
+fn r_string(text: &str) -> String {
+    format!("\"{}\"", backslashed(text, |c| matches!(c, '"' | '\\')))
+}
+
+/// `text` as a PowerShell single-quoted string.
+fn powershell_string(text: &str) -> String {
+    format!("'{}'", text.replace('\'', "''"))
 }
 
 #[cfg(test)]
@@ -1098,6 +1571,7 @@ mod tests {
             line: 1,
             name,
             classes: &classes,
+            module: None,
         })
     }
 
@@ -1960,10 +2434,13 @@ mod tests {
     }
 
     #[test]
-    fn other_languages_have_no_command() {
+    fn a_language_without_a_configured_runner_has_no_command() {
         let empty = project(&[]);
 
-        for language in ["ruby", "php", "kotlin", "swift", "cpp", "vue"] {
+        for language in [
+            "ruby", "php", "kotlin", "scala", "swift", "dart", "cpp", "c", "elixir", "erlang",
+            "lua", "r", "gdscript", "zig", "qml", "vue",
+        ] {
             assert_eq!(
                 command(&empty, language, "tests/a_test.x", "case", Some("A")),
                 None,
@@ -2480,6 +2957,7 @@ mod tests {
             line: 1,
             name: "case",
             classes: &[],
+            module: None,
         };
         let first = finder.command(&spec("a.test.ts"));
 
@@ -2520,6 +2998,7 @@ mod tests {
             line,
             name,
             classes: &[],
+            module: None,
         })
     }
 
@@ -2538,6 +3017,7 @@ mod tests {
             line: 1,
             name: "test_m",
             classes: &classes,
+            module: None,
         })
     }
 
@@ -2600,6 +3080,7 @@ mod tests {
             line: 1,
             name: "TestSuiteMethod",
             classes: &[],
+            module: None,
         });
         assert_eq!(method, None);
     }
@@ -2853,6 +3334,370 @@ mod tests {
         assert_eq!(
             script(&files, "a.test.js", "handles ${kind} kind").as_deref(),
             Some(r#"node --test-name-pattern "^handles .* kind\$" a.test.js"#)
+        );
+    }
+
+    struct Spec<'a> {
+        language: &'a str,
+        kind: &'a str,
+        path: &'a str,
+        line: usize,
+        name: &'a str,
+        classes: &'a [&'a str],
+        module: Option<&'a str>,
+    }
+
+    impl Spec<'_> {
+        fn run(&self, project: &tempfile::TempDir) -> Option<String> {
+            let classes: Vec<TestClass> = self
+                .classes
+                .iter()
+                .map(|name| TestClass {
+                    name,
+                    test_case: false,
+                })
+                .collect();
+            CommandFinder::new(project.path()).command(&TestSpec {
+                language: self.language,
+                kind: self.kind,
+                path: self.path,
+                line: self.line,
+                name: self.name,
+                classes: &classes,
+                module: self.module,
+            })
+        }
+    }
+
+    fn spec<'a>(language: &'a str, kind: &'a str, path: &'a str, name: &'a str) -> Spec<'a> {
+        Spec {
+            language,
+            kind,
+            path,
+            line: 3,
+            name,
+            classes: &[],
+            module: None,
+        }
+    }
+
+    #[test]
+    fn a_targeted_gradle_command_uses_the_platform_wrapper_of_the_broader_command() {
+        let both = project(&[
+            ("gradlew", ""),
+            ("gradlew.bat", ""),
+            ("app/build.gradle", ""),
+        ]);
+        let windows_only = project(&[("gradlew.bat", ""), ("app/build.gradle", "")]);
+        let test = Spec {
+            classes: &["FooTest"],
+            ..spec("java", "method", "app/src/test/java/FooTest.java", "checks")
+        };
+        let (both_tool, windows_only_tool) = if cfg!(windows) {
+            ("..\\gradlew.bat", "..\\gradlew.bat")
+        } else {
+            ("../gradlew", "gradle")
+        };
+
+        assert_eq!(
+            test.run(&both),
+            Some(format!(
+                "cd app && {both_tool} test --tests 'FooTest.checks'"
+            ))
+        );
+        assert_eq!(
+            test.run(&windows_only),
+            Some(format!(
+                "cd app && {windows_only_tool} test --tests 'FooTest.checks'"
+            ))
+        );
+        for (windows, dir, gradlew, gradlew_bat, expected) in [
+            (true, "app", Some(""), Some(""), "..\\gradlew.bat"),
+            (false, "app", Some(""), Some(""), "../gradlew"),
+            (true, "app", None, Some("app"), "gradlew.bat"),
+            (false, "app", None, Some(""), "gradle"),
+        ] {
+            assert_eq!(gradle_tool(windows, dir, gradlew, gradlew_bat), expected);
+        }
+    }
+
+    #[test]
+    fn a_kotlin_or_scala_test_label_has_no_maven_or_gradle_command() {
+        let maven = project(&[("pom.xml", "<project/>")]);
+        let gradle = project(&[("build.gradle.kts", "")]);
+        let label = Spec {
+            classes: &["CalcSpec"],
+            ..spec(
+                "kotlin",
+                "function",
+                "src/test/kotlin/CalcSpec.kt",
+                "adds two",
+            )
+        };
+        let method = Spec {
+            kind: "method",
+            ..label
+        };
+
+        assert_eq!(label.run(&maven), None);
+        assert_eq!(label.run(&gradle), None);
+        assert_eq!(
+            method.run(&gradle).as_deref(),
+            Some("gradle test --tests 'CalcSpec.adds two'")
+        );
+    }
+
+    #[test]
+    fn an_sbt_build_without_scalatest_runs_the_whole_class() {
+        let sbt = project(&[("build.sbt", "libraryDependencies += munit\n")]);
+        let ambiguous = project(&[("build.sbt", ""), ("pom.xml", "<project/>")]);
+        let label = Spec {
+            classes: &["Outer", "CalcSuite"],
+            ..spec(
+                "scala",
+                "function",
+                "src/test/scala/CalcSuite.scala",
+                "adds",
+            )
+        };
+
+        assert_eq!(
+            label.run(&sbt).as_deref(),
+            Some("sbt 'testOnly *Outer$CalcSuite'")
+        );
+        assert_eq!(
+            CommandFinder::new(sbt.path())
+                .broader_test_command(Some("src/test/scala/CalcSuite.scala"))
+                .as_deref(),
+            Some("sbt test")
+        );
+        assert_eq!(
+            CommandFinder::new(ambiguous.path())
+                .broader_test_command(Some("src/test/scala/CalcSuite.scala")),
+            None
+        );
+    }
+
+    #[test]
+    fn an_fsharp_or_vbnet_module_test_filters_by_its_module_and_csharp_needs_a_class() {
+        let empty = project(&[]);
+
+        assert_eq!(
+            Spec {
+                module: Some("Demo.Tests"),
+                ..spec("fsharp", "function", "Tests.fs", "``adds \"two\"``")
+            }
+            .run(&empty)
+            .as_deref(),
+            Some(r#"dotnet test --filter "FullyQualifiedName~Demo.Tests.adds \"two\"""#)
+        );
+        assert_eq!(
+            Spec {
+                module: Some("CalcModule"),
+                ..spec("vbnet", "method", "Calc.vb", "Adds")
+            }
+            .run(&empty)
+            .as_deref(),
+            Some(r#"dotnet test --filter "FullyQualifiedName~CalcModule.Adds""#)
+        );
+        assert_eq!(
+            Spec {
+                module: Some("Demo"),
+                ..spec("csharp", "method", "Calc.cs", "Adds")
+            }
+            .run(&empty),
+            None
+        );
+        assert_eq!(
+            spec("fsharp", "function", "Tests.fs", "adds").run(&empty),
+            None
+        );
+    }
+
+    #[test]
+    fn ruby_tests_follow_the_nearest_ruby_project_only() {
+        let nested = project(&[
+            (".rspec", "--require spec_helper\n"),
+            ("engine/Gemfile", "gem \"rake\"\n"),
+        ]);
+        let plain_rspec = project(&[(".rspec", "")]);
+        let rake_function = project(&[("Rakefile", "Rake::TestTask.new\n")]);
+        let example = spec("ruby", "function", "engine/spec/calc_spec.rb", "adds two");
+
+        assert_eq!(example.run(&nested), None);
+        assert_eq!(
+            Spec {
+                path: "spec/calc spec_spec.rb",
+                ..example
+            }
+            .run(&plain_rspec)
+            .as_deref(),
+            Some("rspec 'spec/calc spec_spec.rb':3")
+        );
+        assert_eq!(
+            spec("ruby", "function", "test/calc_test.rb", "adds two").run(&rake_function),
+            None
+        );
+    }
+
+    #[test]
+    fn a_swift_test_in_nested_types_names_each_type_in_its_filter() {
+        let package = project(&[("Package.swift", "")]);
+
+        assert_eq!(
+            Spec {
+                classes: &["Outer", "Inner"],
+                ..spec("swift", "method", "Tests/A/CalcTests.swift", "adds")
+            }
+            .run(&package)
+            .as_deref(),
+            Some(r"swift test --filter 'Outer/Inner/adds\b'")
+        );
+    }
+
+    #[test]
+    fn a_dart_name_with_an_escape_or_interpolation_runs_the_whole_file() {
+        let dart = project(&[("pkg/pubspec.yaml", "dev_dependencies:\n  test: any\n")]);
+        let nested = project(&[
+            ("pubspec.yaml", "dev_dependencies:\n  test: any\n"),
+            ("tool/pubspec.yaml", "name: tool\n"),
+        ]);
+
+        assert_eq!(
+            spec("dart", "function", "pkg/test/a_test.dart", "adds $n").run(&dart),
+            Some("cd pkg && dart test test/a_test.dart".to_string())
+        );
+        assert_eq!(
+            spec("dart", "function", "tool/test/a_test.dart", "adds").run(&nested),
+            None
+        );
+    }
+
+    #[test]
+    fn a_ctest_command_needs_a_googletest_macro_and_exactly_one_build_folder() {
+        let cmake = "gtest_discover_tests(calc_test)\n";
+        let source = "#include <gtest/gtest.h>\n\nTEST_P(CalcTest, Adds) {}\nTYPED_TEST(CalcTest, Typed) {}\n";
+        let one = project(&[
+            ("CMakeLists.txt", cmake),
+            ("build/CTestTestfile.cmake", ""),
+            ("tests/calc_test.cpp", source),
+        ]);
+        let two = project(&[
+            ("CMakeLists.txt", cmake),
+            ("build/CTestTestfile.cmake", ""),
+            ("out/CTestTestfile.cmake", ""),
+            ("tests/calc_test.cpp", source),
+        ]);
+        let undiscovered = project(&[
+            ("CMakeLists.txt", "add_test(NAME calc COMMAND calc_test)\n"),
+            ("build/CTestTestfile.cmake", ""),
+            ("tests/calc_test.cpp", source),
+        ]);
+        let param = spec("cpp", "function", "tests/calc_test.cpp", "CalcTest.Adds");
+        let typed = Spec {
+            line: 4,
+            ..spec("cpp", "function", "tests/calc_test.cpp", "CalcTest.Typed")
+        };
+
+        assert_eq!(
+            param.run(&one).as_deref(),
+            Some(r"ctest --test-dir build -R '/CalcTest\.Adds/'")
+        );
+        assert_eq!(typed.run(&one), None);
+        assert_eq!(param.run(&two), None);
+        assert_eq!(param.run(&undiscovered), None);
+    }
+
+    #[test]
+    fn phpunit_runs_globally_without_composer_and_not_at_all_without_configuration() {
+        let config = project(&[("phpunit.xml.dist", "<phpunit/>")]);
+        let composer = project(&[("composer.json", "{\"require\": {}}")]);
+        let test = Spec {
+            classes: &["CalcTest"],
+            ..spec("php", "method", "tests/CalcTest.php", "testAdds")
+        };
+
+        assert_eq!(
+            test.run(&config).as_deref(),
+            Some(r"phpunit --filter 'CalcTest::testAdds\b' tests/CalcTest.php")
+        );
+        assert_eq!(test.run(&composer), None);
+    }
+
+    #[test]
+    fn rebar3_runs_an_eunit_generator_and_nothing_for_a_helper() {
+        let rebar = project(&[("apps/calc/rebar.config", "")]);
+        let path = "apps/calc/test/calc_tests.erl";
+
+        assert_eq!(
+            spec("erlang", "function", path, "adds_test_")
+                .run(&rebar)
+                .as_deref(),
+            Some("cd apps/calc && rebar3 eunit --generator='calc_tests:adds_test_'")
+        );
+        assert_eq!(spec("erlang", "function", path, "setup").run(&rebar), None);
+    }
+
+    #[test]
+    fn busted_needs_a_busted_file_or_a_rockspec_that_names_busted() {
+        let rockspec = project(&[("calc-1.0-1.rockspec", "test = { type = \"busted\" }\n")]);
+        let other = project(&[("calc-1.0-1.rockspec", "build = {}\n")]);
+        let test = spec("lua", "function", "spec/calc_spec.lua", "adds 100%");
+
+        assert_eq!(
+            test.run(&rockspec).as_deref(),
+            Some("busted spec/calc_spec.lua --filter='adds 100%%$'")
+        );
+        assert_eq!(test.run(&other), None);
+    }
+
+    #[test]
+    fn testthat_needs_a_description_that_names_testthat() {
+        let other = project(&[("DESCRIPTION", "Package: calc\nImports: rlang\n")]);
+        let nested = project(&[
+            ("DESCRIPTION", "Package: calc\nSuggests: testthat\n"),
+            ("sub/DESCRIPTION", "Package: sub\n"),
+        ]);
+
+        assert_eq!(
+            spec("r", "function", "tests/testthat/test-a.R", "adds").run(&other),
+            None
+        );
+        assert_eq!(
+            spec("r", "function", "sub/tests/testthat/test-a.R", "adds").run(&nested),
+            None
+        );
+    }
+
+    #[test]
+    fn pester_and_bats_read_the_runner_from_the_file_name() {
+        let empty = project(&[]);
+
+        assert_eq!(
+            spec("powershell", "function", "tests/Calc.ps1", "adds").run(&empty),
+            None
+        );
+        assert_eq!(
+            spec("powershell", "function", "Calc.Tests.ps1", "it's $x").run(&empty),
+            Some(r#"pwsh -NoProfile -Command "Invoke-Pester -Path 'Calc.Tests.ps1' -FullNameFilter '*.it''s \$x'""#.to_string())
+        );
+        assert_eq!(
+            spec("bash", "function", "test/calc.sh", "adds").run(&empty),
+            None
+        );
+        assert_eq!(
+            spec("bash", "function", "test/calc.bats", "a.b|c's").run(&empty),
+            Some(r"bats test/calc.bats --filter '^a\.b\|c'\''s$'".to_string())
+        );
+    }
+
+    #[test]
+    fn gut_needs_the_addon_in_the_godot_project() {
+        let bare = project(&[("project.godot", "")]);
+
+        assert_eq!(
+            spec("gdscript", "method", "test/test_calc.gd", "test_adds").run(&bare),
+            None
         );
     }
 }
