@@ -382,7 +382,8 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   only a file whose top package (the outermost folder with `__init__.py`), or a plain folder
   above it, is the first segment of the import (`import json` does not reach `src/flask/json/`),
   so a receiver bound by an absolute import that reaches no project file (`_json.dumps()` after
-  `import json as _json`) is excluded: ``receiver `_json` is imported from `json` ``. A Java
+  `import json as _json`) is excluded: ``receiver `_json` is imported from `json` ``. An import
+  source that names a project file by its path (Zig `@import("widget.zig")`) is no outside import. A Java
   receiver imported from a package that no project folder holds (`Assert.assertEquals()` after
   `import org.junit.Assert;`) is excluded the same way; julie writes no source for a Java import,
   so the package is the segments of the line before the first capitalized one.
@@ -427,9 +428,11 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   julie names a test call after its label (`test("strictObject", …)`); such a label is not a
   definition, and when the target is a label every site is excluded: ``res` is a test label,
   which code never names``. A function defined inside a Python, Rust, Kotlin, C#, Swift, Scala,
-  or Dart function is local to it, so a site outside that function is excluded:
-  ``read` is local to `test_session_cookie_setting``; such a function is no other definition
-  of a site outside that function either. A Java member access, written without
+  or Dart function, and a class, struct, enum, interface, trait, union, or type alias defined
+  inside a Python, Rust, Kotlin, Swift, Scala, Java, C++, C, Go, or Zig function, method, or
+  constructor, is local to it, so a site outside that function is excluded:
+  ``read` is local to `test_session_cookie_setting``; such a function or type is no other
+  definition of a site outside that function either. A Java member access, written without
   parentheses, never reaches a method, because julie writes a method reference (`parser::next`)
   as a call: ``a member access reads a field, not the method `length` ``. A bare Java
   call is excluded with the basis ``name` is imported from `java.lang.Math`` when its file has

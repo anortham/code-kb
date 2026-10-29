@@ -242,7 +242,7 @@ fn report_with(
             group: vec![class.clone()],
             scope: RowScope::Calls,
             builds_class: true,
-            local_to: None,
+            local_to: enclosing_function(conn, std::slice::from_ref(class))?,
             arity: if mode.arity_exclusion {
                 arity::group_arity(conn, root, &specs[0].group, true)?
             } else {
@@ -519,6 +519,12 @@ const SOURCE_FILES_SQL: &str = "SELECT 1 FROM files
         OR '/' || replace(replace(path, '\\', '/'), '-', '_') LIKE ?2 ESCAPE '\\'
      LIMIT 1";
 
+/// An indexed file whose path ends with the import source, which names a file
+/// (`@import("widget.zig")`) rather than a module path.
+const SOURCE_PATH_SQL: &str = "SELECT 1 FROM files
+     WHERE '/' || replace(path, '\\', '/') LIKE ?1 ESCAPE '\\'
+     LIMIT 1";
+
 const MAX_GO_ALIAS_HOPS: usize = 4;
 
 const GO_ALIAS_TARGETS_SQL: &str = "SELECT path, json_extract(metadata_json, '$.alias_target')
@@ -667,7 +673,8 @@ struct Spec {
     builds_class: bool,
     /// The arguments a call to the group may pass; `None` when the index cannot tell.
     arity: Option<arity::Arity>,
-    /// The function that holds a group of local functions, which no site outside it can name.
+    /// The function that holds a group of local functions or types, which no site outside it
+    /// can name.
     local_to: Option<Symbol>,
 }
 
@@ -834,19 +841,43 @@ fn is_super_receiver(receiver: &str) -> bool {
     matches!(receiver, "super" | "base") || receiver.starts_with("super<")
 }
 
-/// Languages where a function defined inside a function is named only inside it. JavaScript is
-/// not one here: such a function can be placed on an object the outer function returns.
 /// Languages where a type and a value are apart, so a place that names a type never names a value.
 const STATIC_TYPE_LANGUAGES: &[&str] = &[
     "csharp", "java", "kotlin", "scala", "swift", "dart", "rust", "go", "cpp", "c", "vbnet",
 ];
 
+/// Languages where a function defined inside a function is named only inside it. JavaScript is
+/// not one here: such a function can be placed on an object the outer function returns.
 const LOCAL_FUNCTION_LANGUAGES: &[&str] = &[
     "python", "rust", "kotlin", "csharp", "swift", "scala", "dart",
 ];
 
+/// Languages where a type defined inside a function is named only inside it. C#, Dart, and
+/// VB.NET have no such type; a PHP class declared in a function is global once the function
+/// runs; JavaScript and TypeScript are left out for the reason of [`LOCAL_FUNCTION_LANGUAGES`].
+const LOCAL_TYPE_LANGUAGES: &[&str] = &[
+    "python", "rust", "kotlin", "swift", "scala", "java", "cpp", "c", "go", "zig",
+];
+
+const TYPE_KINDS: &[&str] = &[
+    "class",
+    "struct",
+    "enum",
+    "interface",
+    "trait",
+    "union",
+    "type",
+];
+
+/// Whether a symbol of `kind` in `language`, defined directly inside a function, method, or
+/// constructor, is named only inside it.
+fn is_local_kind(kind: &str, language: &str) -> bool {
+    kind == "function" && LOCAL_FUNCTION_LANGUAGES.contains(&language)
+        || TYPE_KINDS.contains(&kind) && LOCAL_TYPE_LANGUAGES.contains(&language)
+}
+
 /// The function, method, or constructor that holds every member of `group` when each one is a
-/// function defined inside it in a language of [`LOCAL_FUNCTION_LANGUAGES`].
+/// function or type that [`is_local_kind`] keeps local to it.
 fn enclosing_function(conn: &Connection, group: &[Symbol]) -> Result<Option<Symbol>, QueryError> {
     let Some(parent) = group
         .first()
@@ -855,8 +886,7 @@ fn enclosing_function(conn: &Connection, group: &[Symbol]) -> Result<Option<Symb
         return Ok(None);
     };
     let local = group.iter().all(|member| {
-        member.kind == "function"
-            && LOCAL_FUNCTION_LANGUAGES.contains(&member.language.as_str())
+        is_local_kind(&member.kind, &member.language)
             && member.parent_symbol_id.as_deref() == Some(parent)
     });
     if !local {
@@ -1403,8 +1433,8 @@ struct Definition {
     owner_name: Option<String>,
     owner_kind: Option<String>,
     local: bool,
-    /// The lines of the function that holds this function, which alone names it in a language of
-    /// [`LOCAL_FUNCTION_LANGUAGES`].
+    /// The lines of the function that holds this function or type, which alone names it when
+    /// [`is_local_kind`] holds.
     scope: Option<(usize, usize)>,
     kind: String,
     language: String,
@@ -2075,11 +2105,7 @@ impl<'a> Accounting<'a> {
                 row.get::<_, Option<i64>>(16)?,
                 row.get::<_, Option<i64>>(17)?,
             ) {
-                (Some(start), Some(end))
-                    if in_function
-                        && kind == "function"
-                        && LOCAL_FUNCTION_LANGUAGES.contains(&language.as_str()) =>
-                {
+                (Some(start), Some(end)) if in_function && is_local_kind(&kind, &language) => {
                     Some((start as usize, end as usize))
                 }
                 _ => None,
@@ -4650,7 +4676,14 @@ impl<'a> Accounting<'a> {
                 source.split([':', '.', '/']).find(|part| !part.is_empty()),
                 Some("std" | "core" | "alloc")
             );
-        let external = match import_segment(source).filter(|_| !runtime_library) {
+        let path = source.trim().replace('\\', "/");
+        let names_a_file = !runtime_library
+            && path.contains('.')
+            && !path.contains("::")
+            && self.with_statement(SOURCE_PATH_SQL, |stmt| {
+                stmt.exists(params![format!("%/{}", crate::queries::escape_like(&path))])
+            })?;
+        let external = match import_segment(source).filter(|_| !runtime_library && !names_a_file) {
             None => false,
             Some(segment) => {
                 let escaped = crate::queries::escape_like(&segment);

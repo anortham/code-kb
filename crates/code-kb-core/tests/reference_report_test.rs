@@ -770,6 +770,304 @@ fn a_python_function_defined_inside_a_test_is_out_of_reach_of_other_files() {
 }
 
 #[test]
+fn a_python_class_defined_inside_a_test_is_no_other_definition_of_sites_outside_it() {
+    let repo = scanned_repo(&[
+        ("pkg/__init__.py", "from pkg.app import Flask\n"),
+        (
+            "pkg/app.py",
+            "class Flask:\n    def __init__(self, name):\n        self.name = name\n",
+        ),
+        (
+            "tests/test_appctx.py",
+            "import pkg\n\n\ndef test_teardown(app: pkg.Flask) -> None:\n    assert app\n\n\ndef test_make():\n    app = pkg.Flask(__name__)\n    assert app\n",
+        ),
+        (
+            "tests/test_config.py",
+            "import pkg\n\n\ndef test_custom_config_class():\n    class Flask(pkg.Flask):\n        pass\n\n    app = Flask(__name__)\n    assert app\n",
+        ),
+    ]);
+    let module = report(&repo, "Flask", Some("pkg/app.py"));
+    let local = report(&repo, "Flask", Some("tests/test_config.py"));
+    let annotation = line_of(&repo, "tests/test_appctx.py", "app: pkg.Flask");
+    let inside = line_of(&repo, "tests/test_config.py", "app = Flask(");
+
+    assert_site(
+        &module,
+        "tests/test_appctx.py",
+        annotation,
+        SiteLabel::Likely,
+        "name only",
+    );
+    assert_site(
+        &module,
+        "tests/test_config.py",
+        inside,
+        SiteLabel::Excluded,
+        "resolves to `Flask` (tests/test_config.py:5)",
+    );
+    assert_site(
+        &local,
+        "tests/test_appctx.py",
+        annotation,
+        SiteLabel::Excluded,
+        "`Flask` is local to `test_custom_config_class`",
+    );
+    assert_site(
+        &local,
+        "tests/test_config.py",
+        inside,
+        SiteLabel::Proven,
+        "enclosing scope",
+    );
+}
+
+#[test]
+fn the_constructor_of_a_python_class_defined_inside_a_test_is_out_of_reach_of_other_files() {
+    let repo = scanned_repo(&[
+        ("pkg/__init__.py", "from pkg.app import Flask\n"),
+        (
+            "pkg/app.py",
+            "class Flask:\n    def __init__(self, name):\n        self.name = name\n",
+        ),
+        (
+            "tests/test_appctx.py",
+            "from pkg import *\n\n\ndef test_make():\n    app = Flask(__name__)\n    assert app\n",
+        ),
+        (
+            "tests/test_config.py",
+            "import pkg\n\n\ndef test_custom_config_class():\n    class Flask(pkg.Flask):\n        def __init__(self, name):\n            super().__init__(name)\n\n    app = Flask(__name__)\n    assert app\n",
+        ),
+    ]);
+    let local_init = report(&repo, "__init__", Some("tests/test_config.py"));
+
+    assert_site(
+        &local_init,
+        "tests/test_appctx.py",
+        line_of(&repo, "tests/test_appctx.py", "app = Flask("),
+        SiteLabel::Excluded,
+        "`Flask` is local to `test_custom_config_class`",
+    );
+    assert_site(
+        &local_init,
+        "tests/test_config.py",
+        line_of(&repo, "tests/test_config.py", "app = Flask("),
+        SiteLabel::Proven,
+        "builds the class",
+    );
+}
+
+struct LocalTypeCase {
+    files: &'static [(&'static str, &'static str)],
+    module_path: &'static str,
+    local_path: &'static str,
+    outside: (&'static str, &'static str),
+    inside: &'static str,
+}
+
+const LOCAL_TYPE_CASES: &[LocalTypeCase] = &[
+    LocalTypeCase {
+        files: &[
+            (
+                "src/main/java/p/Widget.java",
+                "package p;\n\npublic class Widget {\n  public int size() { return 1; }\n}\n",
+            ),
+            (
+                "src/main/java/p/Use.java",
+                "package p;\n\nclass Use {\n  int outside() {\n    Widget a = new Widget();\n    return a.size();\n  }\n\n  int inside() {\n    class Widget {\n      int size() { return 2; }\n    }\n    Widget b = new Widget();\n    return b.size();\n  }\n}\n",
+            ),
+        ],
+        module_path: "src/main/java/p/Widget.java",
+        local_path: "src/main/java/p/Use.java",
+        outside: ("src/main/java/p/Use.java", "Widget a = new Widget()"),
+        inside: "Widget b = new Widget()",
+    },
+    LocalTypeCase {
+        files: &[
+            (
+                "src/p/Widget.kt",
+                "package p\n\nclass Widget {\n    fun size(): Int = 1\n}\n",
+            ),
+            (
+                "src/p/Use.kt",
+                "package p\n\nfun outside(): Int {\n    val a: Widget = Widget()\n    return a.size()\n}\n\nfun inside(): Int {\n    class Widget {\n        fun size(): Int = 2\n    }\n    val b: Widget = Widget()\n    return b.size()\n}\n",
+            ),
+        ],
+        module_path: "src/p/Widget.kt",
+        local_path: "src/p/Use.kt",
+        outside: ("src/p/Use.kt", "val a: Widget"),
+        inside: "val b: Widget",
+    },
+    LocalTypeCase {
+        files: &[
+            (
+                "Sources/App/Widget.swift",
+                "class Widget {\n    func size() -> Int { return 1 }\n}\n",
+            ),
+            (
+                "Sources/App/Use.swift",
+                "func outside() -> Int {\n    let a: Widget = Widget()\n    return a.size()\n}\n\nfunc inside() -> Int {\n    struct Widget {\n        func size() -> Int { return 2 }\n    }\n    let b: Widget = Widget()\n    return b.size()\n}\n",
+            ),
+        ],
+        module_path: "Sources/App/Widget.swift",
+        local_path: "Sources/App/Use.swift",
+        outside: ("Sources/App/Use.swift", "let a: Widget"),
+        inside: "let b: Widget",
+    },
+    LocalTypeCase {
+        files: &[
+            (
+                "src/p/Widget.scala",
+                "package p\n\nclass Widget {\n  def size(): Int = 1\n}\n",
+            ),
+            (
+                "src/p/Use.scala",
+                "package p\n\nobject Use {\n  def outside(): Int = {\n    val a: Widget = new Widget()\n    a.size()\n  }\n\n  def inside(): Int = {\n    class Widget {\n      def size(): Int = 2\n    }\n    val b: Widget = new Widget()\n    b.size()\n  }\n}\n",
+            ),
+        ],
+        module_path: "src/p/Widget.scala",
+        local_path: "src/p/Use.scala",
+        outside: ("src/p/Use.scala", "val a: Widget"),
+        inside: "val b: Widget",
+    },
+    LocalTypeCase {
+        files: &[
+            (
+                "src/widget.rs",
+                "pub struct Widget {\n    pub size: i32,\n}\n",
+            ),
+            (
+                "src/lib.rs",
+                "mod widget;\nuse crate::widget::Widget;\n\npub fn outside() -> i32 {\n    let a: Widget = Widget { size: 1 };\n    a.size\n}\n\npub fn inside() -> i32 {\n    struct Widget {\n        size: i32,\n    }\n    let b: Widget = Widget { size: 2 };\n    b.size\n}\n",
+            ),
+        ],
+        module_path: "src/widget.rs",
+        local_path: "src/lib.rs",
+        outside: ("src/lib.rs", "let a: Widget"),
+        inside: "let b: Widget",
+    },
+    LocalTypeCase {
+        files: &[
+            (
+                "src/widget.h",
+                "class Widget {\npublic:\n    int size() { return 1; }\n};\n",
+            ),
+            (
+                "src/use.cpp",
+                "#include \"widget.h\"\n\nint outside() {\n    Widget a;\n    return a.size();\n}\n\nint inside() {\n    struct Widget {\n        int size() { return 2; }\n    };\n    Widget b;\n    return b.size();\n}\n",
+            ),
+        ],
+        module_path: "src/widget.h",
+        local_path: "src/use.cpp",
+        outside: ("src/use.cpp", "Widget a;"),
+        inside: "Widget b;",
+    },
+    LocalTypeCase {
+        files: &[
+            ("src/widget.h", "struct Widget {\n    int size;\n};\n"),
+            (
+                "src/use.c",
+                "#include \"widget.h\"\n\nint outside(void) {\n    struct Widget a = {1};\n    return a.size;\n}\n\nint inside(void) {\n    struct Widget {\n        int size;\n    };\n    struct Widget b = {2};\n    return b.size;\n}\n",
+            ),
+        ],
+        module_path: "src/widget.h",
+        local_path: "src/use.c",
+        outside: ("src/use.c", "struct Widget a"),
+        inside: "struct Widget b",
+    },
+    LocalTypeCase {
+        files: &[
+            (
+                "p/widget.go",
+                "package p\n\ntype Widget struct {\n\tSize int\n}\n",
+            ),
+            (
+                "p/use.go",
+                "package p\n\nfunc outside() int {\n\ta := Widget{Size: 1}\n\treturn a.Size\n}\n\nfunc inside() int {\n\ttype Widget struct {\n\t\tSize int\n\t}\n\tb := Widget{Size: 2}\n\treturn b.Size\n}\n",
+            ),
+        ],
+        module_path: "p/widget.go",
+        local_path: "p/use.go",
+        outside: ("p/use.go", "a := Widget"),
+        inside: "b := Widget",
+    },
+    LocalTypeCase {
+        files: &[
+            (
+                "src/widget.zig",
+                "pub const Widget = struct {\n    size: i32,\n};\n\nfn outside() i32 {\n    const a = Widget{ .size = 1 };\n    return a.size;\n}\n",
+            ),
+            (
+                "src/local.zig",
+                "fn inside() i32 {\n    const Widget = struct {\n        size: i32,\n    };\n    const b = Widget{ .size = 2 };\n    return b.size;\n}\n",
+            ),
+        ],
+        module_path: "src/widget.zig",
+        local_path: "src/local.zig",
+        outside: ("src/widget.zig", "const a = Widget"),
+        inside: "const b = Widget",
+    },
+];
+
+#[test]
+fn a_type_defined_inside_a_function_is_local_to_it() {
+    for case in LOCAL_TYPE_CASES {
+        let repo = scanned_repo(case.files);
+        let module = report(&repo, "Widget", Some(case.module_path));
+        let local = report(&repo, "Widget", Some(case.local_path));
+        let outside = line_of(&repo, case.outside.0, case.outside.1);
+        let inside = line_of(&repo, case.local_path, case.inside);
+
+        assert_site(
+            &local,
+            case.outside.0,
+            outside,
+            SiteLabel::Excluded,
+            "`Widget` is local to `inside`",
+        );
+        assert_not_excluded(&local, case.local_path, inside);
+        let module_site = site_at(&module, case.outside.0, outside);
+        assert!(
+            !(module_site.label == SiteLabel::Unresolved
+                || module_site.basis.contains("definitions")),
+            "{}:{outside} counts the local type: {}\n{}",
+            case.outside.0,
+            module_site.basis,
+            dump(&module)
+        );
+        assert_eq!(
+            site_at(&module, case.local_path, inside).label,
+            SiteLabel::Excluded,
+            "{}",
+            dump(&module)
+        );
+    }
+}
+
+#[test]
+fn a_zig_receiver_imported_from_a_project_file_reaches_its_type() {
+    let repo = scanned_repo(&[
+        (
+            "src/widget.zig",
+            "pub const Widget = struct {\n    size: u32,\n};\n",
+        ),
+        (
+            "src/main.zig",
+            "const widget = @import(\"widget.zig\");\nconst std = @import(\"std\");\n\npub fn main() void {\n    const w = widget.Widget{ .size = 1 };\n    _ = w;\n    _ = std.Widget;\n}\n",
+        ),
+    ]);
+    let report = report(&repo, "Widget", Some("src/widget.zig"));
+
+    assert_not_excluded(&report, "src/main.zig", 5);
+    assert_site(
+        &report,
+        "src/main.zig",
+        7,
+        SiteLabel::Excluded,
+        "receiver `std` is imported from `std`",
+    );
+}
+
+#[test]
 fn a_java_field_read_never_reaches_a_method_of_that_name() {
     let repo = scanned_repo(&[
         (
