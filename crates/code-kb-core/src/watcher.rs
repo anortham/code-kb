@@ -547,6 +547,8 @@ fn watcher_worker(
         match event_receiver.recv_timeout(WATCHER_POLL_INTERVAL) {
             Ok(events) => process_events(
                 events,
+                &event_receiver,
+                &overflow,
                 &mut debouncer,
                 &workspace,
                 &db_path,
@@ -978,8 +980,15 @@ fn forget_removed_directories(
     }
 }
 
+/// Refreshes changed files one at a time. Before each file it takes the batches that arrived
+/// meanwhile, so a storm that reaches the queue over several debounce windows still runs one
+/// bulk scan once more than `MAX_QUEUED_EVENTS_PER_BATCH` files wait. A slow extractor start
+/// (Windows) otherwise costs one process for each file of the storm.
+#[allow(clippy::too_many_arguments)]
 fn process_events(
     events: Vec<DebouncedEvent>,
+    queue: &mpsc::Receiver<Vec<DebouncedEvent>>,
+    overflow: &AtomicBool,
     debouncer: &mut WorkspaceDebouncer,
     workspace: &Workspace,
     db_path: &Path,
@@ -987,42 +996,97 @@ fn process_events(
     failures: &Arc<Mutex<WatcherFailureState>>,
     shutdown: &AtomicBool,
 ) {
-    if events.is_empty() || shutdown.load(Ordering::Acquire) {
-        return;
-    }
-    let requires_reconciliation = events
-        .iter()
-        .any(|event| event_requires_reconciliation(event, workspace, registrations));
-    forget_removed_directories(&events, debouncer, workspace, registrations);
-    if requires_reconciliation {
-        trace!("Reconciling directory events");
-        reconcile_workspace(
-            debouncer,
-            workspace,
-            db_path,
-            registrations,
-            failures,
-            shutdown,
-        );
-        return;
-    }
-
-    let mut ignore_matcher = match workspace_walk_builder(&workspace.canonical_root)
+    let Some(mut ignore_matcher) = workspace_walk_builder(&workspace.canonical_root)
         .build_matchers()
         .pop()
-    {
-        Some(matcher) => matcher,
-        None => {
-            record_failure(
-                failures,
-                "Failed to initialize ignore matcher for workspace root".to_string(),
-            );
+    else {
+        record_failure(
+            failures,
+            "Failed to initialize ignore matcher for workspace root".to_string(),
+        );
+        return;
+    };
+    let mut events = events;
+    let mut pending_files = BTreeMap::new();
+    let mut conn = None;
+    loop {
+        events.extend(queue.try_iter().flatten());
+        if shutdown.load(Ordering::Acquire) || overflow.load(Ordering::Acquire) {
             return;
         }
-    };
+        if !events.is_empty() {
+            let batch = std::mem::take(&mut events);
+            let requires_reconciliation = batch
+                .iter()
+                .any(|event| event_requires_reconciliation(event, workspace, registrations));
+            forget_removed_directories(&batch, debouncer, workspace, registrations);
+            if requires_reconciliation {
+                trace!("Reconciling directory events");
+                reconcile_workspace(
+                    debouncer,
+                    workspace,
+                    db_path,
+                    registrations,
+                    failures,
+                    shutdown,
+                );
+                return;
+            }
+            collect_relevant_files(
+                &batch,
+                workspace,
+                &mut ignore_matcher,
+                failures,
+                &mut pending_files,
+            );
+            if pending_files.len() > MAX_QUEUED_EVENTS_PER_BATCH {
+                debug!(
+                    "Git storm detected ({} changed files wait). Running bulk scan...",
+                    pending_files.len()
+                );
+                if let Err(error) = scan_workspace(workspace, db_path, false) {
+                    warn!("Bulk scan failed during git storm: {error}");
+                    record_failure(
+                        failures,
+                        format!("Bulk scan failed during git storm: {error}"),
+                    );
+                }
+                return;
+            }
+        }
+        let Some((relative, absolute)) = pending_files.pop_first() else {
+            return;
+        };
+        let conn = match &mut conn {
+            Some(conn) => conn,
+            None => match crate::db::open_read_only(db_path) {
+                Ok(opened) => conn.insert(opened),
+                Err(error) => {
+                    warn!("Failed to open index during watcher update: {error}");
+                    record_failure(
+                        failures,
+                        format!("Failed to open index during watcher update: {error}"),
+                    );
+                    return;
+                }
+            },
+        };
+        refresh_file(
+            &absolute, &relative, workspace, db_path, conn, failures, shutdown,
+        );
+    }
+}
 
-    let mut relevant_files = Vec::new();
-    for event in &events {
+/// Adds the workspace files that `events` name and the ignore rules accept, keyed by their
+/// relative path.
+fn collect_relevant_files(
+    events: &[DebouncedEvent],
+    workspace: &Workspace,
+    ignore_matcher: &mut IncrementalIgnore,
+    failures: &Arc<Mutex<WatcherFailureState>>,
+    files: &mut BTreeMap<String, PathBuf>,
+) {
+    for event in events {
         if event.kind.is_access() {
             continue;
         }
@@ -1042,62 +1106,35 @@ fn process_events(
                 record_failure(failures, format!("Failed to load ignore rule: {error}"));
             }
             if !matched.is_ignore() {
-                relevant_files.push((absolute, relative));
+                files.insert(relative, absolute);
             }
         }
     }
+}
 
-    if relevant_files.is_empty() {
-        return;
-    }
-
-    relevant_files.sort_by(|left, right| left.1.cmp(&right.1));
-    relevant_files.dedup_by(|left, right| left.1 == right.1);
-    if relevant_files.len() > MAX_QUEUED_EVENTS_PER_BATCH {
-        debug!(
-            "Git storm detected ({} files changed in window). Running bulk scan...",
-            relevant_files.len()
-        );
-        if let Err(error) = scan_workspace(workspace, db_path, false) {
-            warn!("Bulk scan failed during git storm: {error}");
+fn refresh_file(
+    absolute: &Path,
+    relative: &str,
+    workspace: &Workspace,
+    db_path: &Path,
+    conn: &rusqlite::Connection,
+    failures: &Arc<Mutex<WatcherFailureState>>,
+    shutdown: &AtomicBool,
+) {
+    if absolute.exists() && absolute.is_file() {
+        let result = match ensure_fresh_file(workspace, db_path, conn, relative) {
+            Ok(_) => Ok(()),
+            Err(_) => update_file(workspace, db_path, relative),
+        };
+        if let Err(error) = result {
+            warn!("Failed to refresh '{}' from watcher: {error}", relative);
             record_failure(
                 failures,
-                format!("Bulk scan failed during git storm: {error}"),
+                format!("Failed to refresh '{relative}' from watcher: {error}"),
             );
         }
-        return;
-    }
-
-    let conn = match crate::db::open_read_only(db_path) {
-        Ok(conn) => conn,
-        Err(error) => {
-            warn!("Failed to open index during watcher update: {error}");
-            record_failure(
-                failures,
-                format!("Failed to open index during watcher update: {error}"),
-            );
-            return;
-        }
-    };
-    for (absolute, relative) in relevant_files {
-        if shutdown.load(Ordering::Acquire) {
-            return;
-        }
-        if absolute.exists() && absolute.is_file() {
-            let result = match ensure_fresh_file(workspace, db_path, &conn, &relative) {
-                Ok(_) => Ok(()),
-                Err(_) => update_file(workspace, db_path, &relative),
-            };
-            if let Err(error) = result {
-                warn!("Failed to refresh '{}' from watcher: {error}", relative);
-                record_failure(
-                    failures,
-                    format!("Failed to refresh '{relative}' from watcher: {error}"),
-                );
-            }
-        } else if !absolute.exists() {
-            remove_indexed_path(workspace, db_path, &conn, &relative, failures, shutdown);
-        }
+    } else if !absolute.exists() {
+        remove_indexed_path(workspace, db_path, conn, relative, failures, shutdown);
     }
 }
 
@@ -1580,6 +1617,65 @@ mod tests {
             remaining,
             vec![root.clone(), root.join("a-b"), root.join("ab")]
         );
+    }
+
+    #[test]
+    fn a_storm_spread_over_queued_batches_runs_one_bulk_scan() {
+        crate::sync::find_julie_extract_binary()
+            .expect("julie-extract binary must be present for tests");
+        let temp_dir = crate::safe_tempdir();
+        let root = canonical_temp(&temp_dir).join("project");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("main.rs"), "pub fn queued_seed() {}\n").unwrap();
+        let workspace = Workspace::new(root.clone());
+        let db_path = canonical_temp(&temp_dir).join("queued_storm.db");
+        crate::sync::scan_workspace(&workspace, &db_path, true).unwrap();
+        let mut batches = (0..3).map(|batch| {
+            (0..25)
+                .map(|index| {
+                    let path = root.join(format!("queued_{batch}_{index:02}.rs"));
+                    std::fs::write(
+                        &path,
+                        format!("pub fn queued_storm_{batch}_{index:02}() {{}}\n"),
+                    )
+                    .unwrap();
+                    debounced_event(EventKind::Create(CreateKind::File), &[&path])
+                })
+                .collect::<Vec<_>>()
+        });
+        let first = batches.next().unwrap();
+        let (sender, queue) = mpsc::sync_channel(EVENT_QUEUE_CAPACITY);
+        let overflow = AtomicBool::new(false);
+        for batch in batches {
+            enqueue_events(&sender, &overflow, batch);
+        }
+        let mut debouncer = new_debouncer(
+            Duration::from_millis(150),
+            None,
+            |_: crate::debouncer::DebounceEventResult| {},
+        )
+        .unwrap();
+        let failures = Arc::new(Mutex::new(WatcherFailureState::default()));
+
+        process_events(
+            first,
+            &queue,
+            &overflow,
+            &mut debouncer,
+            &workspace,
+            &db_path,
+            &mut RegisteredDirectories::default(),
+            &failures,
+            &AtomicBool::new(false),
+        );
+
+        let conn = crate::db::open_read_only(&db_path).unwrap();
+        let indexed =
+            crate::queries::search_symbols(&conn, "queued_storm", None, false, 100).unwrap();
+        assert_eq!(indexed.len(), 75);
+        assert!(queue.try_recv().is_err());
+        assert!(!overflow.load(Ordering::Acquire));
+        assert!(failures.lock().unwrap().failure.is_none());
     }
 
     #[test]

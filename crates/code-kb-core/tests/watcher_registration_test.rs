@@ -8,7 +8,13 @@ use code_kb_core::{
 };
 #[cfg(target_os = "linux")]
 use std::io;
-use std::{fs, path::Path, sync::Mutex, thread::sleep, time::Duration};
+use std::{
+    fs,
+    path::Path,
+    sync::Mutex,
+    thread::sleep,
+    time::{Duration, Instant},
+};
 
 static WATCHER_TEST_LOCK: Mutex<()> = Mutex::new(());
 
@@ -300,25 +306,39 @@ fn watcher_recovers_a_large_file_event_storm() {
     scan_workspace(&workspace, &db_path, true).unwrap();
     let watcher = start_watcher(workspace, db_path.clone()).unwrap();
 
-    for index in 0..75 {
-        fs::write(
-            root.join(format!("storm_{index:03}.rs")),
-            format!("pub fn watcher_storm_{index:03}() {{}}\n"),
-        )
-        .unwrap();
+    for group in 0..5 {
+        for index in group * 15..(group + 1) * 15 {
+            fs::write(
+                root.join(format!("storm_{index:03}.rs")),
+                format!("pub fn watcher_storm_{index:03}() {{}}\n"),
+            )
+            .unwrap();
+        }
+        sleep(Duration::from_millis(300));
     }
 
-    for _ in 0..50 {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let mut indexed = 0;
+    while Instant::now() < deadline {
         let conn = open_read_only(&db_path).unwrap();
-        let symbols = search_symbols(&conn, "watcher_storm", None, false, 100).unwrap();
-        if symbols.len() == 75 {
-            assert!(watcher.pending_failure().is_none());
+        indexed = search_symbols(&conn, "watcher_storm", None, false, 100)
+            .unwrap()
+            .len();
+        if indexed == 75 {
+            assert!(
+                watcher.pending_failure().is_none(),
+                "{:?}",
+                watcher.pending_failure()
+            );
             drop(watcher);
             return;
         }
         sleep(Duration::from_millis(100));
     }
-    panic!("watcher did not reconcile every file from the event storm");
+    panic!(
+        "watcher indexed {indexed} of 75 storm files; failure: {:?}",
+        watcher.pending_failure()
+    );
 }
 
 fn wait_for_symbol(db_path: &Path, name: &str, expected: bool) {
