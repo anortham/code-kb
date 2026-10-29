@@ -35,6 +35,33 @@ fn index_prepare_panic_message(payload: Box<dyn std::any::Any + Send>) -> String
     )
 }
 
+/// The result of a finished prepare; a panic becomes its error.
+fn join_index_prepare(prepare: IndexPrepare) -> Result<Option<WatcherHandle>, String> {
+    prepare
+        .join()
+        .unwrap_or_else(|panic| Err(index_prepare_panic_message(panic)))
+}
+
+/// The error that each call for `root` returns after the rebuild of its unreadable index failed
+/// with `error`. It names the scan that rebuilds the index.
+fn failed_rebuild_message(root: &Path, error: &str) -> String {
+    let remedy = scan_remedy(root);
+    let error = error.trim_end();
+    let root = root.display();
+    if error.contains(&remedy) {
+        format!("Index preparation of '{root}' failed: {error}")
+    } else {
+        format!("Index preparation of '{root}' failed: {error}. {remedy}")
+    }
+}
+
+/// A prepare of a root that is no longer active, with that root's index file.
+struct ParkedPrepare {
+    root: PathBuf,
+    db_path: PathBuf,
+    prepare: IndexPrepare,
+}
+
 pub struct McpServer {
     pub workspace: Workspace,
     pub db_path: PathBuf,
@@ -52,7 +79,7 @@ pub struct McpServer {
     /// Prepares still running on roots the server left. A scan writes into `artifact.db`
     /// in place, so a root that becomes active again reuses its running prepare and the
     /// watcher that prepare starts.
-    parked: Vec<(PathBuf, IndexPrepare)>,
+    parked: Vec<ParkedPrepare>,
     /// False while the active root has had no prepare, which happens when the startup
     /// pre-warm is refused.
     prepared: bool,
@@ -249,17 +276,23 @@ impl McpServer {
 
         self._watcher = None;
         self.drop_finished_parked_prepares();
-        if let Some(prepare) = self.reconcile.take()
-            && !prepare.is_finished()
-        {
-            self.parked
-                .push((self.workspace.canonical_root.clone(), prepare));
+        if let Some(prepare) = self.reconcile.take() {
+            let left = ParkedPrepare {
+                root: self.workspace.canonical_root.clone(),
+                db_path: self.db_path.clone(),
+                prepare,
+            };
+            if left.prepare.is_finished() {
+                self.settle_inactive_prepare(left);
+            } else {
+                self.parked.push(left);
+            }
         }
         let parked = self
             .parked
             .iter()
-            .position(|(root, _)| paths_equal(root, &workspace.canonical_root))
-            .map(|index| self.parked.swap_remove(index).1);
+            .position(|parked| paths_equal(&parked.root, &workspace.canonical_root))
+            .map(|index| self.parked.swap_remove(index).prepare);
         self.prepared = true;
         self.workspace = workspace;
         self.db_path = db_path;
@@ -284,11 +317,38 @@ impl McpServer {
         None
     }
 
-    /// Drops each parked prepare that has finished, and with it the watcher it started for a
-    /// root that is no longer active. Switching back to that root runs a new prepare, whose
-    /// offline reconcile picks up edits made in between.
+    /// Records that the rebuild of the unreadable index of `root` failed, with the error that
+    /// each call for that root returns until the index is readable again.
+    fn record_failed_rebuild(&mut self, root: &Path, message: String) {
+        self.failed_rebuilds
+            .retain(|(failed, _)| !paths_equal(failed, root));
+        self.failed_rebuilds.push((root.to_path_buf(), message));
+    }
+
+    /// Reads the result of a finished prepare of a root that is no longer active and drops the
+    /// watcher it started. A failed rebuild of an index that stays unreadable is recorded, so
+    /// switching back to that root returns its error instead of rebuilding again.
+    fn settle_inactive_prepare(&mut self, parked: ParkedPrepare) {
+        if let Err(error) = join_index_prepare(parked.prepare)
+            && is_unreadable_database(&parked.db_path)
+        {
+            let message = failed_rebuild_message(&parked.root, &error);
+            tracing::error!("{}", message);
+            self.record_failed_rebuild(&parked.root, message);
+        }
+    }
+
+    /// Settles each parked prepare that has finished, and drops with it the watcher it started
+    /// for a root that is no longer active. Switching back to that root runs a new prepare,
+    /// whose offline reconcile picks up edits made in between, unless its rebuild failed.
     fn drop_finished_parked_prepares(&mut self) {
-        self.parked.retain(|(_, prepare)| !prepare.is_finished());
+        let finished: Vec<ParkedPrepare> = self
+            .parked
+            .extract_if(.., |parked| parked.prepare.is_finished())
+            .collect();
+        for parked in finished {
+            self.settle_inactive_prepare(parked);
+        }
     }
 
     /// Resolves a call's `project_root` (or its silent aliases `workspace` and `root`) and
@@ -739,10 +799,7 @@ impl McpServer {
                     started.query_ms = Some(0);
                     return started;
                 }
-                let prepared = match prepare.join() {
-                    Ok(result) => result,
-                    Err(panic) => Err(index_prepare_panic_message(panic)),
-                };
+                let prepared = join_index_prepare(prepare);
                 let waited = Some(rec_start.elapsed().as_millis() as u64);
                 match prepared {
                     Ok(watcher) => {
@@ -787,17 +844,9 @@ impl McpServer {
             self._watcher = None;
             let root = self.workspace.canonical_root.display();
             let msg = if is_unreadable_database(&self.db_path) {
-                let remedy = scan_remedy(&self.workspace.canonical_root);
-                let e = e.trim_end();
-                let msg = if e.contains(&remedy) {
-                    format!("Index preparation of '{root}' failed: {e}")
-                } else {
-                    format!("Index preparation of '{root}' failed: {e}. {remedy}")
-                };
-                let active = &self.workspace.canonical_root;
-                self.failed_rebuilds
-                    .retain(|(failed, _)| !paths_equal(failed, active));
-                self.failed_rebuilds.push((active.clone(), msg.clone()));
+                let active = self.workspace.canonical_root.clone();
+                let msg = failed_rebuild_message(&active, &e);
+                self.record_failed_rebuild(&active, msg.clone());
                 msg
             } else {
                 self.reconcile = spawn_index_prepare(&self.workspace, &self.db_path);

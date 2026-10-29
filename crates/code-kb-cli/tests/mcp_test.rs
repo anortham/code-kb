@@ -5129,3 +5129,127 @@ fn test_mcp_does_not_rebuild_an_unreadable_index_again_until_a_scan_repairs_it()
         1
     );
 }
+
+#[cfg(unix)]
+struct SlowFailingRebuild {
+    session: McpSession,
+    launch: tempfile::TempDir,
+    target: tempfile::TempDir,
+    rebuilds: PathBuf,
+    _tools: tempfile::TempDir,
+}
+
+#[cfg(unix)]
+impl SlowFailingRebuild {
+    /// A server whose launch root answers, and whose other root holds an unreadable index
+    /// that the server cannot rebuild: each rebuild of it fails after one second.
+    fn start() -> Self {
+        let launch = cargo_project("pub fn launch_marker() {}\n");
+        let target = cargo_project("pub fn behind_a_failed_rebuild() {}\n");
+        let tools = tempfile::tempdir().unwrap();
+        let rebuilds = tools.path().join("rebuilds");
+        let wrapper = extractor_wrapper(
+            tools.path(),
+            &format!(
+                "side=0; target=0\nfor arg in \"$@\"; do case \"$arg\" in *artifact.db.rebuild|*artifact.db.rescan-*) side=1;; '{target_root}') target=1;; esac; done\nif [ $side = 1 ] && [ $target = 1 ]; then sleep 1; echo rebuild >> '{rebuilds}'; echo 'simulated rebuild failure' >&2; exit 2; fi",
+                target_root = canonical_root(target.path()).display(),
+                rebuilds = rebuilds.display()
+            ),
+        );
+        let mut command = serve_command(launch.path());
+        command
+            .env("JULIE_EXTRACT_BIN", &wrapper)
+            .env("CODE_KB_INDEX_WAIT_MS", "100");
+        let mut fixture = SlowFailingRebuild {
+            session: McpSession::start(command),
+            launch,
+            target,
+            rebuilds,
+            _tools: tools,
+        };
+        fixture.answer_from_launch();
+        corrupt_index(fixture.target.path());
+        fixture
+    }
+
+    fn answer_from_launch(&mut self) {
+        let arguments = json!({"query": "launch_marker", "project_root": self.launch.path()});
+        let deadline = Instant::now() + Duration::from_secs(60);
+        loop {
+            let result = self.session.call("lookup_symbol", arguments.clone());
+            if !result_text(&result).starts_with("Indexing ") {
+                assert_ne!(result["isError"], true, "{result}");
+                assert!(result_text(&result).contains("launch_marker"), "{result}");
+                return;
+            }
+            assert!(Instant::now() < deadline, "{result}");
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
+    fn call_target(&mut self) -> Value {
+        self.session.call(
+            "lookup_symbol",
+            json!({"query": "behind_a_failed_rebuild", "project_root": self.target.path()}),
+        )
+    }
+
+    fn start_target_rebuild(&mut self) {
+        let started = self.call_target();
+        assert!(result_text(&started).starts_with("Indexing "), "{started}");
+    }
+
+    fn rebuild_attempts(&self) -> usize {
+        std::fs::read_to_string(&self.rebuilds)
+            .map(|attempts| attempts.lines().count())
+            .unwrap_or(0)
+    }
+
+    fn wait_until_the_rebuild_failed(&self) {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while self.rebuild_attempts() == 0 {
+            assert!(Instant::now() < deadline, "the rebuild never ran");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        std::thread::sleep(Duration::from_millis(500));
+    }
+
+    fn assert_the_target_reports_the_failed_rebuild(&mut self) {
+        for _ in 0..2 {
+            let result = self.call_target();
+            let text = result_text(&result);
+            assert_eq!(result["isError"], true, "{result}");
+            assert!(
+                text.contains(&scan_remedy_tail(self.target.path())),
+                "{text}"
+            );
+            assert!(text.contains("simulated rebuild failure"), "{text}");
+        }
+        assert_eq!(self.rebuild_attempts(), 1);
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn test_mcp_keeps_a_rebuild_failure_that_finishes_while_its_root_is_inactive() {
+    let mut server = SlowFailingRebuild::start();
+    server.start_target_rebuild();
+
+    server.answer_from_launch();
+    server.wait_until_the_rebuild_failed();
+    server.answer_from_launch();
+
+    server.assert_the_target_reports_the_failed_rebuild();
+}
+
+#[cfg(unix)]
+#[test]
+fn test_mcp_keeps_a_rebuild_failure_that_finished_before_a_switch_joined_it() {
+    let mut server = SlowFailingRebuild::start();
+    server.start_target_rebuild();
+
+    server.wait_until_the_rebuild_failed();
+    server.answer_from_launch();
+
+    server.assert_the_target_reports_the_failed_rebuild();
+}

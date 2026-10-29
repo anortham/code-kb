@@ -443,27 +443,62 @@ pub fn ensure_index_matches_extractor(
 /// The command that rebuilds the index of `root` from scratch. It names the running binary,
 /// because a plugin install does not put `code-kb` on `PATH`.
 pub fn scan_remedy(root: &Path) -> String {
-    format!(
-        "Run `{} scan --root {}` to rebuild the index.",
-        shell_argument(&running_binary()),
-        shell_argument(&root.display().to_string())
+    scan_remedy_text(
+        &running_binary(),
+        &root.display().to_string(),
+        cfg!(windows),
     )
 }
 
-/// `arg` as one shell word: bare when it holds only path characters, else quoted for `sh` on
-/// Unix and for `cmd` and PowerShell on Windows, where a path cannot hold `"`.
-fn shell_argument(arg: &str) -> String {
+/// The remedy text for `binary` and `root`. On Windows it gives the command for PowerShell
+/// (Codex and most agents) and for Git Bash (Claude Code), since no one form runs in both:
+/// PowerShell runs a quoted path only after the call operator `&`, which `sh` rejects.
+fn scan_remedy_text(binary: &str, root: &str, windows: bool) -> String {
+    if windows {
+        format!(
+            "Run `& {} scan --root {}` in PowerShell or `{} scan --root {}` in Git Bash to rebuild the index.",
+            powershell_argument(binary),
+            powershell_argument(root),
+            posix_argument(binary),
+            posix_argument(root)
+        )
+    } else {
+        format!(
+            "Run `{} scan --root {}` to rebuild the index.",
+            posix_argument(binary),
+            posix_argument(root)
+        )
+    }
+}
+
+/// `arg` as one `sh` word: bare when it holds only characters that `sh` and `bash` take
+/// literally, else in single quotes. A backslash is not bare, because `sh` drops it.
+fn posix_argument(arg: &str) -> String {
     let bare = !arg.is_empty()
-        && arg.chars().all(|c| {
-            c.is_alphanumeric() || "/:._-+@%,=".contains(c) || (cfg!(windows) && c == '\\')
-        });
+        && arg
+            .chars()
+            .all(|c| c.is_alphanumeric() || "/:._-+@%,=".contains(c));
     if bare {
         arg.to_string()
-    } else if cfg!(windows) {
-        format!("\"{arg}\"")
     } else {
         format!("'{}'", arg.replace('\'', r"'\''"))
     }
+}
+
+/// `arg` as one PowerShell word: always in single quotes, where nothing expands. PowerShell
+/// also ends a single-quoted string at the typographic single quotes, so each of them is
+/// doubled like `'`.
+fn powershell_argument(arg: &str) -> String {
+    let mut quoted = String::with_capacity(arg.len() + 2);
+    quoted.push('\'');
+    for c in arg.chars() {
+        if matches!(c, '\'' | '\u{2018}' | '\u{2019}' | '\u{201A}' | '\u{201B}') {
+            quoted.push(c);
+        }
+        quoted.push(c);
+    }
+    quoted.push('\'');
+    quoted
 }
 
 /// The path of the running `code-kb` binary, or `code-kb` when the platform cannot tell.
@@ -1274,42 +1309,91 @@ mod tests {
 
     use super::*;
 
+    #[cfg(unix)]
     #[test]
-    fn the_scan_remedy_quotes_a_root_with_a_space() {
+    fn the_unix_scan_remedy_quotes_a_root_with_a_space_for_sh() {
         let remedy = scan_remedy(Path::new("/home/me/My Projects/app"));
 
-        #[cfg(unix)]
+        assert!(remedy.starts_with("Run `"), "{remedy}");
         assert!(
             remedy.ends_with(" scan --root '/home/me/My Projects/app'` to rebuild the index."),
             "{remedy}"
-        );
-        #[cfg(windows)]
-        assert!(
-            remedy.ends_with(" scan --root \"/home/me/My Projects/app\"` to rebuild the index."),
-            "{remedy}"
-        );
-    }
-
-    #[test]
-    fn a_shell_argument_without_special_characters_stays_bare() {
-        assert_eq!(
-            shell_argument("/repo/src-1/app_v2.rs"),
-            "/repo/src-1/app_v2.rs"
         );
     }
 
     #[cfg(windows)]
     #[test]
-    fn a_windows_path_with_backslashes_stays_bare() {
-        assert_eq!(shell_argument(r"C:\Users\me\app"), r"C:\Users\me\app");
+    fn the_windows_scan_remedy_names_a_powershell_and_a_git_bash_command() {
+        let remedy = scan_remedy(Path::new(r"C:\Users\me\My Projects\app"));
+
+        assert!(remedy.starts_with("Run `& '"), "{remedy}");
+        assert!(
+            remedy.contains(r" scan --root 'C:\Users\me\My Projects\app'` in PowerShell or `'"),
+            "{remedy}"
+        );
+        assert!(
+            remedy.ends_with(
+                r" scan --root 'C:\Users\me\My Projects\app'` in Git Bash to rebuild the index."
+            ),
+            "{remedy}"
+        );
     }
 
-    #[cfg(unix)]
     #[test]
-    fn a_unix_shell_argument_with_a_quote_or_a_backslash_is_quoted() {
-        assert_eq!(shell_argument("/a/it's here"), r"'/a/it'\''s here'");
-        assert_eq!(shell_argument("/a/$HOME"), "'/a/$HOME'");
-        assert_eq!(shell_argument(r"/a/b\c"), r"'/a/b\c'");
+    fn the_unix_remedy_text_runs_one_sh_command() {
+        assert_eq!(
+            scan_remedy_text("/opt/code kb/code-kb", "/repo/app", false),
+            "Run `'/opt/code kb/code-kb' scan --root /repo/app` to rebuild the index."
+        );
+    }
+
+    #[test]
+    fn the_windows_remedy_text_runs_the_binary_with_the_call_operator_in_powershell() {
+        assert_eq!(
+            scan_remedy_text(
+                r"C:\Program Files\code-kb\code-kb.exe",
+                r"C:\Users\me\it's %USERPROFILE% $HOME `n",
+                true
+            ),
+            concat!(
+                r"Run `& 'C:\Program Files\code-kb\code-kb.exe' scan --root ",
+                r"'C:\Users\me\it''s %USERPROFILE% $HOME `n'` in PowerShell or ",
+                r"`'C:\Program Files\code-kb\code-kb.exe' scan --root ",
+                r"'C:\Users\me\it'\''s %USERPROFILE% $HOME `n'` in Git Bash to rebuild the index."
+            )
+        );
+    }
+
+    #[test]
+    fn a_powershell_argument_is_single_quoted_with_every_single_quote_doubled() {
+        assert_eq!(
+            powershell_argument(r"C:\Users\me\app"),
+            r"'C:\Users\me\app'"
+        );
+        assert_eq!(powershell_argument("code-kb"), "'code-kb'");
+        assert_eq!(
+            powershell_argument("C:\\a\\it's \u{2019}x\u{2018} $env:HOME `t"),
+            "'C:\\a\\it''s \u{2019}\u{2019}x\u{2018}\u{2018} $env:HOME `t'"
+        );
+    }
+
+    #[test]
+    fn a_posix_argument_without_special_characters_stays_bare() {
+        assert_eq!(
+            posix_argument("/repo/src-1/app_v2.rs"),
+            "/repo/src-1/app_v2.rs"
+        );
+        assert_eq!(posix_argument("/a/%x,y=z+@:"), "/a/%x,y=z+@:");
+    }
+
+    #[test]
+    fn a_posix_argument_with_a_quote_a_backslash_or_an_expansion_is_quoted() {
+        assert_eq!(posix_argument("/a/it's here"), r"'/a/it'\''s here'");
+        assert_eq!(posix_argument("/a/$HOME"), "'/a/$HOME'");
+        assert_eq!(posix_argument(r"/a/b\c"), r"'/a/b\c'");
+        assert_eq!(posix_argument(r"C:\Users\me\app"), r"'C:\Users\me\app'");
+        assert_eq!(posix_argument("/a/`id`"), "'/a/`id`'");
+        assert_eq!(posix_argument(""), "''");
     }
 
     #[test]

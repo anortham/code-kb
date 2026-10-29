@@ -120,7 +120,9 @@ different `julie-extract` version or extraction level wrote it, or when SQLite c
 The rebuild scans into a side file and then moves it into place, so reads never find the index
 missing. If a rebuild fails, the error names the command to run, `code-kb scan --root <root>`,
 with the full path of the running `code-kb` binary in place of `code-kb`, because a plugin
-install does not put `code-kb` on `PATH`. `code-kb scan --force` forces a full re-extraction.
+install does not put `code-kb` on `PATH`. On Windows the error gives the command for
+PowerShell (`& '<code-kb>' scan --root '<root>'`) and for Git Bash. `code-kb scan --force`
+forces a full re-extraction.
 
 The index honors `.gitignore`, `.ignore`, `.julieignore`, `.code-kb-ignore`, and
 `.codekbignore`, and applies changes to them automatically. These folders are never indexed,

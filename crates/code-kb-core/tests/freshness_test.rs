@@ -1234,14 +1234,17 @@ fn test_failed_rebuild_of_an_index_that_is_not_a_database_names_the_scan_remedy(
     assert!(error.contains(&scan_remedy_tail(&ws)), "{error}");
 }
 
-/// The end of the scan remedy: the running binary's file name, then the scan of the root.
+/// The end of the scan remedy: the running binary's file name, then the scan of the root, in
+/// the Git Bash form on Windows.
 fn scan_remedy_tail(ws: &Workspace) -> String {
     let exe = std::env::current_exe().unwrap();
-    format!(
-        "{} scan --root {}` to rebuild the index.",
-        exe.file_name().unwrap().to_string_lossy(),
-        ws.canonical_root.display()
-    )
+    let exe = exe.file_name().unwrap().to_string_lossy().into_owned();
+    let root = ws.canonical_root.display();
+    if cfg!(windows) {
+        format!("{exe}' scan --root '{root}'` in Git Bash to rebuild the index.")
+    } else {
+        format!("{exe} scan --root {root}` to rebuild the index.")
+    }
 }
 
 #[test]
