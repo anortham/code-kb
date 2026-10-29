@@ -1124,6 +1124,22 @@ const LOCAL_FUNCTION_CASES: &[LocalTypeCase] = &[
     LocalTypeCase {
         files: &[
             (
+                "src/p/Util.scala",
+                "package p\n\nobject Util {\n  def helper(): Int = 1\n\n  def outside(): Int = {\n    Util.helper()\n  }\n}\n",
+            ),
+            (
+                "src/p/Use.scala",
+                "package p\n\nobject Use {\n  def inside(): Int = {\n    def helper(): Int = 2\n    helper()\n  }\n}\n",
+            ),
+        ],
+        module_path: "src/p/Util.scala",
+        local_path: "src/p/Use.scala",
+        outside: ("src/p/Util.scala", "Util.helper()"),
+        inside: "    helper()",
+    },
+    LocalTypeCase {
+        files: &[
+            (
                 "src/Util.cs",
                 "static class Util {\n  public static int helper() => 1;\n\n  public static int Outside() {\n    return helper();\n  }\n}\n",
             ),

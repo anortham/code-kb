@@ -233,7 +233,7 @@ pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
         )?;
     }
 
-    link_impl_owners(conn)?;
+    normalize_extractor_facts(conn)?;
 
     if fts_index_is_ready(conn) {
         return Ok(());
@@ -417,6 +417,61 @@ pub fn link_impl_owners(conn: &Connection) -> rusqlite::Result<()> {
     tx.commit()
 }
 
+/// Normalizes extracted facts that need code-kb semantics: the names of anonymous classes and the
+/// owners of methods declared away from their type.
+pub(crate) fn normalize_extractor_facts(conn: &Connection) -> rusqlite::Result<()> {
+    name_anonymous_classes(conn)?;
+    link_impl_owners(conn)
+}
+
+/// julie names an anonymous class after its line (`anonymous_class_L12`), a name that no code
+/// writes and that a line shift changes. Renames each one to the type it creates and the symbol
+/// that creates it (`<anonymous Task in make>`), so every answer shows that name and the edit
+/// check pairs its members across a line shift. Rows are renamed in source order, so a nested
+/// anonymous class reads the new name of the one around it.
+pub(crate) fn name_anonymous_classes(conn: &Connection) -> rusqlite::Result<()> {
+    let has_metadata: bool = conn.query_row(
+        "SELECT count(*) = 1 FROM pragma_table_info('symbols') WHERE name = 'metadata_json'",
+        [],
+        |row| row.get(0),
+    )?;
+    if !has_metadata {
+        return Ok(());
+    }
+    let unnamed: Vec<(String, Option<String>, Option<String>)> = conn
+        .prepare(
+            "SELECT symbol_id, signature, parent_symbol_id FROM symbols
+             WHERE name GLOB 'anonymous_class_L[0-9]*' AND kind = 'class'
+               AND json_valid(metadata_json)
+               AND json_extract(metadata_json, '$.type') = 'anonymous_class'
+             ORDER BY path, start_line, start_column",
+        )?
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
+        .collect::<rusqlite::Result<_>>()?;
+    if unnamed.is_empty() {
+        return Ok(());
+    }
+    let tx = rusqlite::Transaction::new_unchecked(conn, rusqlite::TransactionBehavior::Immediate)?;
+    {
+        let mut creator = tx.prepare("SELECT name FROM symbols WHERE symbol_id = ?1")?;
+        let mut rename = tx.prepare("UPDATE symbols SET name = ?1 WHERE symbol_id = ?2")?;
+        for (symbol_id, signature, parent) in unnamed {
+            let creator = match parent {
+                Some(parent) => creator
+                    .query_row([parent], |row| row.get::<_, String>(0))
+                    .optional()?,
+                None => None,
+            };
+            let name = crate::models::anonymous_class_label(
+                signature.as_deref().unwrap_or(""),
+                creator.as_deref(),
+            );
+            rename.execute([name, symbol_id])?;
+        }
+    }
+    tx.commit()
+}
+
 /// `(owner, method)` pairs for the Go methods with no parent whose receiver type is declared
 /// once in the method's package: its folder, narrowed by the `package` clause when an external
 /// test package shares the folder, and then by the method's own file.
@@ -568,6 +623,15 @@ pub fn link_impl_owners_path(path: &Path) -> Result<(), DbError> {
     conn.busy_timeout(std::time::Duration::from_secs(60))
         .map_err(DbError::PragmaFailed)?;
     link_impl_owners(&conn)?;
+    Ok(())
+}
+
+/// Runs [`normalize_extractor_facts`] on the database file after an incremental write.
+pub(crate) fn normalize_extractor_facts_path(path: &Path) -> Result<(), DbError> {
+    let conn = open_read_write(path)?;
+    conn.busy_timeout(std::time::Duration::from_secs(60))
+        .map_err(DbError::PragmaFailed)?;
+    normalize_extractor_facts(&conn)?;
     Ok(())
 }
 

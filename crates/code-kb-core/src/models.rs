@@ -278,6 +278,69 @@ pub(crate) fn is_generated_lambda_name(
         && signature.is_some_and(|signature| signature.starts_with("lambda"))
 }
 
+/// The prefix of the name that code-kb gives an anonymous class: `<anonymous Task in make>`.
+pub(crate) const ANONYMOUS_CLASS_PREFIX: &str = "<anonymous";
+
+/// Whether a symbol is an anonymous class: a `class` row that code-kb named
+/// `<anonymous Task in make>` in place of julie's `anonymous_class_L<line>`.
+pub(crate) fn is_anonymous_class(name: &str, kind: &str) -> bool {
+    kind == "class" && name.starts_with(ANONYMOUS_CLASS_PREFIX)
+}
+
+/// The name of an anonymous class: the type it creates or extends, from the creation head that
+/// julie writes as its signature (`new Task()`, `object : Task`, `new Task { … }`,
+/// `class extends Base`, `class implements Task`, `Class.new(Base)`, `{ new ITask with … }`),
+/// and the function, method, property, or variable that creates it.
+pub(crate) fn anonymous_class_label(signature: &str, creator: Option<&str>) -> String {
+    let created = created_type(signature.trim());
+    match (created, creator) {
+        (Some(created), Some(creator)) => format!("<anonymous {created} in {creator}>"),
+        (Some(created), None) => format!("<anonymous {created}>"),
+        (None, Some(creator)) => format!("<anonymous in {creator}>"),
+        (None, None) => "<anonymous>".to_string(),
+    }
+}
+
+fn created_type(head: &str) -> Option<&str> {
+    let after_word = |text: &'_ str, word: &str| -> Option<usize> {
+        text.match_indices(word)
+            .find(|(at, _)| *at == 0 || text[..*at].ends_with(char::is_whitespace))
+            .map(|(at, _)| at + word.len())
+    };
+    let class_expression = |text: &str| {
+        text.strip_prefix("class")
+            .is_some_and(|rest| !rest.starts_with(|c: char| c.is_alphanumeric() || c == '_'))
+    };
+    let head = match head.strip_prefix("new ") {
+        Some(rest) if class_expression(rest.trim_start()) => rest.trim_start(),
+        _ => head,
+    };
+    let written = if let Some(rest) = head.strip_prefix("new ") {
+        rest
+    } else if let Some(rest) = head.strip_prefix("object") {
+        rest.trim_start().strip_prefix(':')?
+    } else if class_expression(head) {
+        let at = after_word(head, "extends ").or_else(|| after_word(head, "implements "))?;
+        &head[at..]
+    } else if let Some((receiver, rest)) = head.split_once(".new").or(head.split_once(".define")) {
+        match receiver.trim() {
+            "Class" => rest.trim_start().strip_prefix('(')?,
+            receiver => receiver,
+        }
+    } else {
+        return None;
+    };
+    let written = written.trim_start().trim_start_matches('\\');
+    let end = written
+        .find(|c: char| !(c.is_alphanumeric() || matches!(c, '_' | '.' | ':' | '\\' | '$')))
+        .unwrap_or(written.len());
+    let segment = written[..end]
+        .rsplit(['.', ':', '\\'])
+        .next()
+        .filter(|segment| segment.starts_with(|c: char| c.is_alphabetic() || c == '_'))?;
+    Some(segment)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct StructuralFact {
     pub structural_fact_id: String,
@@ -461,4 +524,57 @@ pub struct ImpactedSymbol {
     /// Why a row that the callers report found, not the walk, is impacted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::anonymous_class_label;
+
+    #[test]
+    fn an_anonymous_class_is_named_by_the_type_it_creates_and_its_creator() {
+        let cases = [
+            ("new Task()", "<anonymous Task in make>"),
+            (
+                "new java.util.Comparator<String>()",
+                "<anonymous Comparator in make>",
+            ),
+            (
+                "object : MouseAdapter(), Closeable",
+                "<anonymous MouseAdapter in make>",
+            ),
+            ("object", "<anonymous in make>"),
+            ("new Logging with Closeable", "<anonymous Logging in make>"),
+            (
+                "class extends Base implements Task",
+                "<anonymous Base in make>",
+            ),
+            ("class implements Task", "<anonymous Task in make>"),
+            (
+                "new class implements \\Psr\\Log\\LoggerInterface",
+                "<anonymous LoggerInterface in make>",
+            ),
+            ("new class($a, $b)", "<anonymous in make>"),
+            ("new classic.Task()", "<anonymous Task in make>"),
+            ("class", "<anonymous in make>"),
+            ("class($a) extends \\App\\Base", "<anonymous Base in make>"),
+            ("Class.new(Api::Base)", "<anonymous Base in make>"),
+            ("Class.new", "<anonymous in make>"),
+            ("Struct.new(:a, :b)", "<anonymous Struct in make>"),
+            ("Data.define(:a)", "<anonymous Data in make>"),
+            ("new ITask", "<anonymous ITask in make>"),
+            ("new Base(1)", "<anonymous Base in make>"),
+        ];
+        for (signature, label) in cases {
+            assert_eq!(
+                anonymous_class_label(signature, Some("make")),
+                label,
+                "{signature}"
+            );
+        }
+        assert_eq!(
+            anonymous_class_label("new Task()", None),
+            "<anonymous Task>"
+        );
+        assert_eq!(anonymous_class_label("", None), "<anonymous>");
+    }
 }

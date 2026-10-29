@@ -897,10 +897,11 @@ const STATIC_TYPE_LANGUAGES: &[&str] = &[
 /// Lua, and R are not: the outer function can return an object that holds the function
 /// (`return { inc = inc }`), and a call through that object names it. A PowerShell function
 /// sees the functions of the function that calls it; a Ruby `def` defines a method of the class,
-/// and a Bash or PHP function is global once the outer function runs. julie writes a Scala local
-/// `def` as a method, the same as a member of an anonymous class there, so Scala is not one.
+/// and a Bash or PHP function is global once the outer function runs. A member of an anonymous
+/// class (`object : Task { … }`) is a method of that class, never such a function: a caller
+/// reaches it through the object that the function returns or passes.
 const LOCAL_FUNCTION_LANGUAGES: &[&str] = &[
-    "python", "rust", "kotlin", "csharp", "swift", "dart", "fsharp",
+    "python", "rust", "kotlin", "csharp", "swift", "dart", "fsharp", "scala",
 ];
 
 /// Languages where a type defined inside a function is named only inside it. C#, Dart, F#, and
@@ -927,27 +928,24 @@ const TYPE_KINDS: &[&str] = &[
 
 /// Whether a symbol of `kind` in `language`, defined directly inside a function, method, or
 /// constructor, is named only inside it.
-fn is_local_kind(kind: &str, language: &str, signature: &str) -> bool {
-    kind == "function"
-        && LOCAL_FUNCTION_LANGUAGES.contains(&language)
-        && !is_object_expression_member(language, signature)
+fn is_local_kind(kind: &str, language: &str) -> bool {
+    kind == "function" && LOCAL_FUNCTION_LANGUAGES.contains(&language)
         || TYPE_KINDS.contains(&kind) && LOCAL_TYPE_LANGUAGES.contains(&language)
         || TYPE_ONLY_KINDS.contains(&kind) && language_family(language) == "js"
 }
 
-/// A Kotlin `override fun` that julie hangs on the function around it: a member of an object
-/// expression (`object : Task { override fun run() … }`), which a caller of the object reaches.
-/// A local function cannot override.
-fn is_object_expression_member(language: &str, signature: &str) -> bool {
-    language == "kotlin"
-        && signature
-            .split_whitespace()
-            .take_while(|word| *word != "fun")
-            .any(|word| word == "override")
+/// Whether a symbol of `kind` in `language` whose parent is of `parent_kind` is named only inside
+/// that parent: a function, method, or constructor, or, for a local function, the initializer
+/// block of a property, field, or variable (Scala `val v = { def local() = 1; local() }`).
+fn is_local_to(kind: &str, language: &str, parent_kind: &str) -> bool {
+    is_local_kind(kind, language)
+        && (matches!(parent_kind, "function" | "method" | "constructor")
+            || kind == "function"
+                && matches!(parent_kind, "property" | "field" | "variable" | "constant"))
 }
 
-/// The function, method, or constructor that holds every member of `group` when each one is a
-/// function or type that [`is_local_kind`] keeps local to it.
+/// The function, method, constructor, or initialized value that holds every member of `group`
+/// when [`is_local_to`] keeps each one local to it.
 fn enclosing_function(conn: &Connection, group: &[Symbol]) -> Result<Option<Symbol>, QueryError> {
     let Some(parent) = group
         .first()
@@ -955,18 +953,19 @@ fn enclosing_function(conn: &Connection, group: &[Symbol]) -> Result<Option<Symb
     else {
         return Ok(None);
     };
-    let local = group.iter().all(|member| {
-        is_local_kind(
-            &member.kind,
-            &member.language,
-            member.signature.as_deref().unwrap_or(""),
-        ) && member.parent_symbol_id.as_deref() == Some(parent)
-    });
-    if !local {
+    if !group
+        .iter()
+        .all(|member| member.parent_symbol_id.as_deref() == Some(parent))
+    {
         return Ok(None);
     }
-    Ok(crate::queries::get_symbol_by_id(conn, parent)?
-        .filter(|outer| matches!(outer.kind.as_str(), "function" | "method" | "constructor")))
+    Ok(
+        crate::queries::get_symbol_by_id(conn, parent)?.filter(|outer| {
+            group
+                .iter()
+                .all(|member| is_local_to(&member.kind, &member.language, &outer.kind))
+        }),
+    )
 }
 
 /// A JavaScript method assigned to a property (`req.accepts = function`): no scope binds its name,
@@ -2181,16 +2180,15 @@ impl<'a> Accounting<'a> {
             let in_function = parent_kind
                 .as_deref()
                 .is_some_and(|k| matches!(k, "function" | "method" | "constructor"));
+            let local_to_parent = parent_kind
+                .as_deref()
+                .is_some_and(|parent_kind| is_local_to(&kind, &language, parent_kind));
             let local = kind == "parameter" || kind == "variable" && in_function;
             let scope = match (
                 row.get::<_, Option<i64>>(16)?,
                 row.get::<_, Option<i64>>(17)?,
             ) {
-                (Some(start), Some(end))
-                    if in_function && is_local_kind(&kind, &language, &signature) =>
-                {
-                    Some((start as usize, end as usize))
-                }
+                (Some(start), Some(end)) if local_to_parent => Some((start as usize, end as usize)),
                 _ => None,
             };
             let exported = row.get::<_, Option<String>>(12)?.as_deref() == Some("public")
@@ -3568,8 +3566,9 @@ impl<'a> Accounting<'a> {
             .collect::<Result<Vec<_>, _>>()
         })?;
         let is_class = |kind: &str| matches!(kind, "class" | "interface" | "enum" | "record");
-        // julie hangs the methods of an anonymous class on the field or method that builds it,
-        // so its supertype, whose methods a bare call also reaches, is unknown.
+        // julie hangs the methods of an enum constant body on the constant, so the supertype of
+        // that body, whose methods a bare call also reaches, is unknown. An anonymous class has a
+        // class row of its own, and its ancestors join the chain below.
         if chain.windows(2).any(|pair| {
             matches!(pair[0].0.as_str(), "method" | "constructor") && !is_class(&pair[1].0)
         }) {

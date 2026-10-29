@@ -20,7 +20,7 @@ needs, and keeps nothing after the call.
 (never a constructor) whose parent is a class, struct, record, interface, trait, protocol,
 enum, or union. A private Java, C#, Kotlin, or Scala method is never dispatched: it has neither
 override section, and it is never a row of one. Its rows are the same-named method and function members of every type that
-extends or implements the owner, through resolved `extends` and `implements` rows and through
+extends or implements the owner, an anonymous class (`<anonymous Task in make>`) among them, through resolved `extends` and `implements` rows and through
 pending rows that name the owner. A type of any of these kinds can be a row, so an enum or a
 Rust union that implements a trait or an interface is listed. Only a class, struct, record,
 interface, trait, or protocol can be the owner that is extended or implemented. A Python enum
@@ -129,7 +129,11 @@ forms: a call, a `new` (`instantiates`), or a site that the constructor step lab
 `builds the class`; a literal of the type (below); or a constructor call that the source
 confirms (below). When one line holds a call and a type use of the name with the same label,
 the site keeps the call, so a C++ `Box b(1)` or `new Box("s")`, which julie 3.10.0 writes as a
-`call` of the class name, counts as a call.
+`call` of the class name, counts as a call. In a Java, Kotlin, Scala, F#, or PHP file the
+`extends` site of an anonymous class (`object : Base(1) { … }`, `{ new Base(1) with … }`,
+`new class(1) extends Base { … }`) also counts, because the expression builds an object of the
+class where it is written. A JavaScript or TypeScript class expression and a Ruby
+`Class.new(Base)` make a class, not an object, so their `extends` sites do not count.
 
 Literals. In Rust, Go, C, C++, Zig, F#, and Elixir files a `type_usage`, `variable_ref`, or
 `uses` site counts when its line opens a literal of the type. The site needs a column, except in

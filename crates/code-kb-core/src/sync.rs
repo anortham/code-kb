@@ -241,7 +241,7 @@ fn write_incrementally(
             scan_workspace(workspace, db_path, true)
         }
         Err(error) => Err(error),
-        Ok(_) => crate::db::link_impl_owners_path(db_path).map_err(|e| {
+        Ok(_) => crate::db::normalize_extractor_facts_path(db_path).map_err(|e| {
             error!(db = %db_path.display(), "Linking method owners failed: {e}");
             e.into()
         }),

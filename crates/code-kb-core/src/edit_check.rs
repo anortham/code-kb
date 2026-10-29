@@ -26,7 +26,7 @@ use crate::db::{DbError, ensure_fts_index_path, open_read_only};
 use crate::formatters::displayed_symbol_name;
 use crate::models::{
     CallingTest, ConstructionSite, LabeledSite, ReferenceReport, SiteLabel, Symbol, VariantUse,
-    is_generated_lambda_name,
+    is_anonymous_class, is_generated_lambda_name,
 };
 use crate::queries::{
     DOCUMENTATION_LANGUAGES, MAX_BLAST_DEPTH, MAX_RESULT_LIMIT, QueryError,
@@ -891,9 +891,9 @@ impl Row {
         }
     }
 
-    /// A julie lambda is named after its line, so a line shift would read as a rename. A
-    /// constant, variable, or type alias counts only at the top level and when another file can
-    /// import it.
+    /// A julie lambda is named after its line, so a line shift would read as a rename. No code
+    /// names an anonymous class, so only its members count. A constant, variable, or type alias
+    /// counts only at the top level and when another file can import it.
     fn is_shape(&self) -> bool {
         let symbol = &self.symbol;
         let kind = symbol.kind.as_str();
@@ -911,6 +911,7 @@ impl Row {
                 kind,
                 symbol.signature.as_deref(),
             )
+            && !is_anonymous_class(&symbol.name, kind)
     }
 
     fn display(&self) -> String {

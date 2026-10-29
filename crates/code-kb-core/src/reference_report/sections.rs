@@ -6,7 +6,7 @@ use rusqlite::{Connection, OptionalExtension, params, params_from_iter};
 
 use crate::models::{
     CallingTest, ConstructionSite, LabeledSite, OverrideRow, Registration, SiteLabel, Symbol,
-    VariantUse,
+    VariantUse, is_anonymous_class,
 };
 use crate::queries::{
     QueryError, ROUTE_FAMILIES, get_symbol_by_id, has_column, has_table, is_test_path,
@@ -1800,6 +1800,9 @@ fn constructions(root: &Path, target: &Symbol, sites: &[LabeledSite]) -> Vec<Con
         };
         if matches!(site.kind.as_str(), "calls" | "call" | "instantiates")
             || labeled.basis == BUILDS_THE_CLASS
+            || site.kind == "extends"
+                && is_anonymous_class(&site.from_symbol_name, "class")
+                && anonymous_class_builds_an_object(&site.path)
         {
             hits.push((index, &site.path, line));
         } else if matches!(site.kind.as_str(), "type_usage" | "variable_ref" | "uses")
@@ -1875,6 +1878,19 @@ fn constructions(root: &Path, target: &Symbol, sites: &[LabeledSite]) -> Vec<Con
             line,
         })
         .collect()
+}
+
+/// Whether an anonymous class that extends a class in the file at `path` builds an object of it
+/// where it is written (`new Base(1) { … }`, `object : Base(1) { … }`, `{ new Base(1) with … }`,
+/// `new class(1) extends Base { … }`). A JavaScript or TypeScript class expression and a Ruby
+/// `Class.new(Base)` make a class, not an object.
+fn anonymous_class_builds_an_object(path: &str) -> bool {
+    path.rsplit_once('.').is_some_and(|(_, extension)| {
+        matches!(
+            extension.to_ascii_lowercase().as_str(),
+            "java" | "kt" | "kts" | "scala" | "sc" | "fs" | "fsx" | "php"
+        )
+    })
 }
 
 fn constructor_call_language(path: &str) -> Option<&'static str> {
@@ -3289,9 +3305,25 @@ fn load_test_symbol(
     Ok(rows.next().transpose()?)
 }
 
+/// Whether `symbol` is a member of an anonymous class, which no runner selects by name.
+fn in_anonymous_class(
+    load: &mut rusqlite::Statement,
+    symbol: &TestSymbol,
+) -> Result<bool, QueryError> {
+    if symbol.parent_kind.as_deref() != Some("class") {
+        return Ok(false);
+    }
+    let Some(parent) = symbol.parent_id.as_deref() else {
+        return Ok(false);
+    };
+    Ok(load_test_symbol(load, parent)?
+        .is_some_and(|owner| is_anonymous_class(&owner.name, &owner.kind)))
+}
+
 /// The test that `caller` stands for: the caller when julie flags it as a test or its name reads
 /// like one in a test file, else the test function that holds it as a helper. A class defined
-/// inside a function is part of that function. Setup, teardown, and fixture members are never
+/// inside a function is part of that function, and so is an anonymous class that a local
+/// variable of the function holds. Setup, teardown, and fixture members are never
 /// tests, and neither are helpers inside them.
 fn test_of(load: &mut rusqlite::Statement, caller: &str) -> Result<Option<TestSymbol>, QueryError> {
     let mut current = load_test_symbol(load, caller)?;
@@ -3302,7 +3334,7 @@ fn test_of(load: &mut rusqlite::Statement, caller: &str) -> Result<Option<TestSy
         if symbol.lifecycle {
             return Ok(None);
         }
-        if symbol.reads_as_test() {
+        if symbol.reads_as_test() && !in_anonymous_class(load, &symbol)? {
             let holder = if symbol.language == "python" {
                 class_chain(load, &symbol)?.held_by
             } else {
@@ -3389,6 +3421,17 @@ fn class_chain(
             (Some(outer), Some("class")) => Some(outer.clone()),
             (Some(holder), Some(kind)) if TestSymbol::is_callable(kind) => {
                 chain.held_by = Some(holder.clone());
+                None
+            }
+            (Some(value), Some("variable")) if is_anonymous_class(&class.name, &class.kind) => {
+                chain.held_by = load_test_symbol(load, value)?
+                    .filter(|value| {
+                        value
+                            .parent_kind
+                            .as_deref()
+                            .is_some_and(TestSymbol::is_callable)
+                    })
+                    .and_then(|value| value.parent_id);
                 None
             }
             _ => None,

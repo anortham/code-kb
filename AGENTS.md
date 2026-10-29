@@ -178,6 +178,18 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   clears a link when it rewrites the type's file, and the next run links it again. A skeleton
   shows a method whose parent is in another file as a top-level row.
 
+- julie names an anonymous class `anonymous_class_L<line>` (kind `class`, metadata
+  `type: anonymous_class`): a Java `new T() { … }`, a Kotlin `object : T { … }`, a Scala
+  `new T { … }`, a JavaScript-family class expression with no name, an F# object expression, a
+  Ruby `Class.new`, `Struct.new`, or `Data.define` block, and a PHP `new class`.
+  `normalize_extractor_facts` in `db.rs` runs `name_anonymous_classes` before `link_impl_owners`
+  at the same points, and it renames such a class to the type it creates and the symbol that
+  creates it, its parent (`<anonymous Task in make>`, `<anonymous in make>`, `<anonymous Task>`),
+  read from the creation head that julie writes as its signature, so every answer shows that name,
+  a member shows as `<anonymous Task in make>.run`, and a line shift does not rename it. Lookup
+  lists such a class only by its whole name, ranked search leaves it out, `check_edit` counts
+  only its members, and a member is never a test of its own: the test that holds the object is.
+
 ### 3. Token-Dense Progressive Disclosure
 - Always return the most compact representation that answers the query.
 - Strip implementation bodies in `file_skeleton`.
@@ -250,7 +262,7 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   A member access whose receiver names a type-like target groups to one row per
   file with an `occurrences` count. An identifier row is dropped when a relationship row already
   covers the same site. An import alias satisfies a pending receiver unless the import source
-  starts with `Qt`. An `extends` row never resolves to its own component. A `type_usage` or `member_access` identifier matches a selected target only in the same language, except among JavaScript, TypeScript, TSX, JSX, and Vue, between Razor and C#, and from QML to C++. A name-only `type_usage` does not match a type when a type with the same name is nearer to the use: nested in an enclosing scope, or at the top level of the same file. The grouped rows of a type-like receiver follow the same language rule and leave out a file that defines its own type with that name. A caller that julie names as a generated lambda shows as `<lambda> in <enclosing symbol>`, and a site with no caller shows as `(no enclosing symbol)`. A handler row is
+  starts with `Qt`. An `extends` row never resolves to its own component. A `type_usage` or `member_access` identifier matches a selected target only in the same language, except among JavaScript, TypeScript, TSX, JSX, and Vue, between Razor and C#, and from QML to C++. A name-only `type_usage` does not match a type when a type with the same name is nearer to the use: nested in an enclosing scope, or at the top level of the same file. The grouped rows of a type-like receiver follow the same language rule and leave out a file that defines its own type with that name. A caller that julie names as a generated lambda shows as `<lambda> in <enclosing symbol>`, an anonymous class shows as `<anonymous Task in make>` (invariant 2), and a site with no caller shows as `(no enclosing symbol)`. A handler row is
   labelled `handler` when the receiver names the owner and `handler (candidate)` otherwise. Test
   paths include `/autotests/` directories and file names that start with `tst_`. A Qt C++
   header's `property` and `event` rows come from the extractor's macro pre-pass and render like
@@ -439,13 +451,14 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   julie names a test call after its label (`test("strictObject", …)`); such a label is not a
   definition, and when the target is a label every site is excluded: ``res` is a test label,
   which code never names``. A function defined inside a Python, Rust, Kotlin, C#, Swift, Dart,
-  or F# function (not a Kotlin `override fun` of an object expression), a class, struct, enum,
+  F#, or Scala function, or in the initializer of a property, field, or variable, a class, struct, enum,
   interface, trait, union, or type alias defined inside a Python, Rust, Kotlin, Swift, Scala,
   Java, C++, C, Go, or Zig function, method, or constructor, and a TypeScript, TSX, or Vue
   interface or type alias defined inside a function, is local to it, so a site outside that
   function is excluded:
   ``read` is local to `test_session_cookie_setting``; such a function or type is no other
-  definition of a site outside that function either. A Java member access, written without
+  definition of a site outside that function either. A member of an anonymous class is never
+  local to the function that creates the object, since a caller reaches it through that object. A Java member access, written without
   parentheses, never reaches a method, because julie writes a method reference (`parser::next`)
   as a call: ``a member access reads a field, not the method `length` ``. A bare Java
   call is excluded with the basis ``name` is imported from `java.lang.Math`` when its file has
@@ -590,8 +603,8 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   or type (a changed import or module-level constant); outside a git repository that
   call is the `check_edit` error `not a git repository: <root>` (MCP `isError`, CLI exit 1). A caller at depth 1 is a
   `direct caller`, a deeper one an `indirect caller [depth N]`. A caller defined inside a test
-  (a view function in a pytest test), also as a method of a class defined inside it, is replaced
-  by that test, ``encloses `index` (direct caller)``, unless the test is setup or a fixture. A caller that julie flags as a
+  (a view function in a pytest test), also as a method of a class defined inside it or of an
+  anonymous class that a local variable holds, is replaced by that test, ``encloses `index` (direct caller)``, unless the test is setup or a fixture. A member of an anonymous class steps to the symbol that creates the object, or to the function around a local variable that holds it, with the reason ``creates `<anonymous Task in make>` ``, and the walk goes on to that symbol's callers. A caller that julie flags as a
   pytest fixture is replaced by the tests that take it as a parameter, by the name in its
   `@pytest.fixture(name=...)` when it has one: in its file, or under the directory of the
   `conftest.py` that defines it. A fixture that takes that fixture is replaced by the tests that

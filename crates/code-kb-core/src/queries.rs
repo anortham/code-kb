@@ -7,8 +7,8 @@ mod import_scope;
 
 use crate::db::local_variable_predicate;
 use crate::models::{
-    BlastRadiusResult, FileFact, ImpactedSymbol, LiteralFact, OpenEnd, ReferenceSite,
-    SearchExplain, StructuralFact, Symbol, SymbolSearchResult, TestTarget, TypeFact,
+    ANONYMOUS_CLASS_PREFIX, BlastRadiusResult, FileFact, ImpactedSymbol, LiteralFact, OpenEnd,
+    ReferenceSite, SearchExplain, StructuralFact, Symbol, SymbolSearchResult, TestTarget, TypeFact,
     has_generated_lambda_name, is_generated_lambda_name,
 };
 
@@ -704,6 +704,10 @@ fn search_symbols_sql(variables_wanted: bool, include_tests: bool, limit: usize)
            AND (:path IS NULL OR replace(path, '\\', '/') = :path COLLATE NOCASE OR replace(path, '\\', '/') LIKE :path_like || '/%' ESCAPE '\\' OR replace(path, '\\', '/') LIKE '%/' || :path_like ESCAPE '\\')",
     );
     sql.push_str(&document_link_exclusion());
+    sql.push_str(&format!(
+        " AND (+name = :query OR NOT {})",
+        anonymous_class_predicate("s")
+    ));
 
     if !variables_wanted {
         sql.push_str(&format!(" AND NOT {}", local_variable_predicate("s")));
@@ -1498,6 +1502,13 @@ fn load_module_facts(conn: &Connection, candidates: &mut [Candidate]) -> Result<
 
 /// julie records a Markdown or other documentation link as an `import` row; no lookup or search
 /// for code wants it.
+/// SQL mirror of [`is_anonymous_class`]: a class that code-kb names `<anonymous Task in make>`.
+/// No query names it, so ranked search leaves it out, and lookup lists it only by its whole
+/// name. Its members stay.
+pub(crate) fn anonymous_class_predicate(alias: &str) -> String {
+    format!("({alias}.kind = 'class' AND {alias}.name GLOB '{ANONYMOUS_CLASS_PREFIX}*')")
+}
+
 fn document_link_exclusion() -> String {
     format!(
         " AND NOT (s.kind = 'import' AND s.language IN ({}))",
@@ -1511,6 +1522,7 @@ fn candidate_filters(searching_variables: bool, include_tests: bool) -> String {
           AND (:path IS NULL OR replace(s.path, '\\', '/') = :path COLLATE NOCASE OR replace(s.path, '\\', '/') LIKE :path_like || '/%' ESCAPE '\\' OR replace(s.path, '\\', '/') LIKE '%/' || :path_like ESCAPE '\\')",
     );
     sql.push_str(&document_link_exclusion());
+    sql.push_str(&format!(" AND NOT {}", anonymous_class_predicate("s")));
     if !searching_variables {
         sql.push_str(&format!(" AND NOT {}", local_variable_predicate("s")));
     }
@@ -9073,6 +9085,7 @@ fn collect_walk(
     let mut reached = Vec::new();
     let mut constructor_only_test_keys = HashSet::new();
     let mut non_constructor_test_keys = HashSet::new();
+    let creators = anonymous_class_creators(conn, &walk.rows_json())?;
     for seed in seed_rows(conn, seeds.condition, seeds.params, lifecycle)? {
         let origin = if seeds.target_ids.contains(seed.symbol_id.as_str()) {
             SeedOrigin::Target
@@ -9139,7 +9152,10 @@ fn collect_walk(
                    EXISTS (SELECT 1 FROM symbols owner
                            WHERE owner.symbol_id = s.parent_symbol_id
                              AND COALESCE(owner.test_container, 0) != 0) AS in_test_class,
-                   s.language, s.signature, MIN(iw.depth) = 0 AS is_seed, s.symbol_id
+                   s.language, s.signature, MIN(iw.depth) = 0 AS is_seed, s.symbol_id,
+                   EXISTS (SELECT 1 FROM symbols owner
+                           WHERE owner.symbol_id = s.parent_symbol_id AND {anonymous_owner})
+                       AS in_anonymous_class
             FROM impact_walk iw
             CROSS JOIN symbols s ON iw.symbol_id = s.symbol_id
             WHERE {low_signal_filter}
@@ -9149,7 +9165,8 @@ fn collect_walk(
                AND (MIN(iw.depth) > 0 OR s.is_test != 0 OR s.test_container != 0 OR is_fixture
                     OR ({test_path} AND (in_test_class OR {test_name})))
             ORDER BY {reached_depth} > {max_depth} ASC, {reached_via} ASC, min_depth ASC, s.path ASC, s.name ASC
-            LIMIT 201"
+            LIMIT 201",
+            anonymous_owner = anonymous_class_predicate("owner"),
         );
 
         let mut stmt = conn.prepare(&sql)?;
@@ -9170,6 +9187,7 @@ fn collect_walk(
                 row.get::<_, Option<String>>(12)?,
                 row.get::<_, bool>(13)?,
                 row.get::<_, String>(14)?,
+                row.get::<_, bool>(15)?,
             ))
         })?;
 
@@ -9190,6 +9208,7 @@ fn collect_walk(
                 signature,
                 is_seed,
                 symbol_id,
+                in_anonymous_class,
             ) = r?;
             if depth > max_depth {
                 callers_beyond_depth = true;
@@ -9200,10 +9219,11 @@ fn collect_walk(
                 break;
             }
             let path = raw_path.replace('\\', "/");
-            let is_test_target = is_test
-                || test_container
-                || is_fixture
-                || (is_test_path(&path) && (in_test_class || names_a_test(&name)));
+            let is_test_target = !in_anonymous_class
+                && (is_test
+                    || test_container
+                    || is_fixture
+                    || (is_test_path(&path) && (in_test_class || names_a_test(&name))));
             if is_seed && !is_test_target {
                 continue;
             }
@@ -9276,6 +9296,9 @@ fn collect_walk(
                     });
                 }
             } else {
+                let reason = creators
+                    .get(&symbol_id)
+                    .map(|anonymous| format!("creates `{anonymous}`"));
                 if can_be_open_end(&kind) {
                     reached.push(ReachedSymbol {
                         symbol_id,
@@ -9305,7 +9328,7 @@ fn collect_walk(
                     line,
                     depth,
                     enclosing_symbol_name,
-                    reason: None,
+                    reason,
                 });
             }
         }
@@ -9533,6 +9556,22 @@ fn walk_caller_branches(
         ));
     }
 
+    // An anonymous class is built where it is written, so a change to its member reaches the
+    // symbol that creates the object (`make` for `return new Task() { … }`), and the callers of
+    // that symbol get the object.
+    if has_relationships || has_pending {
+        recursive_branches.push(format!(
+            "SELECT {ANONYMOUS_CLASS_CREATOR}, iw.depth + 1, iw.via, iw.symbol_id
+             FROM impact_walk iw
+             CROSS JOIN symbols member ON member.symbol_id = iw.symbol_id
+             JOIN symbols anon ON anon.symbol_id = member.parent_symbol_id
+             JOIN symbols holder ON holder.symbol_id = anon.parent_symbol_id
+             WHERE iw.depth < {depth_bound}
+               AND {anonymous}",
+            anonymous = anonymous_class_predicate("anon"),
+        ));
+    }
+
     // A constructor runs wherever its class is built: `Flask()` reaches `Flask.__init__`. Rows
     // reached only this way (`via` 1) sort last: nearly every test builds the app.
     if has_relationships {
@@ -9582,9 +9621,39 @@ fn walk_caller_branches(
     recursive_branches
 }
 
+/// The symbol that creates the anonymous class `anon`, whose parent is `holder`: that parent, or
+/// the function around it when the parent is a local variable that holds the object
+/// (`val r = object : Runnable { … }`).
+const ANONYMOUS_CLASS_CREATOR: &str = "CASE WHEN holder.kind = 'variable'
+         AND EXISTS (SELECT 1 FROM symbols outer_fn
+                     WHERE outer_fn.symbol_id = holder.parent_symbol_id
+                       AND outer_fn.kind IN ('function', 'method', 'constructor'))
+         THEN holder.parent_symbol_id ELSE holder.symbol_id END";
+
+/// The symbols that create an anonymous class with a member among the walk rows in `rows_json`,
+/// each with the name of that class: such a symbol is impacted because it creates the object.
+fn anonymous_class_creators(
+    conn: &Connection,
+    rows_json: &str,
+) -> Result<HashMap<String, String>, QueryError> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {ANONYMOUS_CLASS_CREATOR}, MIN(anon.name)
+         FROM json_each(?1) w
+         JOIN symbols member ON member.symbol_id = json_extract(w.value, '$[0]')
+         JOIN symbols anon ON anon.symbol_id = member.parent_symbol_id
+         JOIN symbols holder ON holder.symbol_id = anon.parent_symbol_id
+         WHERE {anonymous}
+         GROUP BY 1",
+        anonymous = anonymous_class_predicate("anon"),
+    ))?;
+    let rows = stmt.query_map(params![rows_json], |row| Ok((row.get(0)?, row.get(1)?)))?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
 /// The test that encloses a function defined inside it, as `index` inside `test_url_processors`,
-/// also through a class defined inside it: the nearest enclosing function or method that is a
-/// test, never one that is setup or a fixture.
+/// also through a class defined inside it or a value that holds an anonymous class
+/// (`val r = object : Runnable { … }`): the nearest enclosing function or method that is a test,
+/// never one that is setup or a fixture.
 pub(crate) fn enclosing_walk_test(
     conn: &Connection,
     parent: Option<&str>,
@@ -9626,7 +9695,10 @@ pub(crate) fn enclosing_walk_test(
         else {
             return Ok(None);
         };
-        if kind == "class" {
+        if matches!(
+            kind.as_str(),
+            "class" | "variable" | "property" | "field" | "constant"
+        ) {
             next = parent;
             continue;
         }
