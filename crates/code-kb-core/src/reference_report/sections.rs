@@ -3418,6 +3418,56 @@ impl<'c> TestCaseBases<'c> {
     }
 }
 
+fn test_symbol_loader(conn: &Connection) -> Result<rusqlite::Statement<'_>, QueryError> {
+    let lifecycle = if has_column(conn, "symbols", "test_lifecycle") {
+        "COALESCE(s.test_lifecycle, 0)"
+    } else {
+        "0"
+    };
+    Ok(conn.prepare(&format!(
+        "SELECT s.symbol_id, s.name, s.kind, s.path, s.start_line, s.language, s.is_test,
+                {lifecycle}, s.parent_symbol_id, p.kind
+         FROM symbols s
+         LEFT JOIN symbols p ON p.symbol_id = s.parent_symbol_id
+         WHERE s.symbol_id = ?1"
+    ))?)
+}
+
+/// The tests that start at each place, by path and line, in the order given, each with the
+/// command that runs it. A place where no test starts, or where only a fixture or a setup member
+/// starts, gives no row.
+pub(crate) fn tests_at(
+    conn: &Connection,
+    root: &Path,
+    places: &[(String, usize)],
+) -> Result<Vec<CallingTest>, QueryError> {
+    let mut load = test_symbol_loader(conn)?;
+    let mut starting = conn.prepare(
+        "SELECT symbol_id FROM symbols
+         WHERE path IN (?1, ?3) AND start_line = ?2
+         ORDER BY kind NOT IN ('function', 'method', 'constructor'), symbol_id",
+    )?;
+    let mut seen = HashSet::new();
+    let mut tests = Vec::new();
+    for (path, line) in places {
+        let backslashed = path.replace('/', "\\");
+        let ids = starting
+            .query_map(params![path, *line as i64, backslashed], |row| {
+                row.get::<_, String>(0)
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        for id in ids {
+            if let Some(test) = test_of(&mut load, &id)? {
+                if seen.insert(test.id.clone()) {
+                    tests.push((test, false));
+                }
+                break;
+            }
+        }
+    }
+    with_commands(conn, root, &mut load, tests)
+}
+
 /// The tests that own a proven or likely site of `target`, by path and line, each with the
 /// command that runs it. Each caller is loaded once, and each marker folder is read once.
 fn calling_tests(
@@ -3426,18 +3476,7 @@ fn calling_tests(
     target: &Symbol,
     sites: &[LabeledSite],
 ) -> Result<Vec<CallingTest>, QueryError> {
-    let lifecycle = if has_column(conn, "symbols", "test_lifecycle") {
-        "COALESCE(s.test_lifecycle, 0)"
-    } else {
-        "0"
-    };
-    let mut load = conn.prepare(&format!(
-        "SELECT s.symbol_id, s.name, s.kind, s.path, s.start_line, s.language, s.is_test,
-                {lifecycle}, s.parent_symbol_id, p.kind
-         FROM symbols s
-         LEFT JOIN symbols p ON p.symbol_id = s.parent_symbol_id
-         WHERE s.symbol_id = ?1"
-    ))?;
+    let mut load = test_symbol_loader(conn)?;
     let mut callers = HashSet::new();
     let mut tests: BTreeMap<String, (TestSymbol, bool)> = BTreeMap::new();
     for labeled in sites
@@ -3456,11 +3495,27 @@ fn calling_tests(
             tests.entry(test.id.clone()).or_insert((test, true)).1 &= name_only;
         }
     }
+    let mut rows = with_commands(conn, root, &mut load, tests.into_values().collect())?;
+    rows.sort_by(|a, b| {
+        a.path
+            .cmp(&b.path)
+            .then_with(|| a.line.cmp(&b.line))
+            .then_with(|| a.name.cmp(&b.name))
+    });
+    Ok(rows)
+}
+
+fn with_commands(
+    conn: &Connection,
+    root: &Path,
+    load: &mut rusqlite::Statement,
+    tests: Vec<(TestSymbol, bool)>,
+) -> Result<Vec<CallingTest>, QueryError> {
     let mut finder = CommandFinder::new(root);
     let mut bases = TestCaseBases::new(conn)?;
     let mut rows = Vec::with_capacity(tests.len());
-    for (test, name_only) in tests.into_values() {
-        let chain = class_chain(&mut load, &test)?;
+    for (test, name_only) in tests {
+        let chain = class_chain(load, &test)?;
         let mut classes = Vec::with_capacity(chain.classes.len());
         for class in &chain.classes {
             classes.push(TestClass {
@@ -3485,12 +3540,6 @@ fn calling_tests(
             name_only,
         });
     }
-    rows.sort_by(|a, b| {
-        a.path
-            .cmp(&b.path)
-            .then_with(|| a.line.cmp(&b.line))
-            .then_with(|| a.name.cmp(&b.name))
-    });
     Ok(rows)
 }
 

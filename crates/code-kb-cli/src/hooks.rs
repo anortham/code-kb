@@ -144,7 +144,10 @@ fn stop_decision(payload: &Value, event: &str) -> Option<String> {
     if state.has_seen(&hash) {
         return None;
     }
-    let check = pending.run(&workspace, &db_path, &conn).ok()?;
+    let check = pending
+        .without_test_walk()
+        .run(&workspace, &db_path, &conn)
+        .ok()?;
     let reason = format_stop_reason(&check);
     let sites = stop_sites(&check);
     let (blocked_diff, blocked_sites) = match reason {

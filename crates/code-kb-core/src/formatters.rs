@@ -2377,11 +2377,13 @@ pub fn format_edit_check(check: &EditCheck) -> String {
             "Tests to run: {}",
             check.tests[..shown].join("; ")
         ));
-        if shown < check.tests.len() {
-            out.push_str(&format!("; … {} more", check.tests.len() - shown));
+        let found = check.tests_found.max(check.tests.len());
+        if shown < found {
+            out.push_str(&format!("; … {} more", found - shown));
         }
         out.push('\n');
     }
+    push_tests_incomplete(&mut out, check);
     out.push_str(
         "Not checked: calls inside macro arguments, callback invocation contracts. Indexed callable values are advisory dependencies.\n",
     );
@@ -2427,17 +2429,42 @@ pub fn format_edit_check_page(check: &EditCheck, offset: usize, limit: usize) ->
     push_edit_cuts(&mut out, check);
     if !check.tests.is_empty() {
         let (start, end) = page_bounds(check.tests.len(), offset, limit);
-        out.push_str(&format!("Tests to run ({}):\n", check.tests.len()));
+        let found = check.tests_found.max(check.tests.len());
+        if found > check.tests.len() {
+            out.push_str(&format!(
+                "Tests to run ({found} found, {} kept):\n",
+                check.tests.len()
+            ));
+        } else {
+            out.push_str(&format!("Tests to run ({}):\n", check.tests.len()));
+        }
         page_caption(&mut out, check.tests.len(), start, end, offset);
         if start < end {
             out.push_str(&check.tests[start..end].join("; "));
             out.push('\n');
         }
     }
+    push_tests_incomplete(&mut out, check);
     out.push_str(
         "Not checked: calls inside macro arguments, callback invocation contracts. Indexed callable values are advisory dependencies.\n",
     );
     out
+}
+
+fn push_tests_incomplete(out: &mut String, check: &EditCheck) {
+    if check.tests_incomplete.is_empty() {
+        return;
+    }
+    let lead = if check.tests.is_empty() {
+        "No test reaches the changed symbols through the index"
+    } else {
+        "Tests to run may be incomplete"
+    };
+    out.push_str(&format!("{lead}: {}. ", check.tests_incomplete.join("; ")));
+    match &check.broader_test_command {
+        Some(command) => out.push_str(&format!("Broader test command: `{command}`\n")),
+        None => out.push_str("Run the full test suite.\n"),
+    }
 }
 
 fn push_shape_change_page(out: &mut String, change: &ShapeChange, offset: usize, limit: usize) {

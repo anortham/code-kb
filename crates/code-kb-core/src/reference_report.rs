@@ -27,7 +27,7 @@ mod receiver_types;
 mod sections;
 pub(crate) mod variant_names;
 
-pub(crate) use sections::{destructurings, enum_variant_names, uses_of_variants};
+pub(crate) use sections::{destructurings, enum_variant_names, tests_at, uses_of_variants};
 
 const RESOLVER_ROW_CAP: usize = 5_000;
 const OTHER_DEFINITION_CAP: usize = 12;

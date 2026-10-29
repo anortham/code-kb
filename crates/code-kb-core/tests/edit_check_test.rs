@@ -1097,6 +1097,135 @@ fn the_tests_that_call_a_changed_function_are_named_with_their_commands() {
     );
 }
 
+const CONFIG_APP: &str = "def debug_flag():\n    return True\n\n\ndef make_config():\n    return {\"debug\": debug_flag()}\n\n\nclass App:\n    def __init__(self):\n        self.config = make_config()\n";
+
+fn config_app_repo() -> Repo {
+    committed_repo(&[
+        ("pytest.ini", "[pytest]\n"),
+        ("app.py", CONFIG_APP),
+        (
+            "tests/conftest.py",
+            "import pytest\n\nfrom app import App\n\n\n@pytest.fixture\ndef app():\n    return App()\n",
+        ),
+        (
+            "tests/test_config.py",
+            "from app import App\n\n\ndef test_config_debug():\n    assert App().config[\"debug\"]\n",
+        ),
+        (
+            "tests/test_views.py",
+            "def test_index(app):\n    assert app.config\n",
+        ),
+    ])
+}
+
+#[test]
+fn the_tests_that_reach_the_callers_of_a_changed_function_are_named() {
+    let repo = config_app_repo();
+    write(
+        &repo.root,
+        "app.py",
+        &CONFIG_APP.replace("def debug_flag():", "def debug_flag(env):"),
+    );
+    let check = run_check(&repo, None);
+    assert!(
+        check
+            .tests
+            .contains(&"pytest tests/test_config.py::test_config_debug".to_string()),
+        "{:?}",
+        check.tests
+    );
+    assert!(
+        check
+            .tests
+            .contains(&"pytest tests/test_views.py::test_index".to_string()),
+        "{:?}",
+        check.tests
+    );
+    assert_eq!(check.tests_found, 2);
+}
+
+#[test]
+fn the_tests_that_reach_a_reader_of_a_removed_field_are_named() {
+    let repo = committed_repo(&[
+        ("pytest.ini", "[pytest]\n"),
+        (
+            "wrappers.py",
+            "class Request:\n    routing_exception: Exception | None = None\n    method: str = \"GET\"\n",
+        ),
+        (
+            "dispatch.py",
+            "from wrappers import Request\n\n\ndef dispatch(req: Request):\n    if req.routing_exception is not None:\n        raise req.routing_exception\n    return req.method\n\n\ndef handle():\n    return dispatch(Request())\n",
+        ),
+        (
+            "tests/test_dispatch.py",
+            "from dispatch import handle\n\n\ndef test_handle():\n    assert handle() == \"GET\"\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "wrappers.py",
+        "class Request:\n    method: str = \"GET\"\n",
+    );
+    let text = text_of(&repo);
+    assert_has(&text, "fields +0, -1 (routing_exception)");
+    assert_has(
+        &text,
+        "Tests to run: pytest tests/test_dispatch.py::test_handle\n",
+    );
+}
+
+#[test]
+fn a_caller_that_no_indexed_call_reaches_names_the_broader_scope_instead_of_tests() {
+    let repo = committed_repo(&[
+        ("pytest.ini", "[pytest]\n"),
+        ("lib.py", "def helper(a):\n    return a\n"),
+        (
+            "entry.py",
+            "from lib import helper\n\n\ndef main():\n    return helper(1)\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "lib.py",
+        "def helper(a, b):\n    return a + b\n",
+    );
+    let check = run_check(&repo, None);
+    assert!(check.tests.is_empty(), "{:?}", check.tests);
+    assert_has(
+        &format_edit_check(&check),
+        "No test reaches the changed symbols through the index: the walk stopped at 1 function that no indexed call reaches. Broader test command: `pytest`\n",
+    );
+}
+
+#[test]
+fn a_test_list_past_the_kept_fifty_states_the_count_and_the_broader_scope() {
+    let mut tests = String::from("from app import App\n\n");
+    for index in 0..60 {
+        tests.push_str(&format!(
+            "\ndef test_app_{index}():\n    assert App().config\n\n"
+        ));
+    }
+    let repo = committed_repo(&[
+        ("pytest.ini", "[pytest]\n"),
+        ("app.py", CONFIG_APP),
+        ("tests/test_app.py", &tests),
+    ]);
+    write(
+        &repo.root,
+        "app.py",
+        &CONFIG_APP.replace("def debug_flag():", "def debug_flag(env):"),
+    );
+    let check = run_check(&repo, None);
+    assert_eq!(check.tests.len(), 50);
+    assert_eq!(check.tests_found, 60);
+    let text = format_edit_check(&check);
+    assert_has(&text, "; … 52 more\n");
+    assert_has(
+        &text,
+        "Tests to run may be incomplete: the check keeps 50 of 60. Broader test command: `pytest`\n",
+    );
+}
+
 #[test]
 fn only_the_thirty_symbols_with_the_most_uses_are_checked_and_the_cut_is_stated() {
     let mut files: Vec<(String, String)> = Vec::new();

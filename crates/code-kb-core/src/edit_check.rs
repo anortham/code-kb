@@ -29,15 +29,17 @@ use crate::models::{
     is_generated_lambda_name,
 };
 use crate::queries::{
-    DOCUMENTATION_LANGUAGES, QueryError, declared_fixture_name, escape_like, has_column,
+    DOCUMENTATION_LANGUAGES, MAX_BLAST_DEPTH, MAX_RESULT_LIMIT, QueryError,
+    compute_blast_radius_from_callers, declared_fixture_name, escape_like, has_column,
     load_file_symbols,
 };
 use crate::reference_report::arity::{self, Arity};
 use crate::reference_report::{
     destructurings, enum_variant_names, inherited_group_arity, preprocessor_condition,
-    reference_report_for_edit, reference_report_for_removed_member, uses_of_variants,
+    reference_report_for_edit, reference_report_for_removed_member, tests_at, uses_of_variants,
 };
 use crate::sync::{self, SyncError, ensure_fresh_file};
+use crate::test_commands::CommandFinder;
 use crate::workspace::{Workspace, is_hard_excluded};
 use arms::Verdict;
 use binding::{OverloadBinding, TypedOverloads};
@@ -168,7 +170,17 @@ pub struct EditCheck {
     pub source: BaseSource,
     pub files_changed: usize,
     pub changes: Vec<ShapeChange>,
+    /// The commands of the tests that reach a changed symbol, the first [`MAX_TESTS`] of them.
     pub tests: Vec<String>,
+    /// How many different test commands the check found.
+    #[serde(default)]
+    pub tests_found: usize,
+    /// Why `tests` can leave out tests that reach a changed symbol; empty when nothing cut it.
+    #[serde(default)]
+    pub tests_incomplete: Vec<String>,
+    /// The command that runs the tests around the found ones, when `tests_incomplete` has a reason.
+    #[serde(default)]
+    pub broader_test_command: Option<String>,
     pub cuts: Vec<String>,
     pub diff_hash: String,
 }
@@ -235,6 +247,7 @@ const OWNED_METHODS_SQL: &str = "SELECT name, path, start_line, end_line FROM sy
      ORDER BY path, start_line";
 const STALE_CHECK_AGE: Duration = Duration::from_secs(3600);
 const MAX_TESTS: usize = 50;
+const MAX_WALK_SEEDS: usize = 200;
 const MAX_EXTENT_LINES: usize = 80;
 
 static CHECK_LOCK: Mutex<()> = Mutex::new(());
@@ -313,6 +326,7 @@ pub struct PendingCheck {
     diff_hash: String,
     limits: EditLimits,
     started: Instant,
+    walk_tests: bool,
 }
 
 pub(crate) fn run(
@@ -347,6 +361,7 @@ pub(crate) fn prepare(
         diff_hash,
         limits,
         started,
+        walk_tests: true,
     })
 }
 
@@ -354,6 +369,13 @@ impl PendingCheck {
     /// The hash of the base commit and of the content of each changed file.
     pub fn diff_hash(&self) -> &str {
         &self.diff_hash
+    }
+
+    /// Leaves out the tests that only the walk from the callers of the sites reaches, for a
+    /// caller that does not show the tests to run, such as the `Stop` hook.
+    pub fn without_test_walk(mut self) -> Self {
+        self.walk_tests = false;
+        self
     }
 
     /// Runs the rest of the check. `workspace` and `conn` are those that prepared it.
@@ -376,6 +398,7 @@ impl PendingCheck {
             files_cut,
             diff_hash,
             limits,
+            walk_tests,
             ..
         } = self;
         let mut check = EditCheck {
@@ -384,6 +407,9 @@ impl PendingCheck {
             files_changed: files.len(),
             changes: Vec::new(),
             tests: Vec::new(),
+            tests_found: 0,
+            tests_incomplete: Vec::new(),
+            broader_test_command: None,
             cuts: files_cut.into_iter().collect(),
             diff_hash,
         };
@@ -430,6 +456,8 @@ impl PendingCheck {
         }
 
         let mut lister = SiteLister::new(conn, root, &base_index.conn, &base_index.tree, &hunks);
+        lister.walk_tests = walk_tests;
+        let mut found = FoundTests::default();
         let total = candidates.len();
         for (checked, candidate) in candidates.into_iter().enumerate() {
             if budget.spent() {
@@ -441,11 +469,9 @@ impl PendingCheck {
             }
             match lister.list(&candidate) {
                 Ok(listed) => {
-                    for command in listed.tests {
-                        if !check.tests.contains(&command) && check.tests.len() < MAX_TESTS {
-                            check.tests.push(command);
-                        }
-                    }
+                    found.direct.extend(listed.tests);
+                    found.paths.push(candidate.path.clone());
+                    found.add_walk(listed.walked);
                     check.changes.push(ShapeChange {
                         kind: candidate.kind,
                         display: candidate.display,
@@ -470,7 +496,102 @@ impl PendingCheck {
                 .then_with(|| a.line.cmp(&b.line))
                 .then_with(|| a.display.cmp(&b.display))
         });
+        found.fill(root, &mut check);
         Ok(check)
+    }
+}
+
+/// What the walk from the callers of one change's proven and likely sites found.
+#[derive(Default)]
+struct WalkedTests {
+    commands: Vec<String>,
+    paths: Vec<String>,
+    seeds_cut: Option<(usize, usize)>,
+    ceiling: bool,
+    stopped_at_depth: bool,
+    open_ends: Vec<(String, usize)>,
+    failure: Option<String>,
+}
+
+/// The tests of every change: those that call a changed symbol first, then those that the walk
+/// reaches from the callers of its sites, and what kept the walk from finding them all.
+#[derive(Default)]
+struct FoundTests {
+    direct: Vec<String>,
+    walked: Vec<String>,
+    paths: Vec<String>,
+    seeds_cut: Vec<(usize, usize)>,
+    ceiling: bool,
+    stopped_at_depth: bool,
+    open_ends: Vec<(String, usize)>,
+    failures: Vec<String>,
+}
+
+impl FoundTests {
+    fn add_walk(&mut self, walked: WalkedTests) {
+        self.walked.extend(walked.commands);
+        self.paths.extend(walked.paths);
+        self.seeds_cut.extend(walked.seeds_cut);
+        self.failures.extend(walked.failure);
+        self.ceiling |= walked.ceiling;
+        self.stopped_at_depth |= walked.stopped_at_depth;
+        for end in walked.open_ends {
+            if !self.open_ends.contains(&end) {
+                self.open_ends.push(end);
+            }
+        }
+    }
+
+    fn fill(self, root: &Path, check: &mut EditCheck) {
+        let mut seen = HashSet::new();
+        for command in self.direct.into_iter().chain(self.walked) {
+            if seen.insert(command.clone()) && check.tests.len() < MAX_TESTS {
+                check.tests.push(command);
+            }
+        }
+        check.tests_found = seen.len();
+        let reasons = &mut check.tests_incomplete;
+        if check.tests_found > MAX_TESTS {
+            reasons.push(format!(
+                "the check keeps {MAX_TESTS} of {}",
+                check.tests_found
+            ));
+        }
+        for (walked, callers) in self.seeds_cut {
+            reasons.push(format!(
+                "the walk started from {walked} of {callers} callers of one change"
+            ));
+        }
+        reasons.extend(self.failures);
+        if self.ceiling {
+            reasons.push(format!("the walk stopped at {MAX_RESULT_LIMIT} rows"));
+        }
+        if self.stopped_at_depth {
+            reasons.push(format!("the walk stopped at depth {MAX_BLAST_DEPTH}"));
+        }
+        if !self.open_ends.is_empty() {
+            let count = self.open_ends.len();
+            reasons.push(format!(
+                "the walk stopped at {count} {} that no indexed call reaches",
+                if count == 1 { "function" } else { "functions" }
+            ));
+        }
+        if reasons.is_empty() {
+            return;
+        }
+        let mut paths = self.paths;
+        paths.sort_unstable();
+        paths.dedup();
+        let mut finder = CommandFinder::new(root);
+        let first = paths
+            .first()
+            .and_then(|path| finder.broader_test_command(Some(path)));
+        check.broader_test_command = first.filter(|command| {
+            paths
+                .iter()
+                .skip(1)
+                .all(|path| finder.broader_test_command(Some(path)).as_ref() == Some(command))
+        });
     }
 }
 
@@ -1803,6 +1924,7 @@ impl Placed {
 struct Listed {
     placed: Placed,
     tests: Vec<String>,
+    walked: WalkedTests,
 }
 
 enum RequiredArguments {
@@ -1829,6 +1951,7 @@ struct SiteLister<'a> {
     hunks: &'a Hunks,
     sources: HashMap<String, Option<Vec<String>>>,
     languages: HashMap<String, String>,
+    walk_tests: bool,
 }
 
 fn is_call(kind: &str) -> bool {
@@ -1872,6 +1995,7 @@ impl<'a> SiteLister<'a> {
             hunks,
             sources: HashMap::new(),
             languages: HashMap::new(),
+            walk_tests: true,
         }
     }
 
@@ -1968,7 +2092,74 @@ impl<'a> SiteLister<'a> {
             .iter()
             .filter_map(|test| test.command.clone())
             .collect();
-        Ok(Listed { placed, tests })
+        let walked = if self.walk_tests {
+            self.walked_tests(&report)
+                .unwrap_or_else(|error| WalkedTests {
+                    failure: Some(format!(
+                        "the walk from the callers of `{}` failed: {error}",
+                        candidate.display
+                    )),
+                    ..WalkedTests::default()
+                })
+        } else {
+            WalkedTests::default()
+        };
+        Ok(Listed {
+            placed,
+            tests,
+            walked,
+        })
+    }
+
+    /// The tests that the `blast_radius` walk reaches from the callers of the proven and likely
+    /// sites, up to [`MAX_BLAST_DEPTH`] calls from the changed symbol.
+    fn walked_tests(&self, report: &ReferenceReport) -> Result<WalkedTests, EditCheckError> {
+        let mut callers: Vec<&str> = Vec::new();
+        for labeled in &report.sites {
+            let caller = labeled.site.from_symbol_id.as_str();
+            if matches!(labeled.label, SiteLabel::Proven | SiteLabel::Likely)
+                && !caller.is_empty()
+                && caller != report.target.symbol_id
+                && !callers.contains(&caller)
+            {
+                callers.push(caller);
+            }
+        }
+        if callers.is_empty() {
+            return Ok(WalkedTests::default());
+        }
+        let seeds_cut = (callers.len() > MAX_WALK_SEEDS).then_some((MAX_WALK_SEEDS, callers.len()));
+        callers.truncate(MAX_WALK_SEEDS);
+        let walk = compute_blast_radius_from_callers(
+            self.conn,
+            &callers,
+            MAX_BLAST_DEPTH - 1,
+            MAX_RESULT_LIMIT,
+        )?;
+        let places: Vec<(String, usize)> = walk
+            .likely_tests
+            .iter()
+            .map(|test| (test.path.clone(), test.line))
+            .collect();
+        let tests = tests_at(self.conn, self.root, &places)?;
+        let open_ends: Vec<(String, usize)> = walk
+            .open_ends
+            .iter()
+            .map(|end| (end.path.clone(), end.line))
+            .collect();
+        Ok(WalkedTests {
+            paths: tests
+                .iter()
+                .map(|test| test.path.clone())
+                .chain(open_ends.iter().map(|(path, _)| path.clone()))
+                .collect(),
+            commands: tests.into_iter().filter_map(|test| test.command).collect(),
+            seeds_cut,
+            ceiling: walk.traversal_ceiling_reached || walk.likely_tests_truncated,
+            stopped_at_depth: walk.stopped_at_depth.is_some(),
+            open_ends,
+            failure: None,
+        })
     }
 
     fn calls(&mut self, report: &ReferenceReport, contract: CallContract<'_>) -> Placed {
