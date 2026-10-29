@@ -444,7 +444,7 @@ const CASES: &[Case] = &[
         named: "Impl",
         outside: ("src/Use.fs", "(make ()).Run()"),
         this_call: None,
-        test: None,
+        test: Some("``make builds a task``"),
     },
     Case {
         language: "ruby",
@@ -1215,4 +1215,69 @@ fn an_incremental_update_names_the_anonymous_classes_it_writes() {
         .collect::<Result<_, _>>()
         .unwrap();
     assert_eq!(names, ["Make", "<anonymous Task in build>"]);
+}
+
+const INTERFACE_DEFAULT_CASES: &[(&str, &[(&str, &str)])] = &[
+    (
+        "src/main/java/p/Task.java",
+        &[
+            (
+                "src/main/java/p/Task.java",
+                "package p;\n\npublic interface Task {\n    default int go() {\n        return 1;\n    }\n\n    int run();\n}\n",
+            ),
+            (
+                "src/main/java/p/Impl.java",
+                "package p;\n\npublic class Impl implements Task {\n    public int run() {\n        int a = this.go();\n        int b = go();\n        return a + b;\n    }\n}\n",
+            ),
+            (
+                "src/main/java/p/Make.java",
+                "package p;\n\npublic class Make {\n    static Task make() {\n        return new Task() {\n            public int run() {\n                int a = this.go();\n                int b = go();\n                return a + b;\n            }\n        };\n    }\n}\n",
+            ),
+            (
+                "src/main/java/p/Other.java",
+                "package p;\n\npublic class Other {\n    public int go() {\n        return 2;\n    }\n}\n",
+            ),
+        ],
+    ),
+    (
+        "src/main/kotlin/p/Task.kt",
+        &[
+            (
+                "src/main/kotlin/p/Task.kt",
+                "package p\n\ninterface Task {\n    fun go(): Int = 1\n\n    fun run(): Int\n}\n",
+            ),
+            (
+                "src/main/kotlin/p/Impl.kt",
+                "package p\n\nclass Impl : Task {\n    override fun run(): Int {\n        val a = this.go()\n        val b = go()\n        return a + b\n    }\n}\n",
+            ),
+            (
+                "src/main/kotlin/p/Make.kt",
+                "package p\n\nfun make(): Task {\n    return object : Task {\n        override fun run(): Int {\n                val a = this.go()\n                val b = go()\n                return a + b\n            }\n    }\n}\n",
+            ),
+            (
+                "src/main/kotlin/p/Other.kt",
+                "package p\n\nclass Other {\n    fun go(): Int = 2\n}\n",
+            ),
+        ],
+    ),
+];
+
+#[test]
+fn a_call_in_a_class_or_anonymous_object_reaches_a_default_method_of_its_interface() {
+    for (interface, files) in INTERFACE_DEFAULT_CASES {
+        let repo = scanned_repo(files);
+        let go = report(&repo, "go", Some(interface));
+
+        for (path, _) in &files[1..3] {
+            for needle in ["this.go()", "= go()"] {
+                let (label, basis) = site_label(&go, path, line_of(&repo, path, needle));
+                assert_eq!(
+                    (label, basis.as_str()),
+                    (SiteLabel::Proven, "class chain"),
+                    "{path} {needle}\n{}",
+                    dump(&go)
+                );
+            }
+        }
+    }
 }

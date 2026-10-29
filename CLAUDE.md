@@ -255,10 +255,11 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   import matches a class or namespace member only in that file. A bare pending call never matches a definition in another file when the
   caller's file defines that name at module level or inside the caller; an import or re-export
   there does not count. A `self`, `this`, or `cls`
-  call matches a method of any ancestor class, through same-file and cross-file `extends` rows,
-  and a `self`, `this`, or `cls` call also matches a member of the caller's own class or object
-  literal. A base class that a pending `extends` row names counts unless a class of that name is
-  closer to the subclass's file.
+  call matches a method of any ancestor class or interface, through same-file and cross-file
+  `extends` and `implements` rows (a Java `default` method, a Kotlin interface method with a
+  body), and a `self`, `this`, or `cls` call also matches a member of the caller's own class or
+  object literal. A base that a pending `extends` or `implements` row names counts unless a type of
+  that name is closer to the subclass's file.
   A member access whose receiver names a type-like target groups to one row per
   file with an `occurrences` count. An identifier row is dropped when a relationship row already
   covers the same site. An import alias satisfies a pending receiver unless the import source
@@ -341,7 +342,9 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   `excluded` (evidence ties the site to another definition, to an unindexed import, to another
   type, or to another language). A site counts only the other definitions it can reach, and the
   target's own overloads never count. A row of a document language is no definition, except a CSS
-  custom function, which every loaded stylesheet can call. A call never reaches a Go, Java, or Rust field, property,
+  custom function, which every loaded stylesheet can call. A site never reaches a definition in a
+  language that the shared call rule keeps apart from its own (a Java call counts a Kotlin method,
+  never a TypeScript or C# one). A call never reaches a Go, Java, or Rust field, property,
   variable, or constant, except a Java record component, a Go field or variable with no written
   type, a qualified type, or a func type (written, or a project `type X func`, alias, or generic
   form), and a Rust static, constant, or variable of a function type (written, or a project type
@@ -396,7 +399,9 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   F#, Dart, PHP, and GDScript as each language reads the path, and a path built from runtime state
   (`$DIR/env.sh`, a PowerShell module name) proves nothing. A row that only loads a file or opens
   its names (`#include`, Bash `source`, Ruby `require`, PHP `require`, F# `open`, a Java star
-  import) binds no receiver. A Dart import prefix reaches only the libraries it names and what
+  import) binds no receiver. An F# `open Make` still brings the members of module `Make` into the
+  file's scope: a bare call there of a function of that module is proven (`import`), and the walk
+  follows it. A Dart import prefix reaches only the libraries it names and what
   they export; a GDScript `preload` constant reaches its file's class and that class's bases; an
   R `pkg::f()` reaches only the `R` folder of the project package `pkg`, else it is outside. A bare
   Bash, PowerShell, R, PHP, or Ruby call of a top-level function that a file the caller's file
@@ -458,7 +463,10 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   function is excluded:
   ``read` is local to `test_session_cookie_setting``; such a function or type is no other
   definition of a site outside that function either. A member of an anonymous class is never
-  local to the function that creates the object, since a caller reaches it through that object. A Java member access, written without
+  local to the function that creates the object, since a caller reaches it through that object.
+  julie names the class around a value as the caller of a call in its initializer; the call
+  still binds to a function that the initializer defines (`enclosing scope`). A Java member
+  access, written without
   parentheses, never reaches a method, because julie writes a method reference (`parser::next`)
   as a call: ``a member access reads a field, not the method `length` ``. A bare Java
   call is excluded with the basis ``name` is imported from `java.lang.Math`` when its file has

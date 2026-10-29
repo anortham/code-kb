@@ -1140,6 +1140,22 @@ const LOCAL_FUNCTION_CASES: &[LocalTypeCase] = &[
     LocalTypeCase {
         files: &[
             (
+                "src/p/Util.scala",
+                "package p\n\nobject Util {\n  def helper(): Int = 1\n\n  def outside(): Int = {\n    Util.helper()\n  }\n}\n",
+            ),
+            (
+                "src/p/Use.scala",
+                "package p\n\nobject Use {\n  val inside: Int = {\n    def helper(): Int = 2\n    helper()\n  }\n}\n",
+            ),
+        ],
+        module_path: "src/p/Util.scala",
+        local_path: "src/p/Use.scala",
+        outside: ("src/p/Util.scala", "Util.helper()"),
+        inside: "    helper()",
+    },
+    LocalTypeCase {
+        files: &[
+            (
                 "src/Util.cs",
                 "static class Util {\n  public static int helper() => 1;\n\n  public static int Outside() {\n    return helper();\n  }\n}\n",
             ),
@@ -12910,4 +12926,27 @@ fn paging_by_the_limit_lists_every_site_and_text_line_once() {
     assert_eq!(count("Proven"), 3, "{seen:#?}");
     assert_eq!(count("Unresolved"), 2, "{seen:#?}");
     assert_eq!(count("Text only"), 6, "{seen:#?}");
+}
+
+#[test]
+fn a_bare_fsharp_call_in_a_file_that_opens_the_module_is_proven_by_that_open() {
+    let repo = scanned_repo(&[
+        ("src/Make.fs", "module Make\n\nlet make () = 1\n"),
+        ("src/Other.fs", "module Other\n\nlet make () = 2\n"),
+        (
+            "src/Use.fs",
+            "module Use\n\nopen Make\n\nlet useIt () = make ()\n",
+        ),
+    ]);
+    let line = line_of(&repo, "src/Use.fs", "make ()");
+
+    let make = report(&repo, "make", Some("src/Make.fs"));
+    assert_site(&make, "src/Use.fs", line, SiteLabel::Proven, "import");
+    let other = report(&repo, "make", Some("src/Other.fs"));
+    assert_eq!(
+        site_at(&other, "src/Use.fs", line).label,
+        SiteLabel::Excluded,
+        "{}",
+        dump(&other)
+    );
 }

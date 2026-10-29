@@ -3,8 +3,9 @@ use std::fs;
 
 use code_kb_core::queries::{compute_blast_radius_for_changes, find_callee_signatures};
 use code_kb_core::{
-    Symbol, Workspace, compute_blast_radius_scoped, find_julie_extract_binary, find_related_tests,
-    get_context_slice_op, get_symbol_by_name, open_read_only, safe_tempdir, scan_workspace,
+    SiteLabel, Symbol, Workspace, compute_blast_radius_scoped, find_julie_extract_binary,
+    find_related_tests, get_context_slice_op, get_symbol_by_name, open_read_only, reference_report,
+    safe_tempdir, scan_workspace, select_reference_target,
 };
 
 fn scanned_repo(files: &[(&str, &str)]) -> (tempfile::TempDir, std::path::PathBuf) {
@@ -763,5 +764,57 @@ fn reported_call_fallback_keeps_same_language_tests() {
             .iter()
             .any(|related_test| related_test.symbol_id == other_test.symbol_id),
         "{tests:?}"
+    );
+}
+
+#[test]
+fn a_site_counts_other_definitions_only_in_languages_its_call_can_reach() {
+    let (temp, db) = scanned_repo(&[
+        (
+            "src/main/java/p/Task.java",
+            "package p;\n\npublic abstract class Task {\n    public abstract int run();\n}\n",
+        ),
+        (
+            "src/main/java/p/Make.java",
+            "package p;\n\npublic class Make {\n    public static Task make() {\n        return new Task() {\n            public int run() {\n                return 1;\n            }\n        };\n    }\n}\n",
+        ),
+        (
+            "src/main/java/p/Use.java",
+            "package p;\n\npublic class Use {\n    int use() {\n        return Make.make().run();\n    }\n}\n",
+        ),
+        (
+            "src/main/kotlin/q/KJob.kt",
+            "package q\n\nclass KJob {\n    fun run(): Int = 3\n}\n",
+        ),
+        (
+            "web/task.ts",
+            "export class Job {\n  run(): number {\n    return 1;\n  }\n}\n\nexport function run(): number {\n  return 2;\n}\n",
+        ),
+        (
+            "web/cs/Job.cs",
+            "namespace Q;\n\npublic class CJob\n{\n    public int run() { return 4; }\n}\n",
+        ),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+    let target =
+        select_reference_target(&conn, "Task.run", Some("src/main/java/p/Task.java")).unwrap();
+    let report = reference_report(&conn, temp.path(), &target, false).unwrap();
+
+    let sites: Vec<(&str, Option<usize>, SiteLabel, &str)> = report
+        .sites
+        .iter()
+        .filter(|site| site.site.path == "src/main/java/p/Use.java")
+        .map(|site| {
+            (
+                site.site.from_symbol_name.as_str(),
+                site.site.start_line,
+                site.label,
+                site.basis.as_str(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        sites,
+        [("use", Some(5), SiteLabel::Unresolved, "3 definitions")]
     );
 }

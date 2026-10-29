@@ -838,12 +838,14 @@ impl NameRow {
         }
     }
 
-    /// Whether the row can reach `definition`, another definition of the name: a call cannot
-    /// reach a field, and a member access cannot reach a function that only its scope names.
+    /// Whether the row can reach `definition`, another definition of the name: never one in a
+    /// language that the shared call rule keeps apart from the row's, a call cannot reach a
+    /// field, and a member access cannot reach a function that only its scope names.
     fn can_reach(&self, definition: &Definition) -> bool {
-        let call_of_a_field = self.is_call()
-            && !definition.callable
-            && languages_compatible(&self.language, &definition.language);
+        if !languages_compatible(&self.language, &definition.language) {
+            return false;
+        }
+        let call_of_a_field = self.is_call() && !definition.callable;
         let member_of_a_scoped_function =
             definition.free && language_family(&self.language) == "js" && self.has_qualifier();
         let call_on_a_result = self.result_receiver
@@ -5686,6 +5688,8 @@ fn evidence_sql_with_receiver_chain_status(
     let receiver_chain = class_chain_sql(target, "p.target_receiver IS NOT 'super'");
     let inherited = class_chain_sql(target, &format!("{target}.kind IN ('variable', 'field')"));
     let enclosing = enclosing_scope_sql(target);
+    let in_initializer = crate::queries::initializer_scope_sql(target);
+    let opened_module = crate::queries::opened_module_sql(conn, target);
     let implicit_languages = implicit_receiver_language_list();
     let module_receiver = module_import_binding_sql(target, "p.target_receiver");
     let module_bare = module_import_binding_sql(target, &format!("{target}.name"));
@@ -5789,12 +5793,15 @@ fn evidence_sql_with_receiver_chain_status(
                     WHEN {target}.parent_symbol_id IS NULL AND {target}.path = p.path
                          THEN 'same file'
                     WHEN {target}.parent_symbol_id = p.from_symbol_id THEN 'enclosing scope'
+                    WHEN {target}.parent_symbol_id IS NOT NULL AND {in_initializer}
+                         THEN 'enclosing scope'
                     WHEN {target}.parent_symbol_id IS NOT NULL AND {enclosing}
                          THEN 'enclosing scope'
                     WHEN {target}.parent_symbol_id IS NOT NULL AND p.language IN ({implicit_languages})
                          AND (s_from.parent_symbol_id = {target}.parent_symbol_id OR {inherited})
                          THEN 'class chain'
                     WHEN {target}.parent_symbol_id IS NULL AND {module_bare} THEN 'import'
+                    WHEN {target}.parent_symbol_id IS NOT NULL AND {opened_module} THEN 'import'
                     WHEN {target}.parent_symbol_id IS NULL AND {target}.language IN ('go', 'java')
                          AND {target}.language = p.language AND ({package_proximity}) >= 1
                          THEN 'same package'

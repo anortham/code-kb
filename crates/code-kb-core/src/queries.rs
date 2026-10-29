@@ -4493,6 +4493,29 @@ pub(crate) fn import_binds_name_sql(alias: &str) -> String {
     )
 }
 
+/// SQL that holds when the caller's file `p.path` opens the module that holds `target` (F#
+/// `open Make` for `Make.make`), so a bare call there names the members of that module. julie
+/// writes such an import with the form `open` and the module path as its source. The open binds
+/// no name of its own ([`import_binds_name_sql`]); it brings the members of the module into the
+/// file's scope. `0` without import metadata.
+pub(crate) fn opened_module_sql(conn: &Connection, target: &str) -> String {
+    if !has_column(conn, "symbols", "metadata_json") {
+        return "0".to_string();
+    }
+    format!(
+        "EXISTS (
+            SELECT 1 FROM symbols opened
+            JOIN symbols opened_module ON opened_module.symbol_id = {target}.parent_symbol_id
+            WHERE opened.kind = 'import' AND opened.path = p.path
+              AND opened_module.kind IN ('module', 'namespace')
+              AND json_valid(opened.metadata_json)
+              AND json_extract(opened.metadata_json, '$.form') = 'open'
+              AND (json_extract(opened.metadata_json, '$.source') = opened_module.name
+                   OR json_extract(opened.metadata_json, '$.source')
+                      LIKE '%.' || opened_module.name))"
+    )
+}
+
 /// SQL that holds when the caller's file `p.path` binds `binding_name` through an import whose
 /// source module, or imported name, names a folder or file on the path of `target`. A Java import
 /// and a GDScript `preload` have rules of their own.
@@ -4577,13 +4600,13 @@ pub(crate) fn built_receiver_sql(conn: &Connection, target: &str) -> Option<Stri
                             UNION
                             SELECT r.to_symbol_id, built.depth + 1
                             FROM relationships r JOIN built ON r.from_symbol_id = built.symbol_id
-                            WHERE +r.kind = 'extends' AND built.depth < 8
+                            WHERE +r.kind IN ('extends', 'implements') AND built.depth < 8
                             UNION
                             SELECT c.symbol_id, built.depth + 1
                             FROM pending_relationships pe
                             JOIN built ON pe.from_symbol_id = built.symbol_id
                             JOIN symbols c ON c.name = pe.target_terminal_name
-                            WHERE +pe.kind = 'extends' AND built.depth < 8
+                            WHERE +pe.kind IN ('extends', 'implements') AND built.depth < 8
                               AND c.kind IN ('class', 'interface', 'struct', 'trait', 'protocol')
                         )
                         SELECT 1 FROM built WHERE built.symbol_id = {target}.parent_symbol_id
@@ -4627,11 +4650,11 @@ pub(crate) fn receiver_type_sql(conn: &Connection, parent: &str) -> String {
 }
 
 /// SQL that holds when `target` is a member of the class chain of the caller `s_from`: its own
-/// class when `own_class_rule` holds, or a base class named by an `extends` row, where the nearest
-/// class that defines the name wins. julie resolves most `this` calls to the caller's own class,
-/// but not one inside an ordinary JavaScript function, so a `this`, `self`, or `cls` call also
-/// matches a sibling member. A base class that a pending `extends` row names counts unless a class
-/// of that name is closer.
+/// class when `own_class_rule` holds, or a base class or interface named by an `extends` or
+/// `implements` row, where the nearest type that defines the name wins. julie resolves most `this`
+/// calls to the caller's own class, but not one inside an ordinary JavaScript function, so a
+/// `this`, `self`, or `cls` call also matches a sibling member. A base that a pending `extends` or
+/// `implements` row names counts unless a type of that name is closer.
 pub(crate) fn class_chain_sql(target: &str, own_class_rule: &str) -> String {
     let rival_rank = path_proximity("rival.path", "pe.path");
     let base_rank = path_proximity("c.path", "pe.path");
@@ -4643,13 +4666,13 @@ pub(crate) fn class_chain_sql(target: &str, own_class_rule: &str) -> String {
                                 UNION
                                 SELECT r.to_symbol_id, base.depth + 1
                                 FROM relationships r JOIN base ON r.from_symbol_id = base.symbol_id
-                                WHERE +r.kind = 'extends' AND base.depth < 8
+                                WHERE +r.kind IN ('extends', 'implements') AND base.depth < 8
                                 UNION
                                 SELECT c.symbol_id, base.depth + 1
                                 FROM pending_relationships pe
                                 JOIN base ON pe.from_symbol_id = base.symbol_id
                                 JOIN symbols c ON c.name = pe.target_terminal_name
-                                WHERE +pe.kind = 'extends' AND base.depth < 8
+                                WHERE +pe.kind IN ('extends', 'implements') AND base.depth < 8
                                   AND c.kind IN ('class', 'interface', 'struct', 'trait', 'protocol')
                                   AND NOT EXISTS (
                                       SELECT 1 FROM symbols rival
@@ -4713,6 +4736,20 @@ pub(crate) fn enclosing_scope_sql(target: &str) -> String {
                     AND nearer.kind IN ({target}.kind, 'import')
               )
         )"
+    )
+}
+
+/// SQL that holds when `target` is a function defined in the initializer of a property, field,
+/// variable, or constant (Scala `val v = { def local() = 1; local() }`) and row `p` lies in that
+/// initializer. julie names the class around the value as the caller of such a row.
+pub(crate) fn initializer_scope_sql(target: &str) -> String {
+    format!(
+        "({target}.kind = 'function' AND EXISTS (
+            SELECT 1 FROM symbols holder
+            WHERE holder.symbol_id = {target}.parent_symbol_id
+              AND holder.kind IN ('property', 'field', 'variable', 'constant')
+              AND holder.path = p.path
+              AND p.start_line BETWEEN holder.start_line AND holder.end_line))"
     )
 }
 
@@ -4866,6 +4903,8 @@ fn pending_target_predicate_builder(
     let receiver_chain = class_chain_sql(target, "p.target_receiver IS NOT 'super'");
     let implicit_receiver_languages = implicit_receiver_language_list();
     let enclosing = enclosing_scope_sql(target);
+    let in_initializer = initializer_scope_sql(target);
+    let opened_module = opened_module_sql(conn, target);
     let rust_path = rust_path_rule(target, ns);
     let owner_in_scope = owner_binding_in_scope_sql(parent);
     let predicate = format!(
@@ -4921,8 +4960,9 @@ fn pending_target_predicate_builder(
                 AND ({target}.parent_symbol_id IS NULL
                      OR s_from.parent_symbol_id = {target}.parent_symbol_id
                      OR {target}.parent_symbol_id = p.from_symbol_id
+                     OR {in_initializer}
                      OR CASE WHEN p.target_receiver IS NULL OR p.target_receiver = ''
-                        THEN {enclosing}
+                        THEN {enclosing} OR {opened_module}
                         ELSE 0 END
                      OR CASE WHEN (p.target_receiver IS NULL OR p.target_receiver = '')
                                   AND s_from.language IN ({implicit_receiver_languages})
