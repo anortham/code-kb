@@ -2196,3 +2196,72 @@ fn an_overload_keeps_every_caller_that_names_it_when_julie_ties_no_call_to_one_o
         }
     }
 }
+
+#[test]
+fn a_c_test_that_a_framework_registers_outside_a_test_path_reaches_the_function_it_calls() {
+    let (temp, workspace, conn) = scanned(&[
+        (
+            "src/calc.c",
+            "int add(int a, int b) { return a + b; }\nint twice(int a) { return add(a, a); }\n",
+        ),
+        ("src/calc.h", "int add(int a, int b);\n"),
+        (
+            "src/config.c",
+            "#include \"calc.h\"\nint test_mode(void) { return add(0, 0); }\n",
+        ),
+        (
+            "unit/calc_runner.c",
+            "#include \"unity.h\"\n#include \"../src/calc.h\"\nvoid setUp(void) {}\nvoid tearDown(void) {}\nvoid test_adds(void) { TEST_ASSERT_EQUAL(3, add(1, 2)); }\nint main(void) { UNITY_BEGIN(); RUN_TEST(test_adds); return UNITY_END(); }\n",
+        ),
+        (
+            "unit/check_calc.c",
+            "#include <check.h>\n#include \"../src/calc.h\"\nSTART_TEST(sums_two)\n{\n    ck_assert_int_eq(add(2, 2), 4);\n}\nEND_TEST\nstatic void subtracts(int _i) { ck_assert_int_eq(add(3, -1), 2); }\nSuite *calc_suite(void) {\n    Suite *s = suite_create(\"calc\");\n    TCase *tc = tcase_create(\"core\");\n    tcase_add_test(tc, sums_two);\n    tcase_add_loop_test(tc, subtracts, 0, 2);\n    suite_add_tcase(s, tc);\n    return s;\n}\n",
+        ),
+        (
+            "unit/cmocka_calc.c",
+            "#include <stdarg.h>\n#include <stddef.h>\n#include <setjmp.h>\n#include <cmocka.h>\n#include \"../src/calc.h\"\nstatic void adds_negatives(void **state) { assert_int_equal(add(-1, -1), -2); }\nint main(void) {\n    const struct CMUnitTest tests[] = { cmocka_unit_test(adds_negatives) };\n    return cmocka_run_group_tests(tests, NULL, NULL);\n}\n",
+        ),
+    ]);
+    let expected = [
+        ("adds_negatives", "unit/cmocka_calc.c"),
+        ("subtracts", "unit/check_calc.c"),
+        ("sums_two", "unit/check_calc.c"),
+        ("test_adds", "unit/calc_runner.c"),
+    ];
+
+    let result =
+        blast_radius_op(&workspace, &conn, Some("add"), Some("src/calc.c"), 2, 20).unwrap();
+    let mut tests: Vec<(&str, &str)> = result
+        .likely_tests
+        .iter()
+        .map(|test| (test.name.as_str(), test.path.as_str()))
+        .collect();
+    tests.sort_unstable();
+    assert_eq!(tests, expected, "{}", format_blast_radius(&result));
+    let impacted: Vec<&str> = result
+        .impacted_symbols
+        .iter()
+        .map(|symbol| symbol.name.as_str())
+        .collect();
+    assert!(impacted.contains(&"test_mode"), "{impacted:?}");
+    assert!(impacted.contains(&"twice"), "{impacted:?}");
+    assert!(!impacted.contains(&"main"), "{impacted:?}");
+
+    let db = temp.path().join(".code-kb").join("artifact.db");
+    let context = code_kb_core::ops::get_context_slice_op(
+        &workspace,
+        &db,
+        &conn,
+        "add",
+        Some("src/calc.c"),
+        false,
+    )
+    .unwrap();
+    let mut related: Vec<(&str, &str)> = context
+        .related_tests
+        .iter()
+        .map(|test| (test.name.as_str(), test.path.as_str()))
+        .collect();
+    related.sort_unstable();
+    assert_eq!(related, expected);
+}
