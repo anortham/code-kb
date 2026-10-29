@@ -228,6 +228,40 @@ facts that julie 3.9.1 writes for such a call:
 | Go | A call of `handlers`. The grammar reads `m[k](x)` and an explicit instantiation `F[T](x)` the same way. When `handlers` is a parameter or a local, the callers report excludes the site, and the callee row has no definition. |
 | C, C++ | A call of `handlers`. This is a wrong fact. In C, when a function has the container's name, the callee row points to that function and `blast_radius` lists the caller as impacted. The callers report excludes the site in both languages. The fix is in julie (contract marker `c-cpp-subscript-callee-v1`, after 3.9.1): it writes no call for a subscript callee. |
 
+## Module names in search ranking
+
+Search credits 0.5 to a query word that names the row's module and that no
+other field of the row holds (`path` in `--explain`). The module is the name
+that code uses for the row. `module_names` in `queries.rs` takes it from a
+julie fact where julie 3.9.1 writes one, and from the language's file
+convention otherwise. A namespace or package that wraps whole files credits
+nothing, because code names the type in it and a broad folder credit made the
+search evaluations worse. The regressions are in
+[`search_corpus_test.rs`](../crates/code-kb-core/tests/search_corpus_test.rs).
+
+| Language | Module name | Source | Regression |
+| --- | --- | --- | --- |
+| Rust | `src/lib.rs`, `src/main.rs`: the `name` of `[lib]` (lib only) or `[package]` in the `Cargo.toml` beside `src`, else the package folder. Another `lib.rs` or `main.rs` takes its folder (`src/bin/tool/main.rs` is `tool`). `mod.rs` takes its folder. A row in an inline `mod` (not a test module) also takes that `mod`. | Fact: the TOML `name` row under the `package` or `lib` table, and the `namespace` row of a `mod`. | `a_rust_crate_root_takes_the_name_of_its_crate` |
+| Go | The package clause, and the file stem. `package main` takes the folder, the command's name. | Fact: the top-level `module` row with the signature `package blogsvc`. | `a_go_file_takes_the_name_of_its_package_clause` |
+| Lua | `init.lua` takes its folder (`require("blog")`). | Convention. | `a_lua_init_file_takes_the_name_of_its_folder` |
+| Python | `__init__.py`, `__init__.pyi`, and `__main__.py` take their folder. | Convention. | `python_swift_zig_and_scala_entry_files_take_the_name_of_their_package` |
+| JavaScript, TypeScript, JSX, TSX, Vue | `index.*` and a Deno `mod.ts` take their folder. A row in a TypeScript or TSX `namespace` also takes the namespace. | Convention, and the `namespace` row. | `a_member_of_a_module_takes_the_name_of_that_module` |
+| Swift | `main.swift` takes its folder, the target. Other files keep their stem: the target folder holds every file of the module. | Convention. julie writes no fact for a `Package.swift` target. | `python_swift_zig_and_scala_entry_files_take_the_name_of_their_package` |
+| Zig | `src/root.zig` and `src/main.zig` take the package folder; elsewhere their folder. | Convention. The module name is a string argument in `build.zig` (`b.addModule("name", …)`); julie writes no fact that ties it to the root file. | `python_swift_zig_and_scala_entry_files_take_the_name_of_their_package` |
+| Scala | `package.scala` takes its folder, and a row of a package object takes the object. A `package a.b` clause credits nothing. | Convention, and the `namespace` row with the signature `package object feed`. | `python_swift_zig_and_scala_entry_files_take_the_name_of_their_package` |
+| Elixir, Ruby, F#, Erlang | The file stem, and the last segment of the module that the row is a direct member of (`Post` for `MyApp.Blog.Post`, `Inner` for an F# `module Inner =`). | Fact: the `module` row. An Erlang `-module` equals the stem. | `a_member_of_a_module_takes_the_name_of_that_module` |
+| QML `qmldir` | The last segment of the `module` line. | Fact: the `module` row. | `a_qmldir_row_takes_the_name_of_its_module_line` |
+| C#, VB.NET, F# namespaces, PHP, Java, Kotlin, C++ | The file stem (the type name by convention). The namespace or package credits nothing. A VB.NET `Module` is a `class` row, so its members take the owner credit instead. | Not applicable: the construct wraps whole files. | `a_namespace_or_package_that_wraps_whole_files_credits_nothing` |
+| Dart | The file stem: `lib/<name>.dart` is the package's library by convention. | Convention. julie writes `library blog;` as a `variable` row, so code-kb does not read it. | Unit test `each_language_names_the_module_of_its_entry_files` |
+| C, Bash, PowerShell, R, GDScript, QML files, SQL, and the data, markup, and document languages | The file stem; an `index.*` page takes its folder. | Convention. | Unit test `each_language_names_the_module_of_its_entry_files` |
+
+Extractor gaps: julie 3.9.1 writes no fact for a Swift package target or a Zig
+`build.zig` module, and it writes a Dart `library` directive as a `variable`
+row. code-kb does not read a Cargo `[[bin]]` name or a Rust `#[path]`
+attribute; such a file keeps its stem or folder. A test path, a path
+through a `fixtures`, `vendor`, `vendored`, or `third_party` folder, and a row
+of a Rust test module earn no module credit.
+
 ## SQL argument contracts
 
 SQL navigation and caller fixtures pass, but strict argument checks remain an

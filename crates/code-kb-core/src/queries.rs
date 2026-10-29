@@ -1149,6 +1149,13 @@ pub(crate) struct Candidate {
     pub owner: Option<String>,
     /// Weak context from a highly ranked code type; never substitutes for a member's own hit.
     owner_context: Option<String>,
+    /// The module that the file declares: a Go package clause, a qmldir `module` line, or the
+    /// `name` line of the Cargo package (or its `[lib]`) for a Rust crate root.
+    pub file_module: Option<String>,
+    /// The module or namespace the row is a direct member of, when code names the row through
+    /// it: an Elixir, Ruby, F#, or Erlang module, a Rust `mod`, a TypeScript namespace, or a
+    /// Scala package object.
+    pub module_owner: Option<String>,
 }
 
 /// The kinds of symbol whose members search and lookup name as `Owner.member`.
@@ -1173,6 +1180,86 @@ fn candidate_columns(conn: &Connection) -> String {
         doc_langs = documentation_language_list(),
         not_doc = not_documentation(conn, "s")
     )
+}
+
+/// The module a file declares. A Go file names its package and a qmldir file its module on
+/// one top-level `module` row. A Rust crate root (`src/lib.rs`, `src/main.rs`) takes the
+/// `name` of the `[lib]` or `[package]` table of the `Cargo.toml` beside its `src` folder; the
+/// signature of that row is `name = "my-crate"`.
+const FILE_MODULE_COLUMN: &str = "CASE
+      WHEN s.language IN ('go', 'qmldir') THEN
+        (SELECT f.name FROM symbols f WHERE f.file_id = s.file_id AND f.kind = 'module'
+           AND f.parent_symbol_id IS NULL ORDER BY f.start_line LIMIT 1)
+      WHEN s.language = 'rust' AND (replace(s.path, '\\', '/') = 'src/lib.rs'
+           OR replace(s.path, '\\', '/') GLOB '*/src/lib.rs') THEN
+        (SELECT c.signature FROM symbols c JOIN symbols t ON t.symbol_id = c.parent_symbol_id
+           WHERE c.path = substr(s.path, 1, length(s.path) - 10) || 'Cargo.toml'
+             AND c.name = 'name' AND t.name IN ('lib', 'package') AND t.kind = 'module'
+           ORDER BY t.name = 'lib' DESC LIMIT 1)
+      WHEN s.language = 'rust' AND (replace(s.path, '\\', '/') = 'src/main.rs'
+           OR replace(s.path, '\\', '/') GLOB '*/src/main.rs') THEN
+        (SELECT c.signature FROM symbols c JOIN symbols t ON t.symbol_id = c.parent_symbol_id
+           WHERE c.path = substr(s.path, 1, length(s.path) - 11) || 'Cargo.toml'
+             AND c.name = 'name' AND t.name = 'package' AND t.kind = 'module' LIMIT 1)
+    END";
+
+/// The module or namespace a row is a direct member of, when code writes that module to name
+/// the row (`MyApp.Blog.render`, `inner::render`). A C#, C++, PHP, Java, or Kotlin namespace or
+/// package wraps whole files and code names the type in it, so it credits nothing; a Rust
+/// `mod tests` is test code.
+const MODULE_OWNER_COLUMN: &str = "(SELECT m.name FROM symbols m
+      WHERE m.symbol_id = s.parent_symbol_id AND m.test_container = 0
+        AND ((m.kind = 'module' AND m.language IN ('elixir', 'ruby', 'fsharp', 'erlang'))
+          OR (m.kind = 'namespace' AND (m.language IN ('rust', 'typescript', 'tsx')
+            OR (m.language = 'scala' AND m.signature GLOB 'package object *')))))";
+
+/// The languages whose modules `MODULE_OWNER_COLUMN` reads.
+const MODULE_OWNER_LANGUAGES: &[&str] = &[
+    "elixir",
+    "ruby",
+    "fsharp",
+    "erlang",
+    "rust",
+    "typescript",
+    "tsx",
+    "scala",
+];
+
+/// Whether `FILE_MODULE_COLUMN` can name a module for a row of this file.
+fn may_declare_file_module(language: &str, path: &str) -> bool {
+    match language {
+        "go" | "qmldir" => true,
+        "rust" => {
+            let path = path.replace('\\', "/");
+            ["src/lib.rs", "src/main.rs"]
+                .iter()
+                .any(|root| path == *root || path.ends_with(&format!("/{root}")))
+        }
+        _ => false,
+    }
+}
+
+/// Fills the module facts of each candidate with one primary-key query per row that can have
+/// one, so the cost follows the admitted candidates, not the rows a branch scans.
+fn load_module_facts(conn: &Connection, candidates: &mut [Candidate]) -> Result<(), QueryError> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {FILE_MODULE_COLUMN}, {MODULE_OWNER_COLUMN} FROM symbols s WHERE s.symbol_id = ?1"
+    ))?;
+    for candidate in candidates {
+        let symbol = &candidate.result.symbol;
+        let may_have_module_owner = symbol.parent_symbol_id.is_some()
+            && MODULE_OWNER_LANGUAGES.contains(&symbol.language.as_str());
+        if !may_have_module_owner && !may_declare_file_module(&symbol.language, &symbol.path) {
+            continue;
+        }
+        let facts = stmt
+            .query_row([&candidate.result.symbol.symbol_id], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .optional()?;
+        (candidate.file_module, candidate.module_owner) = facts.unwrap_or((None, None));
+    }
+    Ok(())
 }
 
 /// julie records a Markdown or other documentation link as an `import` row; no lookup or search
@@ -1227,6 +1314,8 @@ fn map_search_candidate(row: &Row, terms: &[String]) -> rusqlite::Result<(i64, C
         nested: row.get::<_, Option<i64>>("nested")? == Some(1),
         owner: row.get("owner_name")?,
         owner_context: None,
+        file_module: None,
+        module_owner: None,
     };
     Ok((row.get("row_id")?, candidate))
 }
@@ -1496,6 +1585,7 @@ pub(crate) fn collect_search_candidates(
             .map(|c| c.result.symbol.symbol_id.as_str()),
     )?;
     candidates.retain(|c| !inherited.contains(&c.result.symbol.symbol_id));
+    load_module_facts(conn, &mut candidates)?;
     Ok(candidates)
 }
 
@@ -1586,12 +1676,11 @@ fn expand_ranked_owner_members(
         conn,
         members.iter().map(|c| c.result.symbol.symbol_id.as_str()),
     )?;
+    members.retain(|member| !inherited.contains(&member.result.symbol.symbol_id));
+    load_module_facts(conn, &mut members)?;
     let mut changed = false;
     for member in members {
         let id = &member.result.symbol.symbol_id;
-        if inherited.contains(id) {
-            continue;
-        }
         if let Some(existing) = candidates
             .iter_mut()
             .find(|c| c.result.symbol.symbol_id == *id)
@@ -2141,51 +2230,127 @@ fn is_path_segment_in(segment: &str, list: &[&str]) -> bool {
     list.iter().any(|entry| entry.eq_ignore_ascii_case(segment))
 }
 
-/// File stems that take the name of their folder: `blog/mod.rs`, `blog/__init__.py`, `blog/index.ts`.
-const MODULE_INDEX_STEMS: &[&str] = &["mod", "__init__", "index"];
+/// File stems that take the name of their folder in every language: `blog/mod.rs`, a Deno
+/// `blog/mod.ts`, `blog/__init__.py`, `blog/__main__.py`, `blog/index.ts`.
+const MODULE_INDEX_STEMS: &[&str] = &["mod", "__init__", "__main__", "index"];
 
-/// The name of the row's module: the file name without its extensions, or the folder of a
-/// module index file. A test path and a path through a vendored or fixture folder have none.
-fn module_name(path: &str) -> Option<&str> {
+/// Entry files that take the name of their folder in one language: `require("blog")` loads
+/// `blog/init.lua`, a Swift target's `main.swift` belongs to the target folder, and a Scala
+/// `package.scala` holds the package object of its folder.
+const LANGUAGE_INDEX_FILES: &[(&str, &str)] = &[
+    ("lua", "init.lua"),
+    ("swift", "main.swift"),
+    ("scala", "package.scala"),
+];
+
+/// Package roots: in a `src` folder they take the package name, elsewhere their folder
+/// (`src/bin/tool/main.rs` is the `tool` binary).
+const PACKAGE_ROOT_FILES: &[(&str, &str)] = &[
+    ("rust", "lib.rs"),
+    ("rust", "main.rs"),
+    ("zig", "root.zig"),
+    ("zig", "main.zig"),
+];
+
+/// The value of a TOML `name = "my-crate"` line.
+fn toml_string_value(line: &str) -> Option<&str> {
+    let (_, value) = line.split_once('=')?;
+    let value = value.trim().trim_matches(['"', '\'']).trim();
+    (!value.is_empty()).then_some(value)
+}
+
+/// The last segment of a dotted or `::` module name: `Post` for `MyApp.Blog.Post`.
+fn last_module_segment(name: &str) -> &str {
+    name.rsplit(['.', ':', '\\'])
+        .find(|segment| !segment.is_empty())
+        .unwrap_or(name)
+}
+
+/// The names of the row's module, as code names it: the file name without its extensions, or
+/// the folder of a module index file, or the package of a package root or a Go file (with the
+/// Go file's own name), and the module the row is a direct member of. A test path and a path
+/// through a vendored or fixture folder have none.
+fn module_names(
+    path: &str,
+    language: &str,
+    file_module: Option<&str>,
+    module_owner: Option<&str>,
+) -> Vec<String> {
     let segments: Vec<&str> = path.split(['/', '\\']).filter(|s| !s.is_empty()).collect();
-    let (file, folders) = segments.split_last()?;
+    let Some((file, folders)) = segments.split_last() else {
+        return Vec::new();
+    };
     if is_test_path(path)
         || folders
             .iter()
             .any(|folder| is_path_segment_in(folder, UNCREDITED_PATH_SEGMENTS))
     {
-        return None;
+        return Vec::new();
     }
     let stem = file.trim_start_matches('.').split('.').next().unwrap_or("");
-    if MODULE_INDEX_STEMS.contains(&stem) {
-        folders.last().copied()
+    let folder = folders.last().copied();
+    let entry_of = |files: &[(&str, &str)]| {
+        files
+            .iter()
+            .any(|(lang, name)| *lang == language && name.eq_ignore_ascii_case(file))
+    };
+    let mut names: Vec<&str> = Vec::new();
+    if entry_of(PACKAGE_ROOT_FILES) {
+        if folder.is_some_and(|f| f.eq_ignore_ascii_case("src")) {
+            let package_folder = folders.len().checked_sub(2).map(|i| folders[i]);
+            names.extend(file_module.and_then(toml_string_value).or(package_folder));
+        } else {
+            names.extend(folder);
+        }
+    } else if MODULE_INDEX_STEMS.contains(&stem) || entry_of(LANGUAGE_INDEX_FILES) {
+        names.extend(folder);
+    } else if language == "go" {
+        match file_module {
+            Some("main") => names.extend(folder),
+            Some(package) => names.push(package),
+            None => {}
+        }
+        names.push(stem);
+    } else if language == "qmldir" {
+        names.extend(file_module.map(last_module_segment));
     } else {
-        Some(stem)
+        names.push(stem);
     }
+    names.extend(module_owner.map(last_module_segment));
+    let mut unique: Vec<String> = Vec::new();
+    for name in names {
+        if !name.is_empty() && !unique.iter().any(|seen| seen == name) {
+            unique.push(name.to_string());
+        }
+    }
+    unique
 }
 
-/// Per query word, whether it names the row's module: a run of words whose letters spell the
-/// whole name (`release corpus check` for `release-corpus-check.py`), or one word with the name's
-/// stem (`view` for `views.py`).
-fn path_hits(path: &str, words: &[QueryWord], stemmer: &Stemmer) -> Vec<bool> {
+/// Per query word, whether it names one of the row's modules: a run of words whose letters
+/// spell the whole name (`release corpus check` for `release-corpus-check.py`), or one word
+/// with the name's stem (`view` for `views.py`).
+fn path_hits(modules: &[String], words: &[QueryWord], stemmer: &Stemmer) -> Vec<bool> {
     let mut marks = vec![false; words.len()];
-    let Some(module) = module_name(path).map(collapse).filter(|m| !m.is_empty()) else {
-        return marks;
-    };
-    let module_stem = stemmer.stem(&module);
-    for start in 0..words.len() {
-        if words[start].stem == module_stem {
-            marks[start] = true;
-            continue;
-        }
-        let mut joined = String::new();
-        for end in start..words.len() {
-            joined.push_str(&words[end].word);
-            if joined.len() >= module.len() {
-                if joined == module {
-                    marks[start..=end].fill(true);
+    for module in modules
+        .iter()
+        .map(|m| collapse(m))
+        .filter(|m| !m.is_empty())
+    {
+        let module_stem = stemmer.stem(&module);
+        for start in 0..words.len() {
+            if words[start].stem == module_stem {
+                marks[start] = true;
+                continue;
+            }
+            let mut joined = String::new();
+            for end in start..words.len() {
+                joined.push_str(&words[end].word);
+                if joined.len() >= module.len() {
+                    if joined == module {
+                        marks[start..=end].fill(true);
+                    }
+                    break;
                 }
-                break;
             }
         }
     }
@@ -2302,7 +2467,16 @@ fn rerank_with(
                     &mut tokens,
                 ),
                 owner_context: text_hits(candidate.owner_context.as_deref(), &words, &mut tokens),
-                path: path_hits(&symbol.path, &words, &stemmer),
+                path: path_hits(
+                    &module_names(
+                        &symbol.path,
+                        &symbol.language,
+                        candidate.file_module.as_deref(),
+                        candidate.module_owner.as_deref(),
+                    ),
+                    &words,
+                    &stemmer,
+                ),
             }
         })
         .collect();
@@ -11505,6 +11679,8 @@ mod tests {
             nested: false,
             owner: None,
             owner_context: None,
+            file_module: None,
+            module_owner: None,
         }
     }
 
@@ -12092,6 +12268,59 @@ mod tests {
         );
         assert_eq!(credit_of(&spelled[0].1, "blog"), ("path", PATH_CREDIT));
         assert_eq!(credit_of(&spelled[0].1, "post"), ("path", PATH_CREDIT));
+    }
+
+    #[test]
+    fn each_language_names_the_module_of_its_entry_files() {
+        let names = |path: &str, language: &str| module_names(path, language, None, None);
+        let with = |path: &str, language: &str, file: Option<&str>, owner: Option<&str>| {
+            module_names(path, language, file, owner)
+        };
+
+        assert_eq!(names("lua/blog/init.lua", "lua"), ["blog"]);
+        assert_eq!(names("app/init.py", "python"), ["init"]);
+        assert_eq!(names("py/blog/__main__.py", "python"), ["blog"]);
+        assert_eq!(names("py/blog/__init__.pyi", "python"), ["blog"]);
+        assert_eq!(names("web/blog/index.tsx", "tsx"), ["blog"]);
+        assert_eq!(names("deno/blog/mod.ts", "typescript"), ["blog"]);
+        assert_eq!(names("src/blog/mod.rs", "rust"), ["blog"]);
+        let crate_root = "crates/my-crate/src/lib.rs";
+        let cargo_name = Some("name = \"blog-kit\"");
+        assert_eq!(with(crate_root, "rust", cargo_name, None), ["blog-kit"]);
+        assert_eq!(names(crate_root, "rust"), ["my-crate"]);
+        assert_eq!(
+            names("crates\\my-crate\\src\\main.rs", "rust"),
+            ["my-crate"]
+        );
+        assert!(names("src/lib.rs", "rust").is_empty());
+        assert_eq!(names("src/bin/tool/main.rs", "rust"), ["tool"]);
+        assert_eq!(names("src/bin/tool.rs", "rust"), ["tool"]);
+        let util = with("src/blog/util.rs", "rust", None, Some("inner"));
+        assert_eq!(util, ["util", "inner"]);
+        let server = with("pkg/v2/server.go", "go", Some("blogsvc"), None);
+        assert_eq!(server, ["blogsvc", "server"]);
+        let command = with("pkg/cmd/tool/main.go", "go", Some("main"), None);
+        assert_eq!(command, ["tool", "main"]);
+        assert_eq!(names("Sources/BlogKit/main.swift", "swift"), ["BlogKit"]);
+        assert_eq!(names("Sources/BlogKit/Post.swift", "swift"), ["Post"]);
+        let scala = with("blog/package.scala", "scala", None, Some("blog"));
+        assert_eq!(scala, ["blog"]);
+        assert_eq!(names("zig/src/root.zig", "zig"), ["zig"]);
+        assert_eq!(names("src/blog.zig", "zig"), ["blog"]);
+        let elixir = with(
+            "lib/my_app/blog.ex",
+            "elixir",
+            None,
+            Some("MyApp.Blog.Post"),
+        );
+        assert_eq!(elixir, ["blog", "Post"]);
+        let fsharp = with("src/Posts.fs", "fsharp", None, Some("Blog.Posts"));
+        assert_eq!(fsharp, ["Posts"]);
+        let qmldir = with("qml/Blog/qmldir", "qmldir", Some("Org.Blog"), None);
+        assert_eq!(qmldir, ["Blog"]);
+        assert_eq!(names("lib/blog.dart", "dart"), ["blog"]);
+        assert_eq!(names("src/Blog/Post.php", "php"), ["Post"]);
+        assert!(with("tests/blog/init.lua", "lua", None, Some("Blog")).is_empty());
     }
 
     #[test]

@@ -1,6 +1,6 @@
 use code_kb_core::{
-    Workspace, ensure_fts_index_path, find_julie_extract_binary, fts_search_symbols_scoped,
-    open_read_only, safe_tempdir, scan_workspace,
+    Workspace, ensure_fts_index_path, find_julie_extract_binary, fts_search_symbols_explained,
+    fts_search_symbols_scoped, open_read_only, safe_tempdir, scan_workspace,
 };
 use std::fs;
 use std::path::Path;
@@ -883,4 +883,287 @@ fn a_query_word_that_names_the_example_file_keeps_its_view_in_the_top_twenty() {
     let names = searched_names(&db, "view that edits an existing blog post");
 
     assert!(names.contains(&"update".to_string()), "{names:?}");
+}
+
+fn module_credit(db_path: &Path, query: &str, path: &str, name: &str, word: &str) -> String {
+    let conn = open_read_only(db_path).unwrap();
+    let rows = fts_search_symbols_explained(&conn, query, None, None, false, 50, true).unwrap();
+    let row = rows
+        .iter()
+        .filter(|r| r.symbol.path == path && r.symbol.name == name)
+        .min_by_key(|r| r.symbol.kind == "export")
+        .unwrap_or_else(|| {
+            let listed: Vec<String> = rows
+                .iter()
+                .map(|r| format!("{} {} ({})", r.symbol.kind, r.symbol.name, r.symbol.path))
+                .collect();
+            panic!("{query:?} did not list {name} in {path}: {listed:#?}")
+        });
+    row.explain
+        .as_ref()
+        .unwrap()
+        .terms
+        .iter()
+        .find(|(term, _, _)| term == word)
+        .map(|(_, field, _)| field.clone())
+        .unwrap()
+}
+
+#[test]
+fn a_lua_init_file_takes_the_name_of_its_folder() {
+    let (_dir, db) = scanned_repo(&[(
+        "lua/blog/init.lua",
+        "local M = {}\nfunction M.render(post) return post end\nreturn M\n",
+    )]);
+    let init = "lua/blog/init.lua";
+
+    assert_eq!(
+        module_credit(&db, "render blog", init, "render", "blog"),
+        "path"
+    );
+    assert_eq!(
+        module_credit(&db, "render init", init, "render", "init"),
+        "none"
+    );
+}
+
+#[test]
+fn a_go_file_takes_the_name_of_its_package_clause() {
+    let (_dir, db) = scanned_repo(&[
+        ("pkg/go.mod", "module example.com/acme/pkg\n\ngo 1.22\n"),
+        (
+            "pkg/blogapi/server.go",
+            "package blogsvc\n\nfunc Serve() {}\n",
+        ),
+        (
+            "pkg/cmd/tool/main.go",
+            "package main\n\nfunc run() {}\n\nfunc main() { run() }\n",
+        ),
+    ]);
+    let server = "pkg/blogapi/server.go";
+
+    assert_eq!(
+        module_credit(&db, "serve blogsvc", server, "Serve", "blogsvc"),
+        "path"
+    );
+    assert_eq!(
+        module_credit(&db, "serve server", server, "Serve", "server"),
+        "path"
+    );
+    assert_eq!(
+        module_credit(&db, "serve blogapi", server, "Serve", "blogapi"),
+        "none"
+    );
+    let main = "pkg/cmd/tool/main.go";
+    assert_eq!(module_credit(&db, "run tool", main, "run", "tool"), "path");
+}
+
+#[test]
+fn a_rust_crate_root_takes_the_name_of_its_crate() {
+    let (_dir, db) = scanned_repo(&[
+        (
+            "crates/blog-kit/Cargo.toml",
+            "[package]\nname = \"blog-kit\"\nversion = \"0.1.0\"\n",
+        ),
+        (
+            "crates/blog-kit/src/lib.rs",
+            "pub fn render(post: &str) -> &str {\n    post\n}\n",
+        ),
+        (
+            "crates/blog-kit/src/main.rs",
+            "fn start() {}\n\nfn main() {\n    start();\n}\n",
+        ),
+        (
+            "crates/blog-kit/src/bin/tool/main.rs",
+            "fn launch() {}\n\nfn main() {\n    launch();\n}\n",
+        ),
+        (
+            "crates/blog-kit/src/util.rs",
+            "pub mod inner {\n    pub fn compose() {}\n}\n",
+        ),
+        (
+            "crates/books/Cargo.toml",
+            "[package]\nname = \"books\"\nversion = \"0.1.0\"\n\n[lib]\nname = \"ledger\"\n",
+        ),
+        ("crates/books/src/lib.rs", "pub fn settle() {}\n"),
+    ]);
+    let lib = "crates/blog-kit/src/lib.rs";
+    let main = "crates/blog-kit/src/main.rs";
+    let tool = "crates/blog-kit/src/bin/tool/main.rs";
+    let util = "crates/blog-kit/src/util.rs";
+    let books = "crates/books/src/lib.rs";
+
+    assert_eq!(
+        module_credit(&db, "render blog kit", lib, "render", "kit"),
+        "path"
+    );
+    assert_eq!(
+        module_credit(&db, "render lib", lib, "render", "lib"),
+        "none"
+    );
+    assert_eq!(
+        module_credit(&db, "start blog kit", main, "start", "blog"),
+        "path"
+    );
+    assert_eq!(
+        module_credit(&db, "launch tool", tool, "launch", "tool"),
+        "path"
+    );
+    assert_eq!(
+        module_credit(&db, "compose inner", util, "compose", "inner"),
+        "path"
+    );
+    assert_eq!(
+        module_credit(&db, "settle ledger", books, "settle", "ledger"),
+        "path"
+    );
+    assert_eq!(
+        module_credit(&db, "settle books", books, "settle", "books"),
+        "none"
+    );
+}
+
+#[test]
+fn python_swift_zig_and_scala_entry_files_take_the_name_of_their_package() {
+    let (_dir, db) = scanned_repo(&[
+        (
+            "py/blog/__main__.py",
+            "def render(post):\n    return post\n",
+        ),
+        (
+            "Sources/BlogKit/main.swift",
+            "func render(post: String) -> String { return post }\n",
+        ),
+        (
+            "ledger/src/root.zig",
+            "pub fn render(post: []const u8) []const u8 {\n    return post;\n}\n",
+        ),
+        (
+            "scala/feed/package.scala",
+            "package object feed {\n  def render(post: String): String = post\n}\n",
+        ),
+    ]);
+
+    let python = "py/blog/__main__.py";
+    let swift = "Sources/BlogKit/main.swift";
+    let zig = "ledger/src/root.zig";
+    let scala = "scala/feed/package.scala";
+    assert_eq!(
+        module_credit(&db, "render blog", python, "render", "blog"),
+        "path"
+    );
+    assert_eq!(
+        module_credit(&db, "render blog kit", swift, "render", "kit"),
+        "path"
+    );
+    assert_eq!(
+        module_credit(&db, "render ledger", zig, "render", "ledger"),
+        "path"
+    );
+    assert_eq!(
+        module_credit(&db, "render feed", scala, "render", "feed"),
+        "path"
+    );
+}
+
+#[test]
+fn a_member_of_a_module_takes_the_name_of_that_module() {
+    let (_dir, db) = scanned_repo(&[
+        (
+            "lib/my_app/blog.ex",
+            "defmodule MyApp.Blog do\n  defmodule Post do\n    def publish(p), do: p\n  end\nend\n",
+        ),
+        (
+            "lib/content.rb",
+            "module Blog\n  module Articles\n    def self.publish(post)\n      post\n    end\n  end\nend\n",
+        ),
+        (
+            "src/Posts.fs",
+            "module Blog.Posts\n\nlet publish post = post\n\nmodule Inner =\n    let helper x = x\n",
+        ),
+        (
+            "src/feed.ts",
+            "namespace Feed {\n  export function publish(post: string) { return post; }\n}\n",
+        ),
+        (
+            "src/view.tsx",
+            "namespace Gallery {\n  export function publish(post: string) { return post; }\n}\n",
+        ),
+    ]);
+
+    let elixir = "lib/my_app/blog.ex";
+    let ruby = "lib/content.rb";
+    let fsharp = "src/Posts.fs";
+    assert_eq!(
+        module_credit(&db, "publish post", elixir, "publish", "post"),
+        "path"
+    );
+    assert_eq!(
+        module_credit(&db, "publish articles", ruby, "publish", "articles"),
+        "path"
+    );
+    assert_eq!(
+        module_credit(&db, "helper inner", fsharp, "helper", "inner"),
+        "path"
+    );
+    assert_eq!(
+        module_credit(&db, "publish feed", "src/feed.ts", "publish", "feed"),
+        "path"
+    );
+    let tsx = "src/view.tsx";
+    assert_eq!(
+        module_credit(&db, "publish gallery", tsx, "publish", "gallery"),
+        "path"
+    );
+}
+
+#[test]
+fn a_qmldir_row_takes_the_name_of_its_module_line() {
+    let (_dir, db) = scanned_repo(&[
+        ("qml/Blog/qmldir", "module Org.Gallery\nPost 1.0 Post.qml\n"),
+        ("qml/Blog/Post.qml", "import QtQuick\nItem {}\n"),
+    ]);
+
+    let qmldir = "qml/Blog/qmldir";
+    assert_eq!(
+        module_credit(&db, "post gallery", qmldir, "Post", "gallery"),
+        "path"
+    );
+}
+
+#[test]
+fn a_namespace_or_package_that_wraps_whole_files_credits_nothing() {
+    let (_dir, db) = scanned_repo(&[
+        (
+            "cs/Post.cs",
+            "namespace Acme.Blog { public class Post { public void Render() {} } }\n",
+        ),
+        (
+            "java/com/acme/blog/Article.java",
+            "package com.acme.blog;\npublic class Article { void render() {} }\n",
+        ),
+        (
+            "kt/com/acme/blog/Story.kt",
+            "package com.acme.blog\nfun render(post: String) = post\n",
+        ),
+        (
+            "php/src/Blog/Entry.php",
+            "<?php\nnamespace App\\Blog;\nclass Entry { public function render() { return 1; } }\n",
+        ),
+        ("cpp/engine.cpp", "namespace blog { void render() {} }\n"),
+    ]);
+
+    for (path, name) in [
+        ("cs/Post.cs", "Render"),
+        ("java/com/acme/blog/Article.java", "render"),
+        ("kt/com/acme/blog/Story.kt", "render"),
+        ("php/src/Blog/Entry.php", "render"),
+        ("cpp/engine.cpp", "render"),
+    ] {
+        assert_eq!(
+            module_credit(&db, "render blog", path, name, "blog"),
+            "none",
+            "{path}"
+        );
+    }
 }
