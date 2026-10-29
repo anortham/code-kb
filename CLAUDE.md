@@ -567,13 +567,17 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   owner, kind, and file) to the overloads its call identifier's facts allow, in Java, Kotlin,
   Scala, C#, C++, Swift, and VB.NET: each overload's own count range (a method's widened by the
   methods of its name in the base types), Kotlin and Scala `arg_names`, Swift `arg_labels`, and
-  `arg_types`. A type rules an overload out only by a certain Java or Kotlin rule (`int` never
-  fills `String`); an overload whose parameter types name the argument types binds alone. Two
-  written types are compared by the type they name (`type_names.rs`): `App.Box` and `Box` can
-  name one type, and a simple name of two project types decides only through the imports,
-  package, or namespaces that the index records. Where julie writes a Kotlin, C#, or Swift
-  nullable value without its marker, the call binds the exact overload or one that takes that
-  value. A C# `dynamic` argument binds at run time; a VB.NET `Object` argument binds an
+  `arg_types`. A type rules an overload out only by a certain Java, Kotlin, or Scala rule (`int`
+  never fills `String`); an overload whose parameter types name the argument types binds alone,
+  except that a Scala one that needs a default loses to an overload that applies without one.
+  Two written types are compared by the type they name (`type_names.rs`): `App.Box` and `Box`
+  can name one type, and in Java, Kotlin, Scala, C#, and VB.NET a simple name is read by the
+  scope rules of the language through the imports, package, namespaces, and build project that
+  the index records, as a project type, a library type (`library_types.rs`), or unknown. Where
+  julie writes a Kotlin, C#, or Swift nullable value without its marker, the call binds the
+  exact overload or one that takes that value, unless the argument's source shows a value that
+  cannot be null (`plain_values.rs`: a literal, a C# `new` object, a name declared with a plain
+  type). A C# `dynamic` argument binds at run time; a VB.NET `Object` argument binds an
   `Object` overload. A Swift argument
   with no label and no type can be a trailing closure, so it can fill a labeled parameter that
   can take a closure. A site of any label whose call binds only other overloads is `excluded`:

@@ -24,8 +24,10 @@ use crate::text_scan::scan_word;
 pub(crate) mod arity;
 mod js_bindings;
 mod js_modules;
+mod library_types;
 mod loaded_files;
 pub(crate) mod overloads;
+mod plain_values;
 mod receiver_types;
 mod sections;
 mod type_names;
@@ -2666,6 +2668,10 @@ impl<'a> Accounting<'a> {
                     args: arguments,
                     path: &row.path,
                     caller: row.caller_id.as_deref(),
+                    site: Some(overloads::Site {
+                        line: row.site_line,
+                        column: row.site_column,
+                    }),
                 })
             {
                 verdict = Verdict::new(SiteLabel::Excluded, basis, false);

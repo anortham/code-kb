@@ -9,6 +9,7 @@
 //! at run time. When the argument can be a nullable value that julie writes without its marker,
 //! the call binds the exact overload or one that takes that nullable value.
 
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -16,6 +17,7 @@ use std::rc::Rc;
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::arity::{self, Arity, Formal, after_attribute_group, default_start};
+use super::plain_values::{Dialect, argument_texts, plain_value};
 use super::type_names::{Place, Same, TypeNames};
 use super::{ACCOUNTING_TIME_LIMIT, Accounting, overload_group, sections};
 use crate::models::Symbol;
@@ -118,6 +120,10 @@ const CSHARP_FRAMEWORK_REFERENCES: [&str; 40] = [
 const CSHARP_TYPE_KINDS_SQL: &str = "SELECT DISTINCT kind FROM symbols
      WHERE name = ?1 AND language = 'csharp'
        AND kind IN ('class', 'interface', 'delegate', 'struct', 'enum')";
+/// The Scala types that are final and that only numeric widening joins ([`scala_converts`]).
+const SCALA_CLOSED: [&str; 10] = [
+    "Byte", "Short", "Char", "Int", "Long", "Float", "Double", "Boolean", "String", "Unit",
+];
 /// The Kotlin types that are final and that no implicit conversion reaches, except the integer
 /// literal widening in [`kotlin_converts`].
 const KOTLIN_CLOSED: [&str; 13] = [
@@ -276,11 +282,12 @@ impl Rules {
     }
 
     /// Whether no conversion of the language passes a value of type `argument` to a parameter of
-    /// type `parameter`. Only Java and Kotlin types that the language closes judge it.
+    /// type `parameter`. Only Java, Kotlin, and Scala types that the language closes judge it.
     fn incompatible(self, argument: &str, parameter: &str) -> bool {
         match self {
             Self::Java => java_converts(argument, parameter) == Some(false),
             Self::Kotlin => kotlin_converts(argument, parameter) == Some(false),
+            Self::Scala => scala_converts(argument, parameter) == Some(false),
             _ => false,
         }
     }
@@ -371,6 +378,25 @@ fn kotlin_converts(argument: &str, parameter: &str) -> Option<bool> {
             || (argument == "Int" && matches!(parameter, "Long" | "Short" | "Byte"))
             || (argument == "UInt" && matches!(parameter, "ULong" | "UShort" | "UByte")),
     )
+}
+
+/// Whether Scala passes `argument` to `parameter`, `None` when either type is not a built-in
+/// value type or `String`. Numeric widening joins the value types, and julie writes `Int` for an
+/// integer literal, which also fills a `Byte`, `Short`, or `Char`. A conversion that the code
+/// defines (an `implicit def` or a `given Conversion`) between these types is not seen.
+fn scala_converts(argument: &str, parameter: &str) -> Option<bool> {
+    if !SCALA_CLOSED.contains(&argument) || !SCALA_CLOSED.contains(&parameter) {
+        return None;
+    }
+    let widens: &[&str] = match argument {
+        "Byte" => &["Short", "Int", "Long", "Float", "Double"],
+        "Short" | "Char" => &["Int", "Long", "Float", "Double"],
+        "Int" => &["Long", "Float", "Double", "Byte", "Short", "Char"],
+        "Long" => &["Float", "Double"],
+        "Float" => &["Double"],
+        _ => &[],
+    };
+    Some(argument == parameter || widens.contains(&parameter))
 }
 
 /// A type name without whitespace or `global::`, with an explicit framework name read as its
@@ -611,9 +637,40 @@ fn kotlin_written_type(segment: &str) -> Option<&str> {
     Some(written.trim())
 }
 
+/// The type of a Kotlin or Scala parameter: julie's type fact, which drops a qualifier
+/// (`b.Node` is `Node`) and the `?` of a Kotlin nullable type. A qualified declared type keeps its
+/// qualifier, and a Kotlin nullable type keeps its `?` for the text that names the overload.
+fn declared_parameter_type(rules: Rules, segment: &str, fact: Option<&String>) -> Option<String> {
+    let declared = kotlin_written_type(segment).filter(|declared| !declared.is_empty());
+    let fact = fact?;
+    match declared {
+        Some(declared) if qualified_at_top(declared) => Some(declared.to_string()),
+        Some(declared)
+            if rules == Rules::Kotlin && declared.ends_with('?') && !fact.ends_with('?') =>
+        {
+            Some(format!("{fact}?"))
+        }
+        _ => Some(fact.clone()),
+    }
+}
+
+/// Whether a written type has a `.` outside its type arguments (`b.Node`, not `List<b.Node>`).
+fn qualified_at_top(written: &str) -> bool {
+    let mut depth = 0usize;
+    for character in written.chars() {
+        match character {
+            '<' | '[' | '(' => depth += 1,
+            '>' | ']' | ')' => depth = depth.saturating_sub(1),
+            '.' if depth == 0 => return true,
+            _ => {}
+        }
+    }
+    false
+}
+
 /// The names in the first `<…>` of a declaration head, before its parameter list (`fun <T> f`,
 /// `class Box<T : Any>`, `func f<T: P>`): Kotlin and Swift type parameters.
-fn type_parameters(signature: &str) -> Vec<String> {
+pub(super) fn type_parameters(signature: &str) -> Vec<String> {
     let head = signature.split('(').next().unwrap_or_default();
     let Some(open) = head.find('<') else {
         return Vec::new();
@@ -686,6 +743,15 @@ pub(crate) struct Call<'a> {
     pub path: &'a str,
     /// The symbol that holds the call, whose namespaces and imports name its argument types.
     pub caller: Option<&'a str>,
+    /// Where the called name is written, so its argument list can be read.
+    pub site: Option<Site>,
+}
+
+/// The line (from 1) and the column (from 0) of a called name.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Site {
+    pub line: usize,
+    pub column: Option<usize>,
 }
 
 impl Call<'_> {
@@ -701,8 +767,9 @@ impl Call<'_> {
 enum Decision {
     /// The one overload whose parameter types equal the argument types.
     Exact(usize),
-    /// The exact overload, or, when an argument is a nullable value that julie wrote without its
-    /// marker, one of the others, which take that value.
+    /// Some of the overloads the call fits: the exact overload, or, when an argument is a
+    /// nullable value that julie wrote without its marker, one of the others, which take that
+    /// value; or the Scala overloads other than an exact one that needs a default.
     Among(Vec<usize>),
     /// Every overload the call fits.
     Open,
@@ -732,6 +799,10 @@ pub(crate) struct OverloadSet {
     /// The C# reference types among the parameter types ([`csharp_reference_types`]).
     references: HashSet<String>,
     names: TypeNames,
+    /// The name a call of the overloads writes: the method, or the class of a constructor.
+    called: String,
+    root: PathBuf,
+    sources: RefCell<HashMap<String, Option<Rc<String>>>>,
 }
 
 impl OverloadSet {
@@ -810,11 +881,19 @@ impl OverloadSet {
         } else {
             HashSet::new()
         };
+        let called = if constructing {
+            constructed_name(conn, target)?
+        } else {
+            target.name.clone()
+        };
         Ok((members.len() > 1).then_some(Self {
             rules,
             members,
             references,
             names: TypeNames::new(rules.language(), root),
+            called,
+            root: root.to_path_buf(),
+            sources: RefCell::new(HashMap::new()),
         }))
     }
 
@@ -829,6 +908,51 @@ impl OverloadSet {
             return normalized.trim_end_matches('?').to_string();
         }
         normalized
+    }
+
+    /// For each argument of the call, whether its source shows a value that cannot be null
+    /// ([`plain_values`]); empty when the argument list cannot be read.
+    fn plain_values(&self, call: &Call) -> Vec<bool> {
+        let dialect = match self.rules {
+            Rules::CSharp => Dialect::CSharp,
+            Rules::Kotlin => Dialect::Kotlin,
+            Rules::Swift => Dialect::Swift,
+            _ => return Vec::new(),
+        };
+        let Some(site) = call.site else {
+            return Vec::new();
+        };
+        let Some(source) = self.source(call.path) else {
+            return Vec::new();
+        };
+        let Some(texts) = argument_texts(&source, site.line, site.column, &self.called) else {
+            return Vec::new();
+        };
+        if Some(texts.len()) != call.args.argument_count() {
+            return Vec::new();
+        }
+        texts
+            .iter()
+            .map(|text| {
+                plain_value(call.conn, dialect, text, call.caller, &|path| {
+                    self.source(path)
+                })
+                .unwrap_or(false)
+            })
+            .collect()
+    }
+
+    fn source(&self, path: &str) -> Option<Rc<String>> {
+        if let Some(source) = self.sources.borrow().get(path) {
+            return source.clone();
+        }
+        let source = std::fs::read_to_string(self.root.join(path))
+            .ok()
+            .map(Rc::new);
+        self.sources
+            .borrow_mut()
+            .insert(path.to_string(), source.clone());
+        source
     }
 
     fn fit(&self, member: &Member, call: &Call) -> Fit {
@@ -962,7 +1086,9 @@ impl OverloadSet {
     /// The exact overload decides: an identity conversion ranks above every other, and one that
     /// leaves no default out wins over those that do. One that leaves a default out decides only
     /// when every other overload the call fits has an argument of another known type, since an
-    /// overload of unknown types can take the call without a default. julie writes `Int` for a
+    /// overload of unknown types can take the call without a default. In Scala it decides only
+    /// when the call fits no other overload, since Scala picks among the overloads that apply
+    /// without a default first ([`Self::scala_without_defaults`]). julie writes `Int` for a
     /// Kotlin `Int?` value, `int` for a C# `int?` value, and `Int` for a Swift `Int!` value, so
     /// such a call binds the exact overload or one that takes the nullable value where the exact
     /// one does not. A C# `dynamic` argument binds at run time, so no overload is exact.
@@ -988,10 +1114,12 @@ impl OverloadSet {
             ([only], _) => *only,
             ([], [only]) => {
                 let outranked = fits.iter().enumerate().all(|(index, fit)| {
-                    index == *only || matches!(fit, Fit::No | Fit::Possible { mismatch: true })
+                    index == *only
+                        || *fit == Fit::No
+                        || (self.rules != Rules::Scala && *fit == Fit::Possible { mismatch: true })
                 });
                 if !outranked {
-                    return Decision::Open;
+                    return self.scala_without_defaults(*only, fits, call);
                 }
                 *only
             }
@@ -1008,6 +1136,71 @@ impl OverloadSet {
         among.extend(takers);
         among.sort_unstable();
         Decision::Among(among)
+    }
+
+    /// Scala picks among the overloads that apply without a default when there is one, so an
+    /// exact overload that leaves a default out loses to an overload that certainly applies
+    /// without one (`r(x: Any)` wins over `r(x: Int, extra: Int = 0)` for an `Int`): the call
+    /// binds one of the other overloads it fits. Elsewhere, and when no other overload certainly
+    /// applies, the call stays open.
+    fn scala_without_defaults(&self, defaulted: usize, fits: &[Fit], call: &Call) -> Decision {
+        if self.rules != Rules::Scala {
+            return Decision::Open;
+        }
+        let others: Vec<usize> = fits
+            .iter()
+            .enumerate()
+            .filter(|(index, fit)| *index != defaulted && **fit != Fit::No)
+            .map(|(index, _)| index)
+            .collect();
+        if others
+            .iter()
+            .any(|&index| self.applies_without_defaults(&self.members[index], call))
+        {
+            Decision::Among(others)
+        } else {
+            Decision::Open
+        }
+    }
+
+    /// Whether every parameter of a Scala overload takes an argument of the call, and each
+    /// argument has the parameter's type or fills an `Any` parameter.
+    fn applies_without_defaults(&self, member: &Member, call: &Call) -> bool {
+        let args = call.args;
+        let Some(parameters) = &member.parameters else {
+            return false;
+        };
+        let (Some(slots), Some(types)) = (self.slots(parameters, args), &args.types) else {
+            return false;
+        };
+        let filled: Vec<usize> = slots.iter().flatten().copied().collect();
+        if filled.len() != slots.len()
+            || slots.len() != types.len()
+            || (0..parameters.len()).any(|index| !filled.contains(&index))
+        {
+            return false;
+        }
+        types.iter().zip(&slots).all(|(written, slot)| {
+            let Some(parameter) = slot.map(|slot| &parameters[slot]) else {
+                return false;
+            };
+            if parameter.variadic {
+                return false;
+            }
+            match (written, parameter.written.as_deref()) {
+                (_, Some("Any")) => true,
+                (Some(argument), Some(declared)) => {
+                    self.names.same(
+                        call.conn,
+                        &self.argument_type(argument),
+                        call.place(),
+                        declared,
+                        member.place(),
+                    ) == Same::Yes
+                }
+                _ => false,
+            }
+        })
     }
 
     /// The other overloads the call fits that take an argument as a nullable value that julie
@@ -1028,6 +1221,21 @@ impl OverloadSet {
         let Some((chosen_parameters, chosen_slots)) = chosen_slots else {
             return others.collect();
         };
+        let hiding: Vec<bool> = chosen_slots
+            .iter()
+            .map(|own| own.is_some_and(|slot| chosen_parameters[slot].hides_null))
+            .collect();
+        if !hiding.contains(&true) {
+            return Vec::new();
+        }
+        let plain = self.plain_values(call);
+        let hidden = hiding
+            .iter()
+            .enumerate()
+            .any(|(at, hides)| *hides && !plain.get(at).copied().unwrap_or(false));
+        if !hidden {
+            return Vec::new();
+        }
         others
             .filter(|&index| {
                 let member = &self.members[index];
@@ -1037,27 +1245,34 @@ impl OverloadSet {
                 let Some(slots) = self.slots(parameters, args) else {
                     return false;
                 };
-                chosen_slots.iter().zip(&slots).any(|(own, other)| {
-                    let Some(own) = own.map(|slot| &chosen_parameters[slot]) else {
-                        return false;
-                    };
-                    let Some(other) = other.map(|slot| &parameters[slot]) else {
-                        return own.hides_null;
-                    };
-                    let value_type = match (&own.written, &other.written) {
-                        (Some(own_type), Some(other_type)) => {
-                            self.names.same(
-                                call.conn,
-                                other_type,
-                                member.place(),
-                                own_type,
-                                chosen_member.place(),
-                            ) == Same::Yes
+                chosen_slots
+                    .iter()
+                    .zip(&slots)
+                    .enumerate()
+                    .any(|(at, (own, other))| {
+                        if plain.get(at).copied().unwrap_or(false) {
+                            return false;
                         }
-                        _ => false,
-                    };
-                    own.hides_null && other.takes_null && !value_type
-                })
+                        let Some(own) = own.map(|slot| &chosen_parameters[slot]) else {
+                            return false;
+                        };
+                        let Some(other) = other.map(|slot| &parameters[slot]) else {
+                            return own.hides_null;
+                        };
+                        let value_type = match (&own.written, &other.written) {
+                            (Some(own_type), Some(other_type)) => {
+                                self.names.same(
+                                    call.conn,
+                                    other_type,
+                                    member.place(),
+                                    own_type,
+                                    chosen_member.place(),
+                                ) == Same::Yes
+                            }
+                            _ => false,
+                        };
+                        own.hides_null && other.takes_null && !value_type
+                    })
             })
             .collect()
     }
@@ -1298,6 +1513,9 @@ fn parameter(
         Rules::CSharp => csharp_parameter_type(&formal.segment),
         Rules::Cpp => cpp_parameter_type(&formal.segment, &formal.name),
         Rules::Swift => swift_parameter_type(&formal.segment),
+        Rules::Kotlin | Rules::Scala => {
+            declared_parameter_type(rules, &formal.segment, facts.get(&formal.name))
+        }
         _ => facts.get(&formal.name).cloned(),
     };
     let written = shown.as_deref().map(|shown| rules.normalized(shown));
@@ -1346,7 +1564,8 @@ pub(crate) struct OverloadSteps<'c> {
     enabled: bool,
 }
 
-const CALLER_ARGUMENTS_SQL: &str = "SELECT metadata_json, path FROM identifiers
+const CALLER_ARGUMENTS_SQL: &str = "SELECT metadata_json, path, start_line, start_column
+     FROM identifiers
      WHERE containing_symbol_id = ?1 AND name = ?2 AND kind = 'call'";
 const CALLER_PENDING_CALLS_SQL: &str = "SELECT COUNT(*) FROM pending_relationships
      WHERE from_symbol_id = ?1 AND target_terminal_name = ?2 AND kind = 'calls'";
@@ -1386,8 +1605,10 @@ impl<'c> OverloadSteps<'c> {
         };
         let (set, name) = entry.as_ref();
         let mut stmt = self.conn.prepare(CALLER_ARGUMENTS_SQL)?;
-        let calls: Vec<(Option<String>, String)> = stmt
-            .query_map(params![caller, name], |row| Ok((row.get(0)?, row.get(1)?)))?
+        let calls: Vec<(Option<String>, String, i64, i64)> = stmt
+            .query_map(params![caller, name], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+            })?
             .collect::<Result<_, _>>()?;
         if calls.is_empty() {
             return Ok(true);
@@ -1403,7 +1624,7 @@ impl<'c> OverloadSteps<'c> {
         if rows > calls.len() as i64 {
             return Ok(true);
         }
-        Ok(calls.iter().any(|(metadata, path)| {
+        Ok(calls.iter().any(|(metadata, path, line, column)| {
             metadata
                 .as_deref()
                 .and_then(ArgumentFacts::from_metadata)
@@ -1413,6 +1634,10 @@ impl<'c> OverloadSteps<'c> {
                         args: &args,
                         path,
                         caller: Some(caller),
+                        site: Some(Site {
+                            line: *line as usize,
+                            column: Some(*column as usize),
+                        }),
                     };
                     set.exclusion_basis(&call).is_none()
                 })

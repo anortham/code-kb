@@ -8,9 +8,10 @@ use rusqlite::{Connection, params};
 
 use crate::models::Symbol;
 use crate::queries::QueryError;
-use crate::reference_report::overloads::{ArgumentFacts, Call, OverloadSet};
+use crate::reference_report::overloads::{ArgumentFacts, Call, OverloadSet, Site};
 
-const CALL_ARGUMENTS_SQL: &str = "SELECT metadata_json, path, containing_symbol_id FROM identifiers
+const CALL_ARGUMENTS_SQL: &str = "SELECT metadata_json, path, containing_symbol_id, start_column
+     FROM identifiers
      WHERE name = ?1 AND kind = 'call' AND (path = ?2 OR path = ?3) AND start_line = ?4
        AND json_valid(metadata_json)";
 
@@ -54,6 +55,7 @@ impl TypedOverloads {
                     row.get::<_, String>(0)?,
                     row.get::<_, String>(1)?,
                     row.get::<_, Option<String>>(2)?,
+                    row.get::<_, i64>(3)?,
                 ))
             },
         ) else {
@@ -61,13 +63,17 @@ impl TypedOverloads {
         };
         let bindings: Vec<Option<usize>> = rows
             .filter_map(Result::ok)
-            .map(|(json, written_path, caller)| {
+            .map(|(json, written_path, caller, column)| {
                 ArgumentFacts::from_metadata(&json).and_then(|args| {
                     self.set.exact_binding(&Call {
                         conn,
                         args: &args,
                         path: &written_path.replace('\\', "/"),
                         caller: caller.as_deref(),
+                        site: Some(Site {
+                            line,
+                            column: Some(column as usize),
+                        }),
                     })
                 })
             })
