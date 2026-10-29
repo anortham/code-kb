@@ -15,7 +15,9 @@ use crate::models::{
     is_generated_lambda_name,
 };
 use crate::queries::{self, QueryError};
-use crate::reference_report::{reference_report_for_impact, select_reference_target};
+use crate::reference_report::{
+    overload_group, reference_report_for_impact, select_reference_target,
+};
 use crate::slicer::{self, SliceError};
 use crate::sync::{self, SyncError};
 use crate::workspace::{Workspace, WorkspaceError, paths_equal};
@@ -1032,7 +1034,8 @@ fn with_report_tests(
         }
         if joins_callers {
             let mut callers = Vec::new();
-            for (id, row) in report_callers(conn, &report, walked_callers)? {
+            let overloaded = walked_callers && overload_group(conn, target)?.len() > 1;
+            for (id, row) in report_callers(conn, &report, walked_callers, overloaded)? {
                 if !holds_changed_line(conn, id.as_deref(), &row, changes)? {
                     callers.push((id, row));
                 }
@@ -1134,7 +1137,8 @@ fn with_calling_tests(
     }
     let mut deeper = None;
     if joins_callers {
-        let callers = report_callers(conn, &report, !needs_callers)?
+        let overloaded = !needs_callers && overload_group(conn, &target)?.len() > 1;
+        let callers = report_callers(conn, &report, !needs_callers, overloaded)?
             .into_iter()
             .filter(|(id, _)| needs_callers || id.as_deref() != Some(target.symbol_id.as_str()));
         let joined = join_report_callers(std::mem::take(&mut res.impacted_symbols), callers);
@@ -1382,11 +1386,14 @@ fn is_candidate_member_access(target: &ReferenceTarget, labeled: &LabeledSite) -
 
 /// The callers of the report's proven and likely sites that are not tests, as depth-1 rows in
 /// report order. A site outside any symbol is a row of its own at the site's line. When the rows
-/// join callers that the walk found, a candidate member access adds no row.
+/// join callers that the walk found, a candidate member access adds no row, and for a target with
+/// overloads a call adds no row either: the report counts the calls of every overload, and the
+/// walk already tied each call to the overload it reaches.
 fn report_callers(
     conn: &Connection,
     report: &ReferenceReport,
     joins_walk: bool,
+    walk_owns_calls: bool,
 ) -> Result<Vec<(Option<String>, ImpactedSymbol)>, OpError> {
     let tests: HashSet<&str> = report
         .tests
@@ -1398,6 +1405,11 @@ fn report_callers(
     for labeled in report.sites.iter().filter(|labeled| {
         matches!(labeled.label, SiteLabel::Proven | SiteLabel::Likely)
             && !(joins_walk && is_candidate_member_access(&report.target, labeled))
+            && !(walk_owns_calls
+                && matches!(
+                    labeled.site.kind.as_str(),
+                    "calls" | "call" | "instantiates"
+                ))
     }) {
         let caller = labeled.site.from_symbol_id.as_str();
         match positions.get(caller).filter(|_| !caller.is_empty()) {
