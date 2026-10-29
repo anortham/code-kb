@@ -481,6 +481,20 @@ fn result_text(result: &Value) -> &str {
     result["content"][0]["text"].as_str().unwrap()
 }
 
+fn call_until_error(session: &mut McpSession, arguments: &Value, deadline: Instant) -> Value {
+    loop {
+        let result = session.call("lookup_symbol", arguments.clone());
+        if result["isError"] == true {
+            return result;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "no failure reached a read: {result}"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
 fn launch_log(root: &Path) -> String {
     let logs = if root.join(".code-kb").is_dir() {
         root.join(".code-kb").join("logs")
@@ -572,7 +586,7 @@ fn extractor_wrapper_with_failures_and_scans(
     std::fs::write(
         &wrapper,
         format!(
-            "#!/bin/sh\nif [ -e '{}' ]; then\n{scan_failures}  for arg in \"$@\"; do\n    case \"$1:$arg\" in\n      {cases}) : > '{}'; echo 'controlled incremental failure' >&2; exit 2;;\n    esac\n  done\nfi\nexec '{}' \"$@\"\n",
+            "#!/bin/sh\nif [ -e '{}' ]; then\n{scan_failures}  for arg in \"$@\"; do\n    case \"$1:$arg\" in\n      {cases}) echo \"$1:$arg\" >> '{}'; sleep 1; echo 'controlled incremental failure' >&2; exit 2;;\n    esac\n  done\nfi\nexec '{}' \"$@\"\n",
             active_marker.display(),
             failure_record.display(),
             real.display(),
@@ -4321,7 +4335,7 @@ fn test_mcp_offline_update_and_delete_failures_return_errors_and_retry() {
         "query": "old_update_symbol",
         "project_root": update_project.path()
     });
-    let failed_update = session.call("lookup_symbol", update_arguments.clone());
+    let failed_update = call_until_error(&mut session, &update_arguments, update_deadline);
     let update_text = result_text(&failed_update);
     assert_eq!(failed_update["isError"], true, "{failed_update}");
     assert!(update_text.contains(&canonical_root(update_project.path()).display().to_string()));
@@ -4412,12 +4426,13 @@ fn test_mcp_offline_update_and_delete_failures_return_errors_and_retry() {
         );
         std::thread::sleep(Duration::from_millis(50));
     }
-    let failed_delete = session.call(
-        "lookup_symbol",
-        json!({
+    let failed_delete = call_until_error(
+        &mut session,
+        &json!({
             "query": "deleted_symbol",
             "project_root": delete_project.path()
         }),
+        delete_deadline,
     );
     let delete_text = result_text(&failed_delete);
     assert_eq!(failed_delete["isError"], true, "{failed_delete}");
@@ -4611,6 +4626,81 @@ fn test_mcp_watcher_failure_stays_pending_through_unrelated_successful_event() {
     );
     assert_ne!(recovered["isError"], true, "{recovered}");
     assert!(result_text(&recovered).contains("function `latest_symbol_after_retry` ["));
+}
+
+#[cfg(unix)]
+#[test]
+fn test_mcp_watcher_runs_a_failing_update_once_per_refresh() {
+    let launch = setup_test_repo();
+    let target = cargo_project("pub fn original_symbol() {}\n");
+    let telemetry = tempfile::tempdir().unwrap();
+    cli_scan(target.path(), None, telemetry.path());
+
+    let tools = tempfile::tempdir().unwrap();
+    let active_marker = tools.path().join("fail-refresh");
+    let failure_record = tools.path().join("failed-path");
+    std::fs::write(&active_marker, "fail").unwrap();
+    let wrapper = extractor_wrapper_with_failures(
+        tools.path(),
+        &active_marker,
+        &failure_record,
+        &[("update", "src/lib.rs")],
+    );
+    let mut command = serve_command(launch.path());
+    command
+        .env("JULIE_EXTRACT_BIN", &wrapper)
+        .env("CODE_KB_INDEX_WAIT_MS", "60000")
+        .env_remove("RUST_LOG");
+    let mut session = McpSession::start(command);
+    let target_root = target.path();
+    let initial = session.call(
+        "lookup_symbol",
+        json!({"query": "original_symbol", "project_root": target_root}),
+    );
+    assert_ne!(initial["isError"], true, "{initial}");
+
+    std::fs::write(
+        target_root.join("src/lib.rs"),
+        "pub fn changed_symbol() {}\n",
+    )
+    .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while !failure_record.exists() {
+        assert!(
+            Instant::now() < deadline,
+            "watcher did not attempt the failed update"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    std::fs::write(
+        target_root.join("src/other.rs"),
+        "pub fn unrelated_symbol() {}\n",
+    )
+    .unwrap();
+    let db_path = target_root.join(".code-kb/artifact.db");
+    loop {
+        let conn = code_kb_core::open_read_only(&db_path).unwrap();
+        if code_kb_core::get_symbol_by_name(&conn, "unrelated_symbol", Some("src/other.rs"))
+            .unwrap()
+            .is_some()
+        {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "unrelated watcher update did not complete"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    session.finish();
+
+    let attempts = std::fs::read_to_string(&failure_record).unwrap();
+    let failed_refreshes = launch_log(launch.path())
+        .lines()
+        .filter(|line| line.contains("Failed to refresh 'src/lib.rs' from watcher"))
+        .count();
+    assert!(failed_refreshes > 0, "{attempts}");
+    assert_eq!(attempts.lines().count(), failed_refreshes, "{attempts}");
 }
 
 #[cfg(unix)]

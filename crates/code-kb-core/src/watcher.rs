@@ -16,7 +16,9 @@ use std::time::{Duration, Instant};
 use thiserror::Error;
 use tracing::{debug, info, trace, warn};
 
-use crate::sync::{bounded_detail, delete_file, ensure_fresh_file, scan_workspace, update_file};
+use crate::sync::{
+    SyncError, bounded_detail, delete_file, ensure_fresh_file, scan_workspace, update_file,
+};
 use crate::workspace::{
     Workspace, is_hard_excluded, normalize_path, permission_denied_path, strip_prefix_lossy,
     to_forward_slash, walk_error_path,
@@ -1124,6 +1126,7 @@ fn refresh_file(
     if absolute.exists() && absolute.is_file() {
         let result = match ensure_fresh_file(workspace, db_path, conn, relative) {
             Ok(_) => Ok(()),
+            Err(error) if is_extractor_failure(&error) => Err(error),
             Err(_) => update_file(workspace, db_path, relative),
         };
         if let Err(error) = result {
@@ -1136,6 +1139,17 @@ fn refresh_file(
     } else if !absolute.exists() {
         remove_indexed_path(workspace, db_path, conn, relative, failures, shutdown);
     }
+}
+
+/// Whether the extractor itself refused the refresh, so that running it again would repeat the
+/// same failure.
+fn is_extractor_failure(error: &SyncError) -> bool {
+    matches!(
+        error,
+        SyncError::BinaryNotFound
+            | SyncError::ExtractionFailed(..)
+            | SyncError::TargetNotIndexed(_)
+    )
 }
 
 fn event_requires_reconciliation(
