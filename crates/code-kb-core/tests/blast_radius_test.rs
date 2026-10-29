@@ -1759,3 +1759,369 @@ fn a_method_read_of_a_function_the_diff_changed_is_a_depth_one_impacted_symbol()
         "{text}"
     );
 }
+
+const PY_HANDLER: &str = "class App:\n    def handle_error(self, error):\n        return error\n\n    def handlers(self):\n        return [self.handle_error]\n";
+
+#[test]
+fn a_file_target_lists_a_reader_of_its_method_in_another_file_and_the_test_of_that_reader() {
+    let (_temp, workspace, conn) = scanned(&[
+        ("pyproject.toml", "[project]\nname = \"pkg\"\n"),
+        ("src/pkg/__init__.py", ""),
+        ("src/pkg/app.py", PY_HANDLER),
+        (
+            "src/pkg/setup.py",
+            "from pkg.app import App\n\n\ndef register(app: App):\n    return [app.handle_error]\n",
+        ),
+        (
+            "tests/test_setup.py",
+            "from pkg.setup import register\n\n\ndef test_register():\n    assert register(None)\n",
+        ),
+    ]);
+
+    let result = blast_radius_op(&workspace, &conn, None, Some("src/pkg/app.py"), 2, 20).unwrap();
+
+    let text = format_blast_radius(&result);
+    assert_eq!(
+        impacted(&result),
+        [("register", 1, Some("direct caller (find_references)"))],
+        "{text}"
+    );
+    assert_eq!(
+        reasons(&result),
+        [("test_register", "indirect caller [depth 2]")],
+        "{text}"
+    );
+}
+
+#[test]
+fn a_typescript_file_target_lists_a_reader_of_its_method_in_another_file_and_its_test() {
+    let (_temp, workspace, conn) = scanned(&[
+        ("package.json", "{\"name\":\"pkg\"}\n"),
+        (
+            "src/app.ts",
+            "export class App {\n  handleError(error: Error): Error {\n    return error;\n  }\n}\n",
+        ),
+        (
+            "src/setup.ts",
+            "import { App } from \"./app\";\n\nexport function register(app: App) {\n  return [app.handleError];\n}\n",
+        ),
+        (
+            "test/setup.test.ts",
+            "import { register } from \"../src/setup\";\n\ntest(\"registers\", () => {\n  expect(register(null)).toBeTruthy();\n});\n",
+        ),
+    ]);
+
+    let result = blast_radius_op(&workspace, &conn, None, Some("src/app.ts"), 2, 20).unwrap();
+
+    let text = format_blast_radius(&result);
+    assert_eq!(
+        impacted(&result),
+        [("register", 1, Some("direct caller (find_references)"))],
+        "{text}"
+    );
+    assert_eq!(
+        reasons(&result),
+        [("registers", "indirect caller [depth 2]")],
+        "{text}"
+    );
+}
+
+#[test]
+fn a_csharp_file_target_lists_a_method_group_reader_in_another_file_and_its_test() {
+    let (_temp, workspace, conn) = scanned(&[
+        (
+            "App.csproj",
+            "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>\n",
+        ),
+        (
+            "src/App.cs",
+            "namespace Pkg;\n\npublic class App\n{\n    public string HandleError(string error)\n    {\n        return error;\n    }\n}\n",
+        ),
+        (
+            "src/Setup.cs",
+            "using System;\n\nnamespace Pkg;\n\npublic static class Setup\n{\n    public static Func<string, string> Register(App app)\n    {\n        return app.HandleError;\n    }\n}\n",
+        ),
+        (
+            "tests/SetupTests.cs",
+            "using Xunit;\n\nnamespace Pkg.Tests;\n\npublic class SetupTests\n{\n    [Fact]\n    public void Registers()\n    {\n        Assert.NotNull(Pkg.Setup.Register(new Pkg.App()));\n    }\n}\n",
+        ),
+    ]);
+
+    let result = blast_radius_op(&workspace, &conn, None, Some("src/App.cs"), 2, 20).unwrap();
+
+    let text = format_blast_radius(&result);
+    assert_eq!(
+        impacted(&result),
+        [(
+            "Register",
+            1,
+            Some("direct caller (find_references, name only)")
+        )],
+        "{text}"
+    );
+    assert_eq!(
+        reasons(&result),
+        [("SetupTests::Registers", "indirect caller [depth 2]")],
+        "{text}"
+    );
+}
+
+#[test]
+fn a_file_target_joins_no_untyped_member_read_when_the_walk_found_callers() {
+    let (_temp, workspace, conn) = scanned(&[
+        ("pyproject.toml", "[project]\nname = \"pkg\"\n"),
+        ("src/pkg/__init__.py", ""),
+        ("src/pkg/app.py", PY_HANDLER),
+        (
+            "src/pkg/caller.py",
+            "from pkg.app import App\n\n\ndef run(app: App):\n    return app.handlers()\n",
+        ),
+        (
+            "src/pkg/reader.py",
+            "def collect(thing):\n    return [thing.handle_error]\n",
+        ),
+    ]);
+
+    let result = blast_radius_op(&workspace, &conn, None, Some("src/pkg/app.py"), 2, 20).unwrap();
+
+    let text = format_blast_radius(&result);
+    let names: Vec<&str> = impacted(&result).iter().map(|row| row.0).collect();
+    assert!(names.contains(&"run"), "{text}");
+    assert!(!names.contains(&"collect"), "{text}");
+}
+
+#[test]
+fn a_file_target_lists_an_untyped_member_read_when_the_walk_found_no_caller() {
+    let (_temp, workspace, conn) = scanned(&[
+        ("pyproject.toml", "[project]\nname = \"pkg\"\n"),
+        ("src/pkg/__init__.py", ""),
+        ("src/pkg/app.py", PY_HANDLER),
+        (
+            "src/pkg/reader.py",
+            "def collect(thing):\n    return [thing.handle_error]\n",
+        ),
+    ]);
+
+    let result = blast_radius_op(&workspace, &conn, None, Some("src/pkg/app.py"), 2, 20).unwrap();
+
+    let text = format_blast_radius(&result);
+    assert_eq!(
+        impacted(&result),
+        [("collect", 1, Some("direct caller (find_references)"))],
+        "{text}"
+    );
+}
+
+#[test]
+fn a_caller_the_report_moves_up_to_depth_one_leads_the_walk_to_its_test() {
+    let (_temp, workspace, conn) = scanned(&[
+        ("pyproject.toml", "[project]\nname = \"pkg\"\n"),
+        ("src/pkg/__init__.py", ""),
+        (
+            "src/pkg/app.py",
+            "class App:\n    def handle_error(self, error):\n        return error\n\n    def dispatch(self):\n        return self.handle_error(1)\n\n    def run(self):\n        handler = self.handle_error\n        return self.dispatch()\n",
+        ),
+        (
+            "tests/test_app.py",
+            "from pkg.app import App\n\n\ndef test_run():\n    app = App()\n    assert app.run() == 1\n",
+        ),
+    ]);
+
+    let result = blast_radius_op(&workspace, &conn, Some("App.handle_error"), None, 2, 20).unwrap();
+
+    let text = format_blast_radius(&result);
+    assert_eq!(
+        impacted(&result),
+        [
+            ("dispatch", 1, None),
+            ("run", 1, Some("direct caller (find_references)")),
+        ],
+        "{text}"
+    );
+    assert_eq!(
+        reasons(&result),
+        [("test_run", "indirect caller [depth 2]")],
+        "{text}"
+    );
+    assert_eq!(result.tests_past_depth, Some(0), "{text}");
+    assert!(result.open_ends.is_empty(), "{text}");
+}
+
+#[test]
+fn a_typescript_caller_the_report_moves_up_to_depth_one_leads_the_walk_to_its_test() {
+    let (_temp, workspace, conn) = scanned(&[
+        ("package.json", "{\"name\":\"pkg\"}\n"),
+        (
+            "src/app.ts",
+            "export class App {\n  handleError(error: number): number {\n    return error;\n  }\n\n  dispatch(): number {\n    return this.handleError(1);\n  }\n\n  run(): number {\n    const handler = this.handleError;\n    return this.dispatch();\n  }\n}\n",
+        ),
+        (
+            "test/app.test.ts",
+            "import { App } from \"../src/app\";\n\ntest(\"runs\", () => {\n  const app = new App();\n  expect(app.run()).toBe(1);\n});\n",
+        ),
+    ]);
+
+    let result = blast_radius_op(&workspace, &conn, Some("App.handleError"), None, 2, 20).unwrap();
+
+    let text = format_blast_radius(&result);
+    assert_eq!(
+        impacted(&result),
+        [
+            ("dispatch", 1, None),
+            ("run", 1, Some("direct caller (find_references)")),
+        ],
+        "{text}"
+    );
+    assert_eq!(
+        reasons(&result),
+        [("runs", "indirect caller [depth 2]")],
+        "{text}"
+    );
+    assert!(result.open_ends.is_empty(), "{text}");
+}
+
+#[test]
+fn a_csharp_caller_the_report_moves_up_to_depth_one_leads_the_walk_to_its_test() {
+    let (_temp, workspace, conn) = scanned(&[
+        (
+            "App.csproj",
+            "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>\n",
+        ),
+        (
+            "src/App.cs",
+            "using System;\n\nnamespace Pkg;\n\npublic class App\n{\n    public int HandleError(int error)\n    {\n        return error;\n    }\n\n    public int Dispatch()\n    {\n        return HandleError(1);\n    }\n\n    public int Run()\n    {\n        Func<int, int> handler = this.HandleError;\n        return Dispatch();\n    }\n}\n",
+        ),
+        (
+            "tests/AppTests.cs",
+            "using Pkg;\nusing Xunit;\n\nnamespace Pkg.Tests;\n\npublic class AppTests\n{\n    [Fact]\n    public void Runs()\n    {\n        App app = new App();\n        Assert.Equal(1, app.Run());\n    }\n}\n",
+        ),
+    ]);
+
+    let result = blast_radius_op(&workspace, &conn, Some("App.HandleError"), None, 2, 20).unwrap();
+
+    let text = format_blast_radius(&result);
+    assert_eq!(
+        impacted(&result),
+        [
+            ("Dispatch", 1, None),
+            ("Run", 1, Some("direct caller (find_references)")),
+        ],
+        "{text}"
+    );
+    assert_eq!(
+        reasons(&result),
+        [("AppTests::Runs", "indirect caller [depth 2]")],
+        "{text}"
+    );
+    assert!(result.open_ends.is_empty(), "{text}");
+}
+
+const METHOD_VALUE_READERS: &[(&str, &str, &str, &str, &str, &str)] = &[
+    (
+        "go",
+        "app.go",
+        "package p\n\ntype App struct{}\n\nfunc (a *App) Handle(e string) string {\n\treturn e\n}\n",
+        "setup.go",
+        "package p\n\nfunc Register(a *App) func(string) string {\n\treturn a.Handle\n}\n",
+        "Register",
+    ),
+    (
+        "swift",
+        "App.swift",
+        "class App {\n    func handle(_ e: String) -> String { return e }\n}\n",
+        "Setup.swift",
+        "func register(app: App) -> (String) -> String {\n    return app.handle\n}\n",
+        "register",
+    ),
+    (
+        "dart",
+        "app.dart",
+        "class App {\n  String handle(String e) => e;\n}\n",
+        "setup.dart",
+        "import 'app.dart';\n\nFunction register(App app) {\n  return app.handle;\n}\n",
+        "register",
+    ),
+    (
+        "javascript",
+        "app.js",
+        "export class App {\n  handle(e) { return e; }\n}\n",
+        "setup.js",
+        "import { App } from './app.js';\n\nexport function register(app) {\n  return [app.handle];\n}\n",
+        "register",
+    ),
+    (
+        "scala",
+        "App.scala",
+        "class App {\n  def handle(e: String): String = e\n}\n",
+        "Setup.scala",
+        "object Setup {\n  def register(app: App): String => String = app.handle _\n}\n",
+        "register",
+    ),
+    (
+        "lua",
+        "app.lua",
+        "local App = {}\n\nfunction App.handle(e)\n  return e\nend\n\nreturn App\n",
+        "setup.lua",
+        "local App = require('app')\n\nlocal function register()\n  return App.handle\nend\n",
+        "register",
+    ),
+    (
+        "vbnet",
+        "App.vb",
+        "Public Class App\n    Public Function Handle(e As String) As String\n        Return e\n    End Function\nEnd Class\n",
+        "Setup.vb",
+        "Public Module Setup\n    Public Function Register(app As App) As Func(Of String, String)\n        Return AddressOf app.Handle\n    End Function\nEnd Module\n",
+        "Register",
+    ),
+    (
+        "fsharp",
+        "App.fs",
+        "module App\n\ntype App() =\n    member this.Handle(e: string) = e\n",
+        "Setup.fs",
+        "module Setup\n\nlet register (app: App.App) = app.Handle\n",
+        "register",
+    ),
+    (
+        "gdscript",
+        "app.gd",
+        "class_name App\n\nfunc handle(e):\n\treturn e\n",
+        "setup.gd",
+        "func register(app: App):\n\treturn app.handle\n",
+        "register",
+    ),
+    (
+        "rust",
+        "src/app.rs",
+        "pub struct App;\n\nimpl App {\n    pub fn handle(&self, e: u8) -> u8 {\n        e\n    }\n}\n",
+        "src/setup.rs",
+        "use crate::app::App;\n\npub fn register() -> fn(&App, u8) -> u8 {\n    App::handle\n}\n",
+        "register",
+    ),
+    (
+        "cpp",
+        "app.hpp",
+        "class App {\npublic:\n    int handle(int e) { return e; }\n};\n",
+        "setup.cpp",
+        "#include \"app.hpp\"\n\nauto reg() {\n    return &App::handle;\n}\n",
+        "reg",
+    ),
+];
+
+#[test]
+fn a_file_target_lists_the_reader_of_its_method_value_in_every_language_with_one() {
+    let mut missing = Vec::new();
+    for (language, app, app_text, setup, setup_text, reader) in METHOD_VALUE_READERS {
+        let (_temp, workspace, conn) = scanned(&[(app, app_text), (setup, setup_text)]);
+
+        let result = blast_radius_op(&workspace, &conn, None, Some(app), 2, 20).unwrap();
+
+        let rows = impacted(&result);
+        if !rows
+            .iter()
+            .any(|(name, depth, _)| name == reader && *depth == 1)
+        {
+            missing.push(format!("{language}: {rows:?}"));
+        }
+    }
+    assert!(missing.is_empty(), "{missing:#?}");
+}

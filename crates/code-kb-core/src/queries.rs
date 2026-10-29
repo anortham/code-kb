@@ -8073,10 +8073,16 @@ pub(crate) fn compute_blast_radius_for_files(
 /// walk does not follow, such as a read of a decorated command or a module-level object: every
 /// function, method, constructor, and type, and every variable or constant at module level,
 /// outside tests and documentation, in path and line order.
-pub(crate) fn file_report_targets(
+///
+/// The rows stream from one query and `visit` takes one symbol at a time, so no list of them is
+/// held. Once `deadline` passes, the query only counts the rest, and the count of symbols that
+/// `visit` never took is returned.
+pub(crate) fn visit_file_report_targets<E: From<QueryError>>(
     conn: &Connection,
     seed_paths: &[&str],
-) -> Result<Vec<Symbol>, QueryError> {
+    deadline: std::time::Instant,
+    mut visit: impl FnMut(Symbol) -> Result<(), E>,
+) -> Result<usize, E> {
     let mut params = Vec::new();
     let condition = seed_path_condition(seed_paths, &mut params);
     let lifecycle = if has_column(conn, "symbols", "test_lifecycle") {
@@ -8084,32 +8090,50 @@ pub(crate) fn file_report_targets(
     } else {
         "1"
     };
-    let mut stmt = conn.prepare(&format!(
-        "SELECT s.symbol_id, replace(s.path, '\\', '/') FROM symbols s
-         WHERE {condition}
-           AND (s.kind IN ('function', 'method', 'constructor')
-                OR s.kind IN {OWNER_KINDS}
-                OR (s.kind IN ('variable', 'constant') AND s.parent_symbol_id IS NULL))
-           AND s.is_test = 0 AND s.test_container = 0 AND {lifecycle}
-           AND {not_documentation}
-         ORDER BY s.path, s.start_line",
-        not_documentation = not_documentation(conn, "s")
-    ))?;
-    let ids = stmt
-        .query_map(rusqlite::params_from_iter(&params), |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
-    let mut targets = Vec::new();
-    for (id, path) in ids {
-        if is_test_path(&path) {
+    let mut stmt = conn
+        .prepare(&format!(
+            "SELECT s.symbol_id FROM symbols s
+             WHERE {condition}
+               AND (s.kind IN ('function', 'method', 'constructor')
+                    OR s.kind IN {OWNER_KINDS}
+                    OR (s.kind IN ('variable', 'constant') AND s.parent_symbol_id IS NULL))
+               AND s.is_test = 0 AND s.test_container = 0 AND {lifecycle}
+               AND {not_documentation}
+               AND NOT {test_path}
+             ORDER BY s.path, s.start_line",
+            not_documentation = not_documentation(conn, "s"),
+            test_path = test_path_predicate("s"),
+        ))
+        .map_err(QueryError::from)?;
+    let mut rows = stmt
+        .query(rusqlite::params_from_iter(&params))
+        .map_err(QueryError::from)?;
+    let mut unvisited = 0;
+    while let Some(row) = rows.next().map_err(QueryError::from)? {
+        if unvisited > 0 || std::time::Instant::now() >= deadline {
+            unvisited += 1;
             continue;
         }
+        let id: String = row.get(0).map_err(QueryError::from)?;
         if let Some(symbol) = get_symbol_by_id(conn, &id)? {
-            targets.push(symbol);
+            visit(symbol)?;
         }
     }
-    Ok(targets)
+    Ok(unvisited)
+}
+
+/// Whether `path` lies in one of the files or folders `seed_paths`, by the rule of
+/// [`seed_path_condition`].
+pub(crate) fn in_seed_paths(path: &str, seed_paths: &[&str]) -> bool {
+    let path = path.replace('\\', "/");
+    seed_paths.iter().any(|seed| {
+        let seed = seed.replace('\\', "/");
+        let seed = seed.trim_start_matches("./").trim_matches('/');
+        path.eq_ignore_ascii_case(seed)
+            || path.get(..seed.len()).is_some_and(|head| {
+                head.eq_ignore_ascii_case(seed) && path[seed.len()..].starts_with('/')
+            })
+    })
 }
 
 /// The condition that selects the symbols of the files or folders `seed_paths`, with its values
@@ -8337,6 +8361,8 @@ fn blast_radius_walk_with_options(
             tests_past_depth_cut: false,
             past_depth_tests: Vec::new(),
             report_symbols_unchecked: None,
+            report_symbols_failed: None,
+            report_sites_unchecked: None,
         });
     };
 
@@ -8454,6 +8480,8 @@ fn blast_radius_walk_with_options(
         tests_past_depth_cut,
         past_depth_tests,
         report_symbols_unchecked: None,
+        report_symbols_failed: None,
+        report_sites_unchecked: None,
     })
 }
 

@@ -405,6 +405,15 @@ pub struct BlastRadiusResult {
     /// the tests that only their reports tie to the target are missing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub report_symbols_unchecked: Option<usize>,
+    /// The symbols whose callers report failed with an error, so the callers and tests that only
+    /// their reports tie to the target are missing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub report_symbols_failed: Option<usize>,
+    /// The sites that the callers reports did not check within their time limit. Such a site is
+    /// `likely` or `unresolved` without the checks, so a caller or test it would tie may be
+    /// missing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub report_sites_unchecked: Option<usize>,
 }
 
 /// A symbol where the walk stopped because the index shows no caller of it, such as a method

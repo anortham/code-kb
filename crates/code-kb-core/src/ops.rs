@@ -16,7 +16,8 @@ use crate::models::{
 };
 use crate::queries::{self, QueryError};
 use crate::reference_report::{
-    overload_group, reference_report_for_impact, select_reference_target,
+    overload_group, reference_report_for_impact, reference_report_for_impact_within,
+    select_reference_target, unchecked_site_count,
 };
 use crate::slicer::{self, SliceError};
 use crate::sync::{self, SyncError};
@@ -892,14 +893,49 @@ pub fn blast_radius_selected_op_with_options(
     )
 }
 
-/// How long the callers reports of a file target's symbols may run before the rest go unchecked.
+/// How long the callers reports of a file target's symbols may run, from the start of the
+/// request, before the rest go unchecked.
 const FILE_REPORT_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// What the callers reports of a blast radius could not cover: the reports that failed and the
+/// sites that a report did not check within its time limit.
+#[derive(Default)]
+struct ReportGaps {
+    failed: usize,
+    unchecked_sites: usize,
+}
+
+impl ReportGaps {
+    fn record(&mut self, report: &ReferenceReport) {
+        self.unchecked_sites += unchecked_site_count(report);
+    }
+
+    fn apply(&self, res: &mut BlastRadiusResult) {
+        if self.failed > 0 {
+            res.report_symbols_failed = Some(res.report_symbols_failed.unwrap_or(0) + self.failed);
+        }
+        if self.unchecked_sites > 0 {
+            res.report_sites_unchecked =
+                Some(res.report_sites_unchecked.unwrap_or(0) + self.unchecked_sites);
+        }
+    }
+}
+
+/// The callers of one report in the two forms [`report_callers`] gives: on their own, and joined
+/// to callers that the walk found.
+struct ReportCallerRows {
+    alone: Vec<(Option<String>, ImpactedSymbol)>,
+    with_walk: Vec<(Option<String>, ImpactedSymbol)>,
+}
 
 /// The blast radius of a file or folder. The walk follows resolved and pending calls; the callers
 /// report of each symbol of the file also ties a read of a name, such as
 /// `run_command.make_context()` on a decorated command or a module-level object passed as an
 /// argument. Its tests join the walk's, except a test that only `name only` sites tie, and a
-/// symbol whose report has a proven or likely site is no open end.
+/// symbol whose report has a proven or likely site is no open end. The callers of its proven and
+/// likely sites outside the file or folder join as for one symbol, and the walk goes on from
+/// them. A call of an overload stays a caller: every overload of a group sits in one file, so
+/// each one is a seed of the walk.
 fn file_blast_radius(
     workspace: &Workspace,
     conn: &Connection,
@@ -908,38 +944,84 @@ fn file_blast_radius(
     limit: usize,
     include_low_signal: bool,
 ) -> Result<BlastRadiusResult, OpError> {
-    let targets = queries::file_report_targets(conn, &[file])?;
+    file_blast_radius_within(
+        workspace,
+        conn,
+        file,
+        depth,
+        limit,
+        include_low_signal,
+        FileReportLimits {
+            budget: FILE_REPORT_TIME_LIMIT,
+            report: FILE_REPORT_TIME_LIMIT,
+        },
+    )
+}
+
+/// The time the callers reports of a file target may take: `budget` for all of them from the
+/// start of the call, and `report` for one.
+struct FileReportLimits {
+    budget: std::time::Duration,
+    report: std::time::Duration,
+}
+
+/// [`file_blast_radius`] with the callers reports bounded by `limits`. Each report gets the time
+/// that is left of the budget, up to the limit of one report.
+fn file_blast_radius_within(
+    workspace: &Workspace,
+    conn: &Connection,
+    file: &str,
+    depth: usize,
+    limit: usize,
+    include_low_signal: bool,
+    limits: FileReportLimits,
+) -> Result<BlastRadiusResult, OpError> {
     let started = std::time::Instant::now();
+    let deadline = started.checked_add(limits.budget).unwrap_or(started);
     let mut tests = Vec::new();
     let mut seen = HashSet::new();
     let mut tied = HashSet::new();
-    let mut unchecked = 0;
-    for target in &targets {
-        if started.elapsed() >= FILE_REPORT_TIME_LIMIT {
-            unchecked += 1;
-            continue;
-        }
-        let Ok(report) = reference_report_for_impact(conn, &workspace.root, target) else {
-            continue;
-        };
-        if report.counts.proven + report.counts.likely > 0 {
-            tied.insert((target.path.replace('\\', "/"), target.start_line));
-        }
-        if report.tests.iter().all(|test| test.name_only) {
-            continue;
-        }
-        let name = member_display_name(conn, target)?;
-        for test in report.tests.into_iter().filter(|test| !test.name_only) {
-            if seen.insert((test.path.clone(), test.line)) {
-                tests.push(TestTarget {
-                    reason: format!("calls `{name}` (find_references)"),
-                    name: test.name,
-                    path: test.path,
-                    line: test.line,
-                });
+    let mut gaps = ReportGaps::default();
+    let mut callers = Vec::new();
+    let unchecked = queries::visit_file_report_targets(
+        conn,
+        &[file],
+        deadline,
+        |target| -> Result<(), OpError> {
+            let left = deadline
+                .saturating_duration_since(std::time::Instant::now())
+                .min(limits.report);
+            let Ok(report) =
+                reference_report_for_impact_within(conn, &workspace.root, &target, left)
+            else {
+                gaps.failed += 1;
+                return Ok(());
+            };
+            gaps.record(&report);
+            if report.counts.proven + report.counts.likely > 0 {
+                tied.insert((target.path.replace('\\', "/"), target.start_line));
             }
-        }
-    }
+            callers.push(ReportCallerRows {
+                alone: report_callers(conn, &report, false, false)?,
+                with_walk: report_callers(conn, &report, true, false)?,
+            });
+            if report.tests.iter().all(|test| test.name_only) {
+                return Ok(());
+            }
+            let name = member_display_name(conn, &target)?;
+            for test in report.tests.into_iter().filter(|test| !test.name_only) {
+                if seen.insert((test.path.clone(), test.line)) {
+                    tests.push(TestTarget {
+                        reason: format!("calls `{name}` (find_references)"),
+                        name: test.name,
+                        path: test.path,
+                        line: test.line,
+                    });
+                }
+            }
+            Ok(())
+        },
+    )?;
     let mut res = queries::compute_blast_radius_for_files(
         conn,
         &[file],
@@ -950,7 +1032,40 @@ fn file_blast_radius(
     )?;
     res.open_ends
         .retain(|end| !tied.contains(&(end.path.clone(), end.line)));
+    if !res.traversal_ceiling_reached
+        && !res.impacted_symbols_truncated
+        && !res.likely_tests_truncated
+    {
+        let walked_callers = !res.impacted_symbols.is_empty();
+        let rows = callers
+            .into_iter()
+            .flat_map(|rows| {
+                if walked_callers {
+                    rows.with_walk
+                } else {
+                    rows.alone
+                }
+            })
+            .filter(|(_, row)| !queries::in_seed_paths(&row.path, &[file]));
+        let joined = join_report_callers(std::mem::take(&mut res.impacted_symbols), rows);
+        res.impacted_symbols = joined.rows;
+        walk_on_from_joined(
+            conn,
+            &mut res,
+            &joined.added,
+            depth,
+            limit,
+            include_low_signal,
+        )?;
+        res.impacted_symbols_found = res.impacted_symbols.len();
+        res.impacted_symbols_truncated |= res.impacted_symbols.len() > limit;
+        res.impacted_symbols.truncate(limit);
+        res.likely_tests_found = res.likely_tests.len();
+        res.likely_tests_truncated |= res.likely_tests.len() > limit;
+        res.likely_tests.truncate(limit);
+    }
     res.report_symbols_unchecked = (unchecked > 0).then_some(unchecked);
+    gaps.apply(&mut res);
     Ok(res)
 }
 
@@ -1023,10 +1138,13 @@ fn with_report_tests(
     let joins_callers = !res.impacted_symbols_truncated;
     let walked_callers = !res.impacted_symbols.is_empty();
     let mut added = Vec::new();
+    let mut gaps = ReportGaps::default();
     for target in &targets {
         let Ok(report) = reference_report_for_impact(conn, &workspace.root, target) else {
+            gaps.failed += 1;
             continue;
         };
+        gaps.record(&report);
         if report.counts.proven + report.counts.likely > 0 {
             let path = target.path.replace('\\', "/");
             res.open_ends
@@ -1050,38 +1168,16 @@ fn with_report_tests(
             }
         }
     }
-    if depth > 1 && !added.is_empty() {
-        let ids: Vec<&str> = added.iter().map(String::as_str).collect();
-        let deeper = queries::compute_blast_radius_from_callers_with_low_signal(
-            conn,
-            &ids,
-            depth - 1,
-            limit,
-            include_low_signal,
-        )?;
-        let mut listed: HashSet<(String, usize)> = res
-            .impacted_symbols
+    gaps.apply(&mut res);
+    walk_on_from_joined(conn, &mut res, &added, depth, limit, include_low_signal)?;
+    seen.extend(
+        res.likely_tests
             .iter()
-            .map(|row| (row.path.clone(), row.line))
-            .collect();
-        for row in &deeper.impacted_symbols {
-            if listed.insert((row.path.clone(), row.line)) {
-                res.impacted_symbols.push(ImpactedSymbol {
-                    depth: row.depth + 1,
-                    ..row.clone()
-                });
-            }
-        }
-        follow_deeper(&mut res, &deeper, depth);
-        seen.extend(
-            res.likely_tests
-                .iter()
-                .map(|test| (test.path.clone(), test.line)),
-        );
-    }
+            .map(|test| (test.path.clone(), test.line)),
+    );
     if joins_callers {
         res.impacted_symbols_found = res.impacted_symbols.len();
-        res.impacted_symbols_truncated = res.impacted_symbols.len() > limit;
+        res.impacted_symbols_truncated |= res.impacted_symbols.len() > limit;
         res.impacted_symbols.truncate(limit);
     }
     if res.tests_past_depth.is_some() {
@@ -1130,50 +1226,31 @@ fn with_calling_tests(
     let Ok(report) = reference_report_for_impact(conn, &workspace.root, &target) else {
         return Ok(res);
     };
+    let mut gaps = ReportGaps::default();
+    gaps.record(&report);
+    gaps.apply(&mut res);
     if report.counts.proven + report.counts.likely > 0 {
         let path = target.path.replace('\\', "/");
         res.open_ends
             .retain(|end| end.path != path || end.line != target.start_line);
     }
-    let mut deeper = None;
     if joins_callers {
         let overloaded = !needs_callers && overload_group(conn, &target)?.len() > 1;
         let callers = report_callers(conn, &report, !needs_callers, overloaded)?
             .into_iter()
             .filter(|(id, _)| needs_callers || id.as_deref() != Some(target.symbol_id.as_str()));
         let joined = join_report_callers(std::mem::take(&mut res.impacted_symbols), callers);
-        let ids: Vec<&str> = joined.added.iter().map(String::as_str).collect();
-        if depth > 1 && !ids.is_empty() {
-            deeper = Some(if include_low_signal {
-                queries::compute_blast_radius_from_callers_with_low_signal(
-                    conn,
-                    &ids,
-                    depth - 1,
-                    limit,
-                    true,
-                )?
-            } else {
-                queries::compute_blast_radius_from_callers(conn, &ids, depth - 1, limit)?
-            });
-        }
         res.impacted_symbols = joined.rows;
-        if let Some(deeper) = &deeper {
-            let mut seen: HashSet<(String, usize)> = res
-                .impacted_symbols
-                .iter()
-                .map(|row| (row.path.clone(), row.line))
-                .collect();
-            for row in &deeper.impacted_symbols {
-                if seen.insert((row.path.clone(), row.line)) {
-                    res.impacted_symbols.push(ImpactedSymbol {
-                        depth: row.depth + 1,
-                        ..row.clone()
-                    });
-                }
-            }
-        }
+        walk_on_from_joined(
+            conn,
+            &mut res,
+            &joined.added,
+            depth,
+            limit,
+            include_low_signal,
+        )?;
         res.impacted_symbols_found = res.impacted_symbols.len();
-        res.impacted_symbols_truncated = res.impacted_symbols.len() > limit;
+        res.impacted_symbols_truncated |= res.impacted_symbols.len() > limit;
         res.impacted_symbols.truncate(limit);
         if needs_callers {
             res.callers_report = Some(CallersReportSites {
@@ -1184,9 +1261,6 @@ fn with_calling_tests(
                 excluded: report.counts.excluded,
             });
         }
-    }
-    if let Some(deeper) = &deeper {
-        follow_deeper(&mut res, deeper, depth);
     }
     if res.likely_tests_truncated {
         return Ok(res);
@@ -1224,6 +1298,56 @@ fn with_calling_tests(
     res.likely_tests_truncated |= res.likely_tests.len() > limit;
     res.likely_tests.truncate(limit);
     Ok(res)
+}
+
+/// Walks on from the callers that a join put at depth 1, with one level less depth, and adds what
+/// that walk found one level deeper. A symbol that is listed already keeps the smaller of its
+/// two depths, and the rows stay in depth order.
+fn walk_on_from_joined(
+    conn: &Connection,
+    res: &mut BlastRadiusResult,
+    added: &[String],
+    depth: usize,
+    limit: usize,
+    include_low_signal: bool,
+) -> Result<(), OpError> {
+    if depth <= 1 || added.is_empty() {
+        return Ok(());
+    }
+    let ids: Vec<&str> = added.iter().map(String::as_str).collect();
+    let deeper = queries::compute_blast_radius_from_callers_with_low_signal(
+        conn,
+        &ids,
+        depth - 1,
+        limit,
+        include_low_signal,
+    )?;
+    let mut listed: HashMap<(String, usize), usize> = res
+        .impacted_symbols
+        .iter()
+        .enumerate()
+        .map(|(index, row)| ((row.path.clone(), row.line), index))
+        .collect();
+    for row in &deeper.impacted_symbols {
+        let row_depth = row.depth + 1;
+        match listed.get(&(row.path.clone(), row.line)) {
+            Some(&index) => {
+                let listed_row = &mut res.impacted_symbols[index];
+                listed_row.depth = listed_row.depth.min(row_depth);
+            }
+            None => {
+                listed.insert((row.path.clone(), row.line), res.impacted_symbols.len());
+                res.impacted_symbols.push(ImpactedSymbol {
+                    depth: row_depth,
+                    ..row.clone()
+                });
+            }
+        }
+    }
+    res.impacted_symbols.sort_by_key(|row| row.depth);
+    res.impacted_symbols_truncated |= deeper.impacted_symbols_truncated;
+    follow_deeper(res, &deeper, depth);
+    Ok(())
 }
 
 /// Adds what the walk from the report's callers found: its tests, its open ends, and whether it
@@ -1310,7 +1434,7 @@ fn listed_rows(res: &BlastRadiusResult) -> HashSet<(String, usize)> {
 }
 
 /// The walk's impacted rows with the report's callers joined, and the ids of the callers that
-/// the walk did not list, so a walk can go on from them.
+/// the join put at depth 1, either new or moved up from deeper, so a walk can go on from them.
 struct JoinedCallers {
     rows: Vec<ImpactedSymbol>,
     added: Vec<String>,
@@ -1318,7 +1442,7 @@ struct JoinedCallers {
 
 /// Joins the report's callers to the walk's rows as depth-1 rows: a caller that the walk listed
 /// deeper moves to depth 1, and a caller that the walk did not list follows the walk's depth-1
-/// rows.
+/// rows. Both count as added, since the walk went on from a moved caller with less depth left.
 fn join_report_callers(
     mut rows: Vec<ImpactedSymbol>,
     callers: impl IntoIterator<Item = (Option<String>, ImpactedSymbol)>,
@@ -1331,6 +1455,7 @@ fn join_report_callers(
             .position(|row| row.path == caller.path && row.line == caller.line)
         {
             Some(index) if rows[index].depth > 1 => {
+                added.extend(id);
                 let row = rows.remove(index);
                 rows.insert(
                     at,
@@ -1498,10 +1623,155 @@ fn report_callers(
 mod tests {
     use std::fs;
 
+    use std::time::Duration;
+
     use rusqlite::Connection;
 
-    use super::{codebase_outline_op, one_level_deeper};
+    use super::{
+        FileReportLimits, codebase_outline_op, file_blast_radius_within, one_level_deeper,
+    };
     use crate::workspace::Workspace;
+    use crate::{
+        find_julie_extract_binary, formatters::format_blast_radius_report, open_read_only,
+        safe_tempdir, scan_workspace,
+    };
+
+    const PACKAGE_APP: &str = "LIMIT = 3\n\n\nclass App:\n    def handle_error(self, error):\n        return error\n\n    def dispatch(self):\n        return self.handle_error(LIMIT)\n";
+
+    fn scanned_package() -> (tempfile::TempDir, Workspace, Connection) {
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+        let temp = safe_tempdir();
+        let root = temp.path().to_path_buf();
+        for (relative, text) in [
+            ("pyproject.toml", "[project]\nname = \"pkg\"\n"),
+            ("src/pkg/__init__.py", ""),
+            ("src/pkg/app.py", PACKAGE_APP),
+            (
+                "src/pkg/test_app.py",
+                "from pkg.app import App\n\n\ndef helper():\n    return App()\n\n\ndef test_dispatch():\n    assert helper().dispatch() == 3\n",
+            ),
+            (
+                "tests/test_app.py",
+                "from pkg.app import App\n\n\ndef test_dispatch():\n    app = App()\n    assert app.dispatch() == 3\n",
+            ),
+        ] {
+            let full = root.join(relative);
+            fs::create_dir_all(full.parent().unwrap()).unwrap();
+            fs::write(full, text).unwrap();
+        }
+        let db = root.join(".code-kb").join("artifact.db");
+        let workspace = Workspace::new(root);
+        scan_workspace(&workspace, &db, true).unwrap();
+        let conn = open_read_only(&db).unwrap();
+        (temp, workspace, conn)
+    }
+
+    fn limits(budget: Duration, report: Duration) -> FileReportLimits {
+        FileReportLimits { budget, report }
+    }
+
+    #[test]
+    fn a_folder_target_counts_the_symbols_past_its_budget_and_leaves_out_test_files() {
+        let (_temp, workspace, conn) = scanned_package();
+
+        let result = file_blast_radius_within(
+            &workspace,
+            &conn,
+            "src/pkg",
+            2,
+            20,
+            false,
+            limits(Duration::ZERO, Duration::from_secs(3)),
+        )
+        .unwrap();
+
+        assert_eq!(result.report_symbols_unchecked, Some(4));
+        assert_eq!(result.report_symbols_failed, None);
+        assert_eq!(result.report_sites_unchecked, None);
+        let text = format_blast_radius_report(workspace.root.as_path(), &result, 0, 20, false);
+        assert!(
+            text.contains("find_references did not check 4 symbols of the target"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn a_file_target_counts_the_sites_its_reports_left_unchecked() {
+        let (_temp, workspace, conn) = scanned_package();
+
+        let result = file_blast_radius_within(
+            &workspace,
+            &conn,
+            "src/pkg/app.py",
+            2,
+            20,
+            false,
+            limits(Duration::from_secs(3600), Duration::ZERO),
+        )
+        .unwrap();
+
+        assert_eq!(result.report_symbols_unchecked, None);
+        assert!(
+            result.report_sites_unchecked.is_some_and(|sites| sites > 0),
+            "{result:?}"
+        );
+        let text = format_blast_radius_report(workspace.root.as_path(), &result, 0, 20, false);
+        assert!(
+            text.contains("within the time limit, so callers and tests"),
+            "{text}"
+        );
+        assert!(text.contains("### Broader Test Scope"), "{text}");
+    }
+
+    #[test]
+    fn a_file_target_whose_reports_check_every_site_needs_no_broader_suite() {
+        let (_temp, workspace, conn) = scanned_package();
+
+        let result = file_blast_radius_within(
+            &workspace,
+            &conn,
+            "src/pkg/app.py",
+            2,
+            20,
+            false,
+            limits(Duration::from_secs(3600), Duration::from_secs(3)),
+        )
+        .unwrap();
+
+        assert_eq!(result.report_symbols_unchecked, None);
+        assert_eq!(result.report_symbols_failed, None);
+        assert_eq!(result.report_sites_unchecked, None);
+        let text = format_blast_radius_report(workspace.root.as_path(), &result, 0, 20, false);
+        assert!(!text.contains("### Broader Test Scope"), "{text}");
+    }
+
+    #[test]
+    fn a_file_target_counts_the_symbols_whose_report_failed() {
+        let (_temp, workspace, conn) = scanned_package();
+        drop(conn);
+        let conn = Connection::open(workspace.root.join(".code-kb").join("artifact.db")).unwrap();
+        conn.execute_batch("DROP TABLE identifiers").unwrap();
+
+        let result = file_blast_radius_within(
+            &workspace,
+            &conn,
+            "src/pkg/app.py",
+            2,
+            20,
+            false,
+            limits(Duration::from_secs(3600), Duration::from_secs(3)),
+        )
+        .unwrap();
+
+        assert_eq!(result.report_symbols_failed, Some(4));
+        assert_eq!(result.likely_tests[0].name, "test_dispatch");
+        let text = format_blast_radius_report(workspace.root.as_path(), &result, 0, 20, false);
+        assert!(
+            text.contains("find_references failed for 4 symbols of the target"),
+            "{text}"
+        );
+        assert!(text.contains("### Broader Test Scope"), "{text}");
+    }
 
     #[test]
     fn a_test_one_call_further_from_the_target_is_one_level_deeper() {

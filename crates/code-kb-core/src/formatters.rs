@@ -2897,6 +2897,20 @@ fn format_blast_radius_with_page(
             if count == 1 { "it" } else { "they" }
         ));
     }
+    if let Some(count) = result.report_symbols_failed {
+        out.push_str(&format!(
+            "find_references failed for {count} {} of the target, so the callers and tests that only {} report ties may be missing.\n\n",
+            plural(count, "symbol"),
+            if count == 1 { "its" } else { "their" }
+        ));
+    }
+    if let Some(count) = result.report_sites_unchecked {
+        out.push_str(&format!(
+            "find_references did not check {count} {} within the time limit, so callers and tests that only {} would tie may be missing.\n\n",
+            plural(count, "site"),
+            if count == 1 { "it" } else { "they" }
+        ));
+    }
     out.push_str(&open_ends_text(
         &result.open_ends,
         paged.then_some((offset, limit)),
@@ -3030,6 +3044,8 @@ pub fn format_blast_radius_report(
         || result.traversal_ceiling_reached
         || result.stopped_at_depth.is_some()
         || result.report_symbols_unchecked.is_some()
+        || result.report_symbols_failed.is_some()
+        || result.report_sites_unchecked.is_some()
         || !result.open_ends.is_empty();
     if !needs_broader_suite || result.seed_type == "none" {
         return out;
@@ -4133,6 +4149,8 @@ mod tests {
             tests_past_depth_cut: false,
             past_depth_tests: Vec::new(),
             report_symbols_unchecked: None,
+            report_symbols_failed: None,
+            report_sites_unchecked: None,
         };
 
         let formatted = format_blast_radius(&res);
@@ -4163,6 +4181,8 @@ mod tests {
             tests_past_depth_cut: false,
             past_depth_tests: Vec::new(),
             report_symbols_unchecked: None,
+            report_symbols_failed: None,
+            report_sites_unchecked: None,
         }
     }
 
@@ -4320,6 +4340,8 @@ mod tests {
             tests_past_depth_cut: false,
             past_depth_tests: Vec::new(),
             report_symbols_unchecked: None,
+            report_symbols_failed: None,
+            report_sites_unchecked: None,
         };
 
         let formatted = format_blast_radius(&res);
@@ -4652,6 +4674,8 @@ mod tests {
             tests_past_depth_cut: false,
             past_depth_tests: Vec::new(),
             report_symbols_unchecked: None,
+            report_symbols_failed: None,
+            report_sites_unchecked: None,
         };
 
         let formatted = format_blast_radius(&res);
@@ -4678,6 +4702,8 @@ mod tests {
             tests_past_depth_cut: false,
             past_depth_tests: Vec::new(),
             report_symbols_unchecked: None,
+            report_symbols_failed: None,
+            report_sites_unchecked: None,
         };
 
         let formatted = format_blast_radius(&res);
@@ -4749,6 +4775,8 @@ mod tests {
             tests_past_depth_cut: false,
             past_depth_tests: Vec::new(),
             report_symbols_unchecked: None,
+            report_symbols_failed: None,
+            report_sites_unchecked: None,
         };
         let formatted = format_blast_radius(&unresolved_only);
         assert!(!formatted.contains("No downstream callers"), "{formatted}");

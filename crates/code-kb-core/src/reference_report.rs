@@ -164,11 +164,22 @@ pub fn reference_report_for_impact(
     root: &Path,
     target: &Symbol,
 ) -> Result<ReferenceReport, QueryError> {
+    reference_report_for_impact_within(conn, root, target, ACCOUNTING_TIME_LIMIT)
+}
+
+/// [`reference_report_for_impact`] with its checks bounded by `time_limit` when that is below the
+/// report's own limit, so a pass over many targets stays within one budget.
+pub(crate) fn reference_report_for_impact_within(
+    conn: &Connection,
+    root: &Path,
+    target: &Symbol,
+    time_limit: Duration,
+) -> Result<ReferenceReport, QueryError> {
     report_with(
         conn,
         root,
         target,
-        ACCOUNTING_TIME_LIMIT,
+        time_limit.min(ACCOUNTING_TIME_LIMIT),
         ReportMode {
             text_scan: false,
             arity_exclusion: true,
@@ -176,6 +187,15 @@ pub fn reference_report_for_impact(
         },
         None,
     )
+}
+
+/// The sites of `report` that its checks did not reach within the time limit.
+pub(crate) fn unchecked_site_count(report: &ReferenceReport) -> usize {
+    report
+        .sites
+        .iter()
+        .filter(|site| site.basis.ends_with(NOT_CHECKED))
+        .count()
 }
 
 /// What a report computes besides the labeled sites.
