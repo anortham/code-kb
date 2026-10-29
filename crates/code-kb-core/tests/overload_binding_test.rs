@@ -418,6 +418,157 @@ fn a_csharp_call_binds_only_by_exact_types() {
     }
 }
 
+const CSHARP_NULLABLE_OV: &str = "public struct Pt {}\npublic class Box {}\npublic class Ov {\n    public void Nul(int a) {}\n    public void Nul(int? a) {}\n    public void Num(int a) {}\n    public void Num(object a) {}\n    public void Num(string a) {}\n    public void P(Pt p) {}\n    public void P(object o) {}\n    public void B(Box b) {}\n    public void B(object o) {}\n}\n";
+const CSHARP_NULLABLE_USE: &str = "public class Use {\n    private int? field;\n    public void Go(Ov ov, int? n, Pt? maybe, Box? box) {\n        int? local = null;\n        ov.Nul(local);\n        ov.Nul(field);\n        ov.Nul(n);\n        ov.Nul((int?)3);\n        ov.Num(n);\n        ov.Num(\"s\");\n        ov.P(maybe);\n        ov.B(box);\n    }\n}\n";
+
+#[test]
+fn a_csharp_nullable_value_that_julie_writes_without_its_marker_keeps_the_overloads_that_take_it() {
+    let repo = scanned_repo(&[
+        ("Ov.cs", CSHARP_NULLABLE_OV),
+        ("Use.cs", CSHARP_NULLABLE_USE),
+    ]);
+    let path = "Use.cs";
+    let line = |needle| line_of(&repo, path, needle);
+    let nul_value = report_of(&repo, "Nul", "Ov.cs", 0);
+    let nul_nullable = report_of(&repo, "Nul", "Ov.cs", 1);
+    for call in ["ov.Nul(local)", "ov.Nul(field)", "ov.Nul(n)"] {
+        assert_kept(&nul_value, path, line(call));
+        assert_kept(&nul_nullable, path, line(call));
+    }
+    assert_kept(&nul_nullable, path, line("ov.Nul((int?)3)"));
+    assert_excluded(
+        &nul_value,
+        path,
+        line("ov.Nul((int?)3)"),
+        "arguments `(int?)` bind only `Nul(int?)`",
+    );
+
+    let num_object = report_of(&repo, "Num", "Ov.cs", 1);
+    assert_kept(&num_object, path, line("ov.Num(n)"));
+    assert_excluded(
+        &num_object,
+        path,
+        line("ov.Num(\"s\")"),
+        "arguments `(string)` bind only `Num(string)`",
+    );
+
+    let p_object = report_of(&repo, "P", "Ov.cs", 1);
+    assert_kept(&p_object, path, line("ov.P(maybe)"));
+
+    let b_object = report_of(&repo, "B", "Ov.cs", 1);
+    assert_excluded(
+        &b_object,
+        path,
+        line("ov.B(box)"),
+        "arguments `(Box)` bind only `B(Box)`",
+    );
+}
+
+const CSHARP_API: &str = "#nullable enable\nusing System;\npublic class Settings {}\npublic class Base {}\npublic class Sub : Base {}\npublic class Api {\n    public static string Parse(string json)\n    {\n        return Parse(json, null);\n    }\n    public static string Parse(string json, Settings? settings) { return json; }\n    public static string Ser(object? value)\n    {\n        return Ser(value, null, (Settings?)null);\n    }\n    public static string Ser(object? value, Settings? settings)\n    {\n        return Ser(value, null, settings);\n    }\n    public static string Ser(object? value, Type? type, Settings? settings) { return \"\"; }\n    public void Run(object? a) {}\n    public void Run(string a) {}\n    public void Take(Base b) {}\n    public void Take(int a) {}\n    public void Opt(int a, int b = 0) {}\n    public void Opt(string a) {}\n    public void Par(params int[] xs) {}\n    public void Par(string a) {}\n    public void Dyn(dynamic d) {}\n    public void Dyn(string s) {}\n    public void Def(int a, int b = 0) {}\n    public void Def(in int a) {}\n    public void Gen(int a) {}\n    public void Gen<T>(int a) {}\n}\n";
+const CSHARP_API_USE: &str = "#nullable enable\npublic class Use {\n    public void Go(Api api, object? o, string? s, Sub sub, dynamic d, int x) {\n        api.Run(o);\n        api.Run(s);\n        api.Run(null);\n        api.Take(sub);\n        api.Opt(1);\n        api.Par(1, 2);\n        api.Par(1);\n        api.Dyn(d);\n        api.Def(x);\n        api.Gen(1);\n    }\n}\n";
+
+#[test]
+fn a_csharp_call_keeps_overloads_that_annotations_nulls_subtypes_params_dynamic_or_twins_leave_open()
+ {
+    let repo = scanned_repo(&[("Api.cs", CSHARP_API), ("Use.cs", CSHARP_API_USE)]);
+    let path = "Use.cs";
+    let line = |needle| line_of(&repo, path, needle);
+
+    let run_object = report_of(&repo, "Run", "Api.cs", 0);
+    let run_string = report_of(&repo, "Run", "Api.cs", 1);
+    assert_kept(&run_object, path, line("api.Run(o)"));
+    assert_excluded(
+        &run_string,
+        path,
+        line("api.Run(o)"),
+        "arguments `(object)` bind only `Run(object?)`",
+    );
+    assert_kept(&run_string, path, line("api.Run(s)"));
+    assert_excluded(
+        &run_object,
+        path,
+        line("api.Run(s)"),
+        "arguments `(string)` bind only `Run(string)`",
+    );
+    assert_kept(&run_object, path, line("api.Run(null)"));
+    assert_kept(&run_string, path, line("api.Run(null)"));
+
+    for nth in [0, 1] {
+        assert_kept(
+            &report_of(&repo, "Take", "Api.cs", nth),
+            path,
+            line("api.Take(sub)"),
+        );
+        assert_kept(
+            &report_of(&repo, "Par", "Api.cs", nth),
+            path,
+            line("api.Par(1)"),
+        );
+        assert_kept(
+            &report_of(&repo, "Dyn", "Api.cs", nth),
+            path,
+            line("api.Dyn(d)"),
+        );
+        assert_kept(
+            &report_of(&repo, "Def", "Api.cs", nth),
+            path,
+            line("api.Def(x)"),
+        );
+        assert_kept(
+            &report_of(&repo, "Gen", "Api.cs", nth),
+            path,
+            line("api.Gen(1)"),
+        );
+    }
+    assert_excluded(
+        &report_of(&repo, "Opt", "Api.cs", 1),
+        path,
+        line("api.Opt(1)"),
+        "arguments `(int)` bind only `Opt(int, int)`",
+    );
+    assert_eq!(
+        site(
+            &report_of(&repo, "Par", "Api.cs", 1),
+            path,
+            line("api.Par(1, 2)")
+        )
+        .0,
+        SiteLabel::Excluded
+    );
+}
+
+#[test]
+fn a_csharp_call_whose_argument_count_only_another_overload_takes_stays_excluded() {
+    let repo = scanned_repo(&[("Api.cs", CSHARP_API)]);
+    let path = "Api.cs";
+    let line = |needle| line_of(&repo, path, needle);
+    let parse_call = line("return Parse(json, null)");
+    assert_excluded(
+        &report_of(&repo, "Parse", path, 0),
+        path,
+        parse_call,
+        "arguments `(string, ?)` bind only `Parse(string, Settings?)`",
+    );
+    assert_kept(&report_of(&repo, "Parse", path, 1), path, parse_call);
+
+    let three = line("return Ser(value, null, (Settings?)null)");
+    let forwarded = line("return Ser(value, null, settings)");
+    for target in [0, 1] {
+        let report = report_of(&repo, "Ser", path, target);
+        for call in [three, forwarded] {
+            assert_eq!(
+                site(&report, path, call).0,
+                SiteLabel::Excluded,
+                "{}",
+                dump(&report)
+            );
+        }
+    }
+    let by_type = report_of(&repo, "Ser", path, 2);
+    assert_kept(&by_type, path, three);
+    assert_kept(&by_type, path, forwarded);
+}
+
 #[test]
 fn an_overload_lists_only_the_callers_whose_arguments_can_bind_it() {
     let cases = [
@@ -852,6 +1003,87 @@ fn a_vbnet_call_binds_by_types_and_keeps_named_arguments_and_unknown_types() {
         31,
         "arguments `(Integer)` bind only `Ov(Integer)`",
     );
+}
+
+#[test]
+fn a_vbnet_object_argument_binds_late_and_keeps_every_overload_it_fits() {
+    let path = "src/Late.vb";
+    let repo = scanned_repo(&[(
+        path,
+        "Public Class Late\n    Public Function Run(a As Object) As Integer\n        Return 1\n    End Function\n    Public Function Run(a As String) As Integer\n        Return 2\n    End Function\n    Public Function Go(o As Object, s As String) As Integer\n        Run(o)\n        Run(s)\n        Run(Nothing)\n        Return 0\n    End Function\nEnd Class\n",
+    )]);
+    let by_object = report_of(&repo, "Run", path, 0);
+    let by_string = report_of(&repo, "Run", path, 1);
+    for line in [9, 11] {
+        assert_kept(&by_object, path, line);
+        assert_kept(&by_string, path, line);
+    }
+    assert_kept(&by_string, path, 10);
+    assert_excluded(
+        &by_object,
+        path,
+        10,
+        "arguments `(String)` bind only `Run(String)`",
+    );
+}
+
+#[test]
+fn a_swift_optional_that_julie_writes_without_its_marker_keeps_the_overload_that_takes_it() {
+    let path = "src/opt.swift";
+    let repo = scanned_repo(&[(
+        path,
+        "class Opt {\n    var stored: Int! = nil\n    func nul(_ a: Int) -> Int { return 1 }\n    func nul(_ a: Int?) -> Int { return 2 }\n    func name(_ a: String) -> Int { return 1 }\n    func name(_ a: Int) -> Int { return 2 }\n    func go(n: Int!, m: Int?) {\n        _ = nul(n)\n        _ = nul(stored)\n        _ = nul(m)\n        _ = name(1)\n    }\n}\n",
+    )]);
+    let by_value = report_of(&repo, "nul", path, 0);
+    let by_optional = report_of(&repo, "nul", path, 1);
+    for line in [8, 9] {
+        assert_kept(&by_value, path, line);
+        assert_kept(&by_optional, path, line);
+    }
+    assert_kept(&by_optional, path, 10);
+    assert_excluded(
+        &by_value,
+        path,
+        10,
+        "arguments `(Int?)` bind only `nul(_: Int?)`",
+    );
+    assert_excluded(
+        &report_of(&repo, "name", path, 0),
+        path,
+        11,
+        "arguments `(Int)` bind only `name(_: Int)`",
+    );
+}
+
+#[test]
+fn a_java_varargs_call_keeps_the_widening_overload_and_excludes_what_no_conversion_reaches() {
+    let path = "src/p/Sum.java";
+    let repo = scanned_repo(&[(
+        path,
+        "package p;\n\nclass Sum {\n    int sum(int... xs) { return 0; }\n    int sum(String s) { return 1; }\n    int sum(long a, long b) { return 2; }\n    int go() {\n        int one = sum(1);\n        int two = sum(1, 2);\n        int none = sum();\n        return one + two + none;\n    }\n}\n",
+    )]);
+    let varargs = report_of(&repo, "sum", path, 0);
+    let by_string = report_of(&repo, "sum", path, 1);
+    let by_long = report_of(&repo, "sum", path, 2);
+    let line = |needle| line_of(&repo, path, needle);
+    for call in ["sum(1);", "sum(1, 2)", "sum();"] {
+        assert_kept(&varargs, path, line(call));
+        assert_eq!(
+            site(&by_string, path, line(call)).0,
+            SiteLabel::Excluded,
+            "{}",
+            dump(&by_string)
+        );
+    }
+    assert_kept(&by_long, path, line("sum(1, 2)"));
+    for call in ["sum(1);", "sum();"] {
+        assert_eq!(
+            site(&by_long, path, line(call)).0,
+            SiteLabel::Excluded,
+            "{}",
+            dump(&by_long)
+        );
+    }
 }
 
 #[test]

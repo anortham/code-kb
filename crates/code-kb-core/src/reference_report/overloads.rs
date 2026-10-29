@@ -5,9 +5,10 @@
 //! The rules stay on the safe side. A count, a name, or a label that an overload cannot take
 //! rules it out. A type rules it out only where the language rule is certain (Java and Kotlin
 //! types that no conversion joins). An overload whose parameter types equal the argument types
-//! binds the call alone where the language always picks the exact match.
+//! binds the call alone where the language always picks the exact match, unless the argument can
+//! be a nullable value that julie writes without its marker, or the call binds at run time.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
@@ -61,6 +62,16 @@ const JAVA_PRIMITIVES: [(&str, &str); 8] = [
     ("double", "Double"),
     ("boolean", "Boolean"),
 ];
+/// The C# value types that a nullable value never converts to implicitly.
+const CSHARP_VALUE_KEYWORDS: [&str; 15] = [
+    "bool", "byte", "sbyte", "char", "short", "ushort", "int", "uint", "long", "ulong", "float",
+    "double", "decimal", "nint", "nuint",
+];
+/// The C# keyword types that are reference types.
+const CSHARP_REFERENCE_KEYWORDS: [&str; 3] = ["string", "object", "dynamic"];
+const CSHARP_TYPE_KINDS_SQL: &str = "SELECT DISTINCT kind FROM symbols
+     WHERE name = ?1 AND language = 'csharp'
+       AND kind IN ('class', 'interface', 'delegate', 'struct', 'enum')";
 /// The Kotlin types that are final and that no implicit conversion reaches, except the integer
 /// literal widening in [`kotlin_converts`].
 const KOTLIN_CLOSED: [&str; 13] = [
@@ -227,6 +238,23 @@ impl Rules {
             _ => false,
         }
     }
+
+    /// Whether julie writes a nullable argument without its marker: `Int` for a Kotlin `Int?`
+    /// value, `int` for a C# `int?` value, and `Int` for a Swift `Int!` value.
+    fn drops_null_marker(self) -> bool {
+        matches!(self, Self::Kotlin | Self::CSharp | Self::Swift)
+    }
+
+    /// Whether an argument of this normalized type makes the call bind at run time, so no
+    /// overload is exact: a C# `dynamic` value, and a VB.NET `Object` value, which late binding
+    /// passes by its run-time type when `Option Strict` is off.
+    fn binds_late(self, argument: &str) -> bool {
+        match self {
+            Self::CSharp => argument == "dynamic",
+            Self::VbNet => argument == "object",
+            _ => false,
+        }
+    }
 }
 
 fn java_box(primitive: &str) -> Option<&'static str> {
@@ -305,6 +333,72 @@ fn csharp_normalized(written: &str) -> String {
         })
         .unwrap_or(unqualified)
         .to_string()
+}
+
+/// The name a C# type has in the index (`Linq.JValue` and `JValue<T>` are `JValue`), `None` for
+/// a keyword, an array, or a pointer.
+fn csharp_type_name(written: &str) -> Option<&str> {
+    let base = written.trim_end_matches('?');
+    if CSHARP_VALUE_KEYWORDS.contains(&base)
+        || CSHARP_REFERENCE_KEYWORDS.contains(&base)
+        || base.ends_with(']')
+        || base.ends_with('*')
+    {
+        return None;
+    }
+    let plain = base.split('<').next().unwrap_or(base);
+    let name = plain.rsplit(['.', ':']).next().unwrap_or(plain);
+    (!name.is_empty()).then_some(name)
+}
+
+/// Whether a C# type is a reference type, where `?` only annotates and does not change the
+/// type: `string`, `object`, `dynamic`, an array, or a name that the index defines only as a
+/// class, an interface, or a delegate.
+fn csharp_is_reference(written: &str, references: &HashSet<String>) -> bool {
+    let base = written.trim_end_matches('?');
+    CSHARP_REFERENCE_KEYWORDS.contains(&base)
+        || base.ends_with(']')
+        || csharp_type_name(base).is_some_and(|name| references.contains(name))
+}
+
+/// Whether a C# parameter can take a nullable value: every type except a non-nullable value
+/// keyword, `string`, and an array. A nullable value boxes to `object` and to an interface, a
+/// generic type parameter takes it, and a user-defined conversion can take it to another type.
+fn csharp_takes_null(written: Option<&str>) -> bool {
+    written.is_none_or(|written| {
+        written.ends_with('?')
+            || !(CSHARP_VALUE_KEYWORDS.contains(&written)
+                || written == "string"
+                || written.ends_with(']'))
+    })
+}
+
+/// The names of the C# types that the index defines only as a class, an interface, or a
+/// delegate, among the parameter types of `members`.
+fn csharp_reference_types(
+    conn: &Connection,
+    members: &[Member],
+) -> Result<HashSet<String>, QueryError> {
+    let names: HashSet<&str> = members
+        .iter()
+        .flat_map(|member| member.parameters.iter().flatten())
+        .filter_map(|parameter| parameter.written.as_deref().and_then(csharp_type_name))
+        .collect();
+    let mut stmt = conn.prepare(CSHARP_TYPE_KINDS_SQL)?;
+    let mut references = HashSet::new();
+    for name in names {
+        let kinds: Vec<String> = stmt
+            .query_map(params![name], |row| row.get(0))?
+            .collect::<Result<_, _>>()?;
+        if !kinds.is_empty()
+            && kinds
+                .iter()
+                .all(|kind| matches!(kind.as_str(), "class" | "interface" | "delegate"))
+        {
+            references.insert(name.to_string());
+        }
+    }
+    Ok(references)
 }
 
 /// A VB.NET type name in lower case (VB.NET ignores case), with a framework name read as its
@@ -435,7 +529,7 @@ fn kotlin_written_type(segment: &str) -> Option<&str> {
 }
 
 /// The names in the first `<…>` of a declaration head, before its parameter list (`fun <T> f`,
-/// `class Box<T : Any>`): Kotlin type parameters.
+/// `class Box<T : Any>`, `func f<T: P>`): Kotlin and Swift type parameters.
 fn type_parameters(signature: &str) -> Vec<String> {
     let head = signature.split('(').next().unwrap_or_default();
     let Some(open) = head.find('<') else {
@@ -467,9 +561,15 @@ struct Parameter {
     shown: Option<String>,
     optional: bool,
     variadic: bool,
-    /// A Kotlin parameter that takes a null: `Box?`, a type parameter, or a type the index does
-    /// not know.
+    /// A parameter that can take a nullable value of a language where julie drops the marker
+    /// ([`Rules::drops_null_marker`]): a Kotlin `Box?`, a type parameter, or a type the index
+    /// does not know; any C# type but a value keyword, `string`, or an array; a Swift optional,
+    /// a type parameter, or a type that is not a built-in value type.
     takes_null: bool,
+    /// A parameter whose type an argument can have when it is a nullable value that julie wrote
+    /// without its marker, and that does not take that value: a Kotlin parameter that takes no
+    /// null, a C# type that can be a value type, a Swift type that is not optional.
+    hides_null: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -487,7 +587,11 @@ struct Member {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Fit {
     No,
-    Possible,
+    /// `mismatch` when an argument's known type differs from the known type of its parameter, so
+    /// an exact overload ranks above this one.
+    Possible {
+        mismatch: bool,
+    },
     /// Every argument has the type of the parameter it fills; `defaults` when the call leaves a
     /// parameter with a default value out.
     Exact {
@@ -501,6 +605,8 @@ enum Fit {
 pub(crate) struct OverloadSet {
     rules: Rules,
     members: Vec<Member>,
+    /// The C# reference types among the parameter types ([`csharp_reference_types`]).
+    references: HashSet<String>,
 }
 
 impl OverloadSet {
@@ -552,7 +658,44 @@ impl OverloadSet {
                 inherits: false,
             });
         }
-        Ok((members.len() > 1).then_some(Self { rules, members }))
+        let references = if rules == Rules::CSharp {
+            let references = csharp_reference_types(conn, &members)?;
+            for parameter in members
+                .iter_mut()
+                .flat_map(|member| member.parameters.iter_mut().flatten())
+            {
+                if let Some(written) = parameter.written.take() {
+                    let reference = csharp_is_reference(&written, &references);
+                    parameter.hides_null = !written.ends_with('?') && !reference;
+                    parameter.written = Some(if reference {
+                        written.trim_end_matches('?').to_string()
+                    } else {
+                        written
+                    });
+                }
+            }
+            references
+        } else {
+            HashSet::new()
+        };
+        Ok((members.len() > 1).then_some(Self {
+            rules,
+            members,
+            references,
+        }))
+    }
+
+    /// The normalized type of an argument, without the `?` of a C# reference type, which only
+    /// annotates it.
+    fn argument_type(&self, written: &str) -> String {
+        let normalized = self.rules.normalized(written);
+        if self.rules == Rules::CSharp
+            && normalized.ends_with('?')
+            && csharp_is_reference(&normalized, &self.references)
+        {
+            return normalized.trim_end_matches('?').to_string();
+        }
+        normalized
     }
 
     fn fit(&self, member: &Member, args: &ArgumentFacts) -> Fit {
@@ -561,23 +704,21 @@ impl OverloadSet {
         {
             return Fit::No;
         }
+        let unknown = Fit::Possible { mismatch: false };
         let Some(parameters) = &member.parameters else {
-            return Fit::Possible;
+            return unknown;
         };
         let Some(slots) = self.slots(parameters, args) else {
-            return if member.inherits {
-                Fit::Possible
-            } else {
-                Fit::No
-            };
+            return if member.inherits { unknown } else { Fit::No };
         };
         let Some(types) = &args.types else {
-            return Fit::Possible;
+            return unknown;
         };
         if args.argument_count() != Some(types.len()) {
-            return Fit::Possible;
+            return unknown;
         }
         let mut exact = true;
+        let mut mismatch = false;
         for (written, slot) in types.iter().zip(&slots) {
             let Some(parameter) = slot.map(|slot| &parameters[slot]) else {
                 exact = false;
@@ -586,9 +727,10 @@ impl OverloadSet {
             match (written, &parameter.written) {
                 (_, _) if parameter.variadic => exact = false,
                 (Some(argument), Some(declared)) => {
-                    let argument = self.rules.normalized(argument);
+                    let argument = self.argument_type(argument);
                     if argument != *declared {
                         exact = false;
+                        mismatch = true;
                         if self.rules.incompatible(&argument, declared) {
                             return Fit::No;
                         }
@@ -598,14 +740,14 @@ impl OverloadSet {
             }
         }
         if !exact {
-            return Fit::Possible;
+            return Fit::Possible { mismatch };
         }
         let filled: Vec<usize> = slots.iter().flatten().copied().collect();
         let left_out = (0..parameters.len()).filter(|index| !filled.contains(index));
         let mut defaults = false;
         for index in left_out {
             if !parameters[index].optional {
-                return Fit::Possible;
+                return unknown;
             }
             defaults = true;
         }
@@ -661,8 +803,13 @@ impl OverloadSet {
 
     /// The one overload whose parameter types equal the argument types and that the language
     /// picks over every other overload the call fits: an identity conversion ranks above every
-    /// other, and one that leaves no default out wins over those that do. julie writes `Int` for
-    /// a Kotlin `Int?` value, so a Kotlin call also checks the overloads that take a null.
+    /// other, and one that leaves no default out wins over those that do. One that leaves a
+    /// default out decides only when every other overload the call fits has an argument of
+    /// another known type, since an overload of unknown types can take the call without a
+    /// default. julie writes `Int` for a Kotlin `Int?` value, `int` for a C# `int?` value, and
+    /// `Int` for a Swift `Int!` value, so these calls also check the overloads that take a null.
+    /// A C# `dynamic` argument or a VB.NET `Object` argument binds at run time, so no overload
+    /// is exact.
     pub(crate) fn exact_binding(&self, args: &ArgumentFacts) -> Option<usize> {
         let fits: Vec<Fit> = self
             .members
@@ -680,19 +827,36 @@ impl OverloadSet {
                 .map(|(index, _)| index)
                 .collect()
         };
+        let late = args
+            .types
+            .iter()
+            .flatten()
+            .flatten()
+            .any(|written| self.rules.binds_late(&self.rules.normalized(written)));
+        if late {
+            return None;
+        }
         let chosen = match (exact(false).as_slice(), exact(true).as_slice()) {
             ([only], _) => *only,
-            ([], [only]) => *only,
+            ([], [only]) => {
+                let outranked = fits.iter().enumerate().all(|(index, fit)| {
+                    index == *only || matches!(fit, Fit::No | Fit::Possible { mismatch: true })
+                });
+                if !outranked {
+                    return None;
+                }
+                *only
+            }
             _ => return None,
         };
-        if self.rules == Rules::Kotlin && self.null_can_pick_another(chosen, fits, args) {
+        if self.rules.drops_null_marker() && self.null_can_pick_another(chosen, fits, args) {
             return None;
         }
         Some(chosen)
     }
 
-    /// Whether a Kotlin argument could be a nullable value that the chosen overload does not
-    /// take and another overload the call fits takes: julie writes `Int` for an `Int?` value.
+    /// Whether an argument could be a nullable value that the chosen overload does not take and
+    /// another overload the call fits takes, because julie wrote it without its marker.
     fn null_can_pick_another(&self, chosen: usize, fits: &[Fit], args: &ArgumentFacts) -> bool {
         let Some(chosen_parameters) = &self.members[chosen].parameters else {
             return true;
@@ -711,9 +875,8 @@ impl OverloadSet {
                 continue;
             };
             let takes_null_instead = chosen_slots.iter().zip(&slots).any(|(own, other)| {
-                let own_takes_null = own.is_none_or(|slot| chosen_parameters[slot].takes_null);
-                let other_takes_null = other.is_none_or(|slot| parameters[slot].takes_null);
-                !own_takes_null && other_takes_null
+                own.is_some_and(|slot| chosen_parameters[slot].hides_null)
+                    && other.is_none_or(|slot| parameters[slot].takes_null)
             });
             if takes_null_instead {
                 return true;
@@ -861,7 +1024,7 @@ fn member(
         })?
         .collect::<Result<_, _>>()?
     };
-    let generics: Vec<String> = if rules == Rules::Kotlin {
+    let generics: Vec<String> = if matches!(rules, Rules::Kotlin | Rules::Swift) {
         let owner = match &symbol.parent_symbol_id {
             Some(parent) => conn
                 .query_row(
@@ -956,15 +1119,27 @@ fn parameter(
         _ => facts.get(&formal.name).cloned(),
     };
     let written = shown.as_deref().map(|shown| rules.normalized(shown));
-    let takes_null = rules == Rules::Kotlin
-        && match kotlin_written_type(&formal.segment) {
-            Some(declared) => {
-                declared.ends_with('?')
-                    || written.is_none()
-                    || generics.iter().any(|generic| generic == declared)
-            }
+    let generic = |name: &str| generics.iter().any(|generic| generic == name);
+    let takes_null = match rules {
+        Rules::Kotlin => match kotlin_written_type(&formal.segment) {
+            Some(declared) => declared.ends_with('?') || written.is_none() || generic(declared),
             None => true,
-        };
+        },
+        Rules::CSharp => csharp_takes_null(written.as_deref()),
+        Rules::Swift => written.as_deref().is_none_or(|written| {
+            written.ends_with(['?', '!'])
+                || generic(written)
+                || !(SWIFT_VALUE_TYPES.contains(&written) || written.starts_with('['))
+        }),
+        _ => false,
+    };
+    let hides_null = match rules {
+        Rules::Kotlin => !takes_null,
+        Rules::Swift => written
+            .as_deref()
+            .is_some_and(|written| !written.ends_with(['?', '!'])),
+        _ => false,
+    };
     Parameter {
         name: formal.name.clone(),
         label: (rules == Rules::Swift)
@@ -975,6 +1150,7 @@ fn parameter(
         optional: formal.optional,
         variadic: formal.variadic,
         takes_null,
+        hides_null,
     }
 }
 
@@ -1079,9 +1255,52 @@ impl<'c> OverloadSteps<'c> {
 #[cfg(test)]
 mod tests {
     use super::{
-        Rules, cpp_parameter_type, csharp_normalized, csharp_parameter_type, java_converts,
-        kotlin_converts, swift_label, swift_parameter_type, swift_takes_closure, type_parameters,
+        Rules, cpp_parameter_type, csharp_is_reference, csharp_normalized, csharp_parameter_type,
+        csharp_takes_null, csharp_type_name, java_converts, kotlin_converts, swift_label,
+        swift_parameter_type, swift_takes_closure, type_parameters,
     };
+    use std::collections::HashSet;
+
+    #[test]
+    fn a_csharp_type_is_a_reference_type_only_for_a_reference_keyword_an_array_or_an_indexed_class()
+    {
+        let references: HashSet<String> = ["JValue".to_string()].into();
+        for reference in [
+            "string",
+            "object?",
+            "dynamic",
+            "int[]",
+            "JValue?",
+            "Linq.JValue",
+        ] {
+            assert!(csharp_is_reference(reference, &references), "{reference}");
+        }
+        for value in ["int", "int?", "Pt", "DateTime", "T"] {
+            assert!(!csharp_is_reference(value, &references), "{value}");
+        }
+        assert_eq!(csharp_type_name("Linq.JValue?"), Some("JValue"));
+        assert_eq!(csharp_type_name("List<int>"), Some("List"));
+        assert_eq!(csharp_type_name("int?"), None);
+        assert_eq!(csharp_type_name("string"), None);
+        assert_eq!(csharp_type_name("byte[]"), None);
+    }
+
+    #[test]
+    fn a_csharp_parameter_takes_a_nullable_value_unless_it_is_a_value_keyword_a_string_or_an_array()
+    {
+        for takes in [
+            None,
+            Some("int?"),
+            Some("object"),
+            Some("T"),
+            Some("JToken"),
+        ] {
+            assert!(csharp_takes_null(takes), "{takes:?}");
+        }
+        for refuses in ["int", "double", "string", "int[]"] {
+            assert!(!csharp_takes_null(Some(refuses)), "{refuses}");
+        }
+    }
 
     #[test]
     fn a_csharp_type_name_keeps_its_namespace_and_reads_a_framework_name_as_its_keyword() {

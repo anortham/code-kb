@@ -96,16 +96,46 @@ type it fills, and every parameter the call leaves out has a default value, the
 overload is exact. The language picks the one exact overload over every other
 overload the call fits, so the call binds only it: every one of these
 languages ranks an identity conversion above every other. An exact overload
-that leaves out no default wins over one that does. Kotlin also picks it, but
-julie writes `Int` for an `Int?` value. So in Kotlin the exact overload decides
-only when no other fitting overload takes a null where it does not: a parameter
-written with `?`, a type parameter, or a parameter with no type fact.
+that leaves out no default wins over one that does. An exact overload that
+leaves out a default decides only when every other overload the call fits has
+an argument whose known type differs from its parameter's, because an overload
+with unknown types (a C# `in` parameter, a varargs parameter) can take the call
+without a default and then wins.
+
+julie writes some nullable arguments without their marker: `Int` for a Kotlin
+`Int?` value, `int` for a C# `int?` value (a local, a field, a property, or a
+parameter; only a cast keeps `int?`), `Pt` for a C# `Pt?` value, and `Int` for
+a Swift `Int!` value. So in these languages the exact overload decides only
+when no other fitting overload takes the nullable value where it does not:
+
+- Kotlin: a parameter written with `?`, a type parameter, or a parameter with
+  no type fact takes it; every other Kotlin parameter does not.
+- C#: an exact parameter can hide a nullable value unless its type is a
+  reference type (`string`, `object`, `dynamic`, an array, or a name that the
+  index defines only as a class, an interface, or a delegate). Every other
+  parameter takes the nullable value (it boxes to `object` and to an interface,
+  a generic type parameter takes it, and a user-defined conversion can take it)
+  except a value keyword (`int`, `double`, and the others), `string`, and an
+  array.
+- Swift: an exact parameter that is not optional can hide an `Int!` value. A
+  parameter written with `?` or `!`, a type parameter, or a type that is not a
+  built-in value type or an array takes it.
+
+So `Nul(local)` with `int? local` keeps `Nul(int?)` beside `Nul(int)`, and
+`B(box)` with `Box? box` still binds only `B(Box)` over `B(object)` when `Box`
+is a class. The class test reads the simple name, so a struct outside the
+index with the name of a project class (`System.Drawing.Color` beside a project
+`class Color`) reads as a class. A C# `dynamic` argument and a VB.NET `Object` argument bind at run
+time (VB.NET late binding when `Option Strict` is off), so no overload is exact
+for such a call.
 
 A type is compared by its written name without type arguments, whitespace, or
 a Kotlin trailing `?`, and without the language package (`java.lang.`,
 `kotlin.`, `kotlin.reflect.`, `scala.`, `Swift.`). A Swift `Int?` keeps its
 `?`. A C# type keeps its namespace, and an explicit framework name reads as its
-keyword (`System.String` is `string`). A VB.NET type ignores case, and a
+keyword (`System.String` is `string`). A C# reference type drops its `?`, which
+only annotates it (`object?` is `object`); a C# value type keeps it (`int?` is
+`Nullable<int>`). A VB.NET type ignores case, and a
 framework name reads as its keyword (`System.Int32` is `Integer`). A C++ type
 is read the way julie spells an argument type: without a reference, without a
 top-level `const` or `volatile`, which a call never sees, and with the
