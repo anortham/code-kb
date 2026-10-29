@@ -438,11 +438,24 @@ const JAVA: &[(&str, &str)] = &[
 ];
 
 #[test]
-fn a_java_overload_pair_accepts_both_counts() {
+fn a_java_overload_pair_accepts_both_counts_and_each_overload_its_own() {
     let repo = scanned_repo(JAVA);
     let report = report(&repo, "area", "com/Shape.java");
     assert_kept(&report, "com/Use.java", 6);
-    assert_kept(&report, "com/Use.java", 7);
+    assert_excluded(
+        &report,
+        "com/Use.java",
+        7,
+        "arguments `(int, int)` bind only `area(int, int)`",
+    );
+    let pair = report_of(&repo, "area", "com/Shape.java", 1);
+    assert_excluded(
+        &pair,
+        "com/Use.java",
+        6,
+        "arguments `(int)` bind only `area(int)`",
+    );
+    assert_kept(&pair, "com/Use.java", 7);
     assert_excluded(&report, "com/Use.java", 8, "3 args; `area` takes 1-2");
     assert_excluded(&report, "com/Use.java", 9, "0 args; `area` takes 1-2");
 }
@@ -477,14 +490,15 @@ const JAVA_CONSTRUCTORS: &[(&str, &str)] = &[
 ];
 
 #[test]
-fn a_java_constructor_group_and_a_record_constructor_never_exclude_a_new_expression() {
+fn a_java_class_keeps_every_new_expression_and_a_record_constructor_only_its_count() {
     let repo = scanned_repo(JAVA_CONSTRUCTORS);
     let widget = report(&repo, "Widget", "com/Widget.java");
     assert_kept(&widget, "com/Use.java", 5);
     assert_kept(&widget, "com/Use.java", 6);
     assert_kept(&widget, "com/Use.java", 7);
     let point = report_of(&repo, "Point", "com/Point.java", 1);
-    assert_kept(&point, "com/Use.java", 8);
+    let (label, _, _) = site(&point, "com/Use.java", 8);
+    assert_eq!(label, SiteLabel::Excluded, "{}", dump(&point));
     assert_kept(&point, "com/Use.java", 9);
 }
 
@@ -504,10 +518,22 @@ const KOTLIN_CONSTRUCTORS: &[(&str, &str)] = &[
 ];
 
 #[test]
-fn a_kotlin_secondary_constructor_does_not_describe_the_primary_one() {
+fn a_kotlin_secondary_constructor_leaves_the_calls_of_the_primary_one_to_it() {
     let repo = scanned_repo(KOTLIN_CONSTRUCTORS);
     let report = report_of(&repo, "K", "k/K.kt", 1);
-    for line in [4, 5, 6, 7] {
+    assert_excluded(
+        &report,
+        "k/Use.kt",
+        4,
+        "arguments `(Int)` bind only `K(Int, Int)`",
+    );
+    assert_excluded(
+        &report,
+        "k/Use.kt",
+        5,
+        "arguments `(Int, Int)` bind only `K(Int, Int)`",
+    );
+    for line in [6, 7] {
         assert_kept(&report, "k/Use.kt", line);
     }
 }
@@ -661,29 +687,44 @@ fn a_csharp_constructor_group_decides_the_new_expressions_of_a_class() {
 }
 
 #[test]
-fn a_csharp_primary_constructor_leaves_the_parameters_outside_the_rows_undecided() {
+fn a_csharp_primary_constructor_with_parameters_outside_the_rows_takes_the_other_counts() {
     let repo = scanned_repo(CSHARP_CONSTRUCTORS);
     let report = report_of(&repo, "P", "Primary.cs", 1);
-    for line in [9, 10, 11] {
-        assert_kept(&report, "Use.cs", line);
-    }
+    assert_excluded(&report, "Use.cs", 9, "arguments `(int)` bind only `P(…)`");
+    assert_kept(&report, "Use.cs", 10);
+    assert_excluded(
+        &report,
+        "Use.cs",
+        11,
+        "arguments `(int, int, int)` bind only `P(…)`",
+    );
 }
 
 #[test]
-fn a_csharp_record_constructor_leaves_the_canonical_constructor_undecided() {
+fn a_csharp_record_constructor_leaves_the_calls_of_the_canonical_constructor_to_it() {
     let repo = scanned_repo(CSHARP_CONSTRUCTORS);
     let report = report_of(&repo, "R", "Record.cs", 1);
-    for line in [12, 13, 14] {
-        assert_kept(&report, "Use.cs", line);
-    }
+    assert_kept(&report, "Use.cs", 12);
+    assert_excluded(
+        &report,
+        "Use.cs",
+        13,
+        "arguments `(int, int)` bind only `R(int, int)`",
+    );
+    assert_kept(&report, "Use.cs", 14);
 }
 
 #[test]
-fn a_csharp_struct_constructor_leaves_the_implicit_default_constructor_undecided() {
+fn a_csharp_struct_constructor_leaves_other_counts_to_the_implicit_default_constructor() {
     let repo = scanned_repo(CSHARP_CONSTRUCTORS);
     let report = report_of(&repo, "S", "A.cs", 1);
-    assert_kept(&report, "Use.cs", 7);
-    assert_kept(&report, "Use.cs", 8);
+    assert_excluded(&report, "Use.cs", 7, "arguments `()` bind only `S(…)`");
+    assert_excluded(
+        &report,
+        "Use.cs",
+        8,
+        "arguments `(int, int)` bind only `S(…)`",
+    );
 }
 
 const TS_CONSTRUCTORS: &[(&str, &str)] = &[

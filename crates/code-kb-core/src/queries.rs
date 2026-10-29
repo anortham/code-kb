@@ -8752,6 +8752,7 @@ impl CallerWalk {
         }
         let mut full_stmt = None;
         let mut legacy_stmt = None;
+        let mut overloads = crate::reference_report::overloads::OverloadSteps::new(conn);
         while self.depth < bound && !self.frontier.is_empty() {
             let frontier = std::mem::take(&mut self.frontier);
             let needs_full = pending_receiver_chain_requires_full_for_frontier(conn, &frontier);
@@ -8778,6 +8779,9 @@ impl CallerWalk {
                 let Some(caller) = step.caller else {
                     continue;
                 };
+                if !overloads.keeps(&caller, &step.origin) {
+                    continue;
+                }
                 if caller != step.origin {
                     self.called.insert(step.origin);
                 }
@@ -8815,8 +8819,11 @@ impl CallerWalk {
                 legacy_sql
             };
             let mut stmt = conn.prepare(sql)?;
+            let mut overloads = crate::reference_report::overloads::OverloadSteps::new(conn);
             for step in level_callers(&mut stmt, MAX_BLAST_DEPTH + 1, &unexpanded)? {
-                if step.caller.is_some_and(|caller| caller != step.origin) {
+                if step.caller.is_some_and(|caller| {
+                    caller != step.origin && overloads.keeps(&caller, &step.origin)
+                }) {
                     self.called.insert(step.origin);
                 }
             }

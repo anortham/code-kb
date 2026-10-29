@@ -1475,8 +1475,8 @@ fn is_candidate_member_access(target: &ReferenceTarget, labeled: &LabeledSite) -
 /// The callers of the report's proven and likely sites that are not tests, as depth-1 rows in
 /// report order. A site outside any symbol is a row of its own at the site's line. When the rows
 /// join callers that the walk found, a candidate member access adds no row, and for a target with
-/// overloads a call adds no row either: the report counts the calls of every overload, and the
-/// walk already tied each call to the overload it reaches.
+/// overloads a call adds no row either: the walk already kept each call for the overloads its
+/// argument facts allow, and a call the facts cannot decide stays a call of every overload.
 fn report_callers(
     conn: &Connection,
     report: &ReferenceReport,

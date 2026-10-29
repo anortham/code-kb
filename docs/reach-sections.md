@@ -127,7 +127,9 @@ file. That basis names another definition of the same name in the target's own f
 line still names the target type. A line counts when it holds a counted site of one of three
 forms: a call, a `new` (`instantiates`), or a site that the constructor step labels
 `builds the class`; a literal of the type (below); or a constructor call that the source
-confirms (below).
+confirms (below). When one line holds a call and a type use of the name with the same label,
+the site keeps the call, so a C++ `Box b(1)` or `new Box("s")`, which julie 3.10.0 writes as a
+`call` of the class name, counts as a call.
 
 Literals. In Rust, Go, C, C++, Zig, F#, and Elixir files a `type_usage`, `variable_ref`, or
 `uses` site counts when its line opens a literal of the type. The site needs a column, except in

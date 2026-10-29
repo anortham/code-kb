@@ -2048,7 +2048,7 @@ impl<'a> SiteLister<'a> {
                 required_keyword_parameters,
             } => {
                 let range = inherited_group_arity(self.conn, self.root, &candidate.subject)?;
-                let typed = TypedOverloads::of(self.conn, &candidate.subject)?;
+                let typed = TypedOverloads::of(self.conn, self.root, &candidate.subject)?;
                 let unknown_contract_advisory = ![".js", ".jsx", ".mjs", ".cjs"]
                     .iter()
                     .any(|extension| candidate.path.ends_with(extension));
@@ -2068,7 +2068,7 @@ impl<'a> SiteLister<'a> {
                 placed
             }
             What::Signature => {
-                let typed = TypedOverloads::of(self.conn, &candidate.subject)?;
+                let typed = TypedOverloads::of(self.conn, self.root, &candidate.subject)?;
                 let mut placed = self.calls(
                     &report,
                     CallContract {

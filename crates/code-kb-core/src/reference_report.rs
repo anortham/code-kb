@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use rusqlite::types::ToSql;
@@ -24,6 +25,7 @@ pub(crate) mod arity;
 mod js_bindings;
 mod js_modules;
 mod loaded_files;
+pub(crate) mod overloads;
 mod receiver_types;
 mod sections;
 pub(crate) mod variant_names;
@@ -244,10 +246,15 @@ fn report_with(
         }
         _ => None,
     };
+    let overloads = match mode.arity_exclusion {
+        true => overloads::OverloadSet::of(conn, root, target)?.map(Rc::new),
+        false => None,
+    };
     accounting.restart_clock(time_limit);
     let mut specs = vec![Spec {
         name: target.name.clone(),
         arity: target_arity,
+        overloads: overloads.clone(),
         local_to: enclosing_function(conn, &group)?,
         group,
         scope: if class.is_some() {
@@ -263,6 +270,7 @@ fn report_with(
             group: vec![class.clone()],
             scope: RowScope::Calls,
             builds_class: true,
+            overloads,
             local_to: enclosing_function(conn, std::slice::from_ref(class))?,
             arity: if mode.arity_exclusion {
                 arity::group_arity(conn, root, &specs[0].group, true)?
@@ -708,6 +716,8 @@ struct Spec {
     builds_class: bool,
     /// The arguments a call to the group may pass; `None` when the index cannot tell.
     arity: Option<arity::Arity>,
+    /// The overloads of the target, which the argument facts of a call choose between.
+    overloads: Option<Rc<overloads::OverloadSet>>,
     /// The function that holds a group of local functions or types, which no site outside it
     /// can name.
     local_to: Option<Symbol>,
@@ -763,6 +773,8 @@ struct NameRow {
     /// The arguments the call passes, `None` when julie recorded no count or the call spreads an
     /// argument, so the count is unknown.
     arg_count: Option<u32>,
+    /// The argument facts of the call identifier: its count, types, names, and labels.
+    arguments: Option<Rc<overloads::ArgumentFacts>>,
     /// julie linked the call to a member of a class that encloses the caller, the caller included.
     links_enclosing_class: bool,
 }
@@ -1615,6 +1627,10 @@ struct SiteRow {
     label: SiteLabel,
     basis: String,
     claimed: bool,
+    /// The site's arguments bind another overload: the most specific reason to exclude it, so it
+    /// wins over another exclusion of the same site (a C++ construction that the constructor's
+    /// name also ties to its class).
+    binds_other_overload: bool,
     end_line: Option<usize>,
     arg_count: Option<u32>,
 }
@@ -2637,6 +2653,15 @@ impl<'a> Accounting<'a> {
             {
                 verdict = Verdict::new(SiteLabel::Excluded, basis, false);
             }
+            let mut binds_other_overload = false;
+            if verdict.label != SiteLabel::Excluded
+                && let Some(overloads) = &spec.overloads
+                && let Some(arguments) = &row.arguments
+                && let Some(basis) = overloads.exclusion_basis(arguments)
+            {
+                verdict = Verdict::new(SiteLabel::Excluded, basis, false);
+                binds_other_overload = true;
+            }
             if verdict.label == SiteLabel::Proven
                 && NAME_RESOLVED_BASES.contains(&verdict.basis.as_str())
                 && let Some(line) = self.js_binding_line(row, &spec.name)?
@@ -2647,7 +2672,9 @@ impl<'a> Accounting<'a> {
                     verdict.basis
                 );
             }
-            out.push(site_row(row, verdict, spec));
+            let mut site = site_row(row, verdict, spec);
+            site.binds_other_overload = binds_other_overload;
+            out.push(site);
         }
         if spec.scope == RowScope::All {
             for member in &spec.group {
@@ -2660,6 +2687,7 @@ impl<'a> Accounting<'a> {
                         label: SiteLabel::Proven,
                         basis: "qualified path".to_string(),
                         claimed: true,
+                        binds_other_overload: false,
                         site: grouped,
                     });
                 }
@@ -2681,6 +2709,7 @@ impl<'a> Accounting<'a> {
             scope: RowScope::Inheritance,
             builds_class: false,
             arity: None,
+            overloads: None,
             local_to: None,
         };
         let mut rows = Vec::new();
@@ -2764,6 +2793,7 @@ impl<'a> Accounting<'a> {
                 chain: Some(chain),
                 typed_receiver_chain,
                 arg_count: None,
+                arguments: None,
                 links_enclosing_class: false,
             });
         }
@@ -2815,6 +2845,7 @@ impl<'a> Accounting<'a> {
                     chain: None,
                     typed_receiver_chain: None,
                     arg_count: None,
+                    arguments: None,
                     links_enclosing_class: row.get(10)?,
                 });
             }
@@ -2831,7 +2862,13 @@ impl<'a> Accounting<'a> {
                         CASE WHEN json_valid(i.metadata_json)
                              THEN json_extract(i.metadata_json, '$.arg_count') END,
                         CASE WHEN json_valid(i.metadata_json)
-                             THEN json_extract(i.metadata_json, '$.arg_spread') END IS NOT NULL
+                             THEN json_extract(i.metadata_json, '$.arg_spread') END IS NOT NULL,
+                        CASE WHEN json_valid(i.metadata_json)
+                             THEN json_extract(i.metadata_json, '$.arg_types') END,
+                        CASE WHEN json_valid(i.metadata_json)
+                             THEN json_extract(i.metadata_json, '$.arg_names') END,
+                        CASE WHEN json_valid(i.metadata_json)
+                             THEN json_extract(i.metadata_json, '$.arg_labels') END
                  FROM identifiers i
                  LEFT JOIN symbols s ON s.symbol_id = i.containing_symbol_id
                  WHERE i.name = ?1 AND COALESCE(s.kind, '') != 'import'
@@ -2847,6 +2884,14 @@ impl<'a> Accounting<'a> {
                 let qualifier: Option<String> = row.get(9)?;
                 let arg_count: Option<u32> = row.get(10)?;
                 let arg_spread: bool = row.get(11)?;
+                let arguments = overloads::ArgumentFacts::from_columns(
+                    arg_count,
+                    arg_spread,
+                    row.get::<_, Option<String>>(12)?.as_deref(),
+                    row.get::<_, Option<String>>(13)?.as_deref(),
+                    row.get::<_, Option<String>>(14)?.as_deref(),
+                )
+                .map(Rc::new);
                 let written = receiver.as_deref().filter(|r| !r.is_empty());
                 let chain = match kind.as_str() {
                     "type_usage" => None,
@@ -2884,6 +2929,7 @@ impl<'a> Accounting<'a> {
                     chain,
                     typed_receiver_chain: None,
                     arg_count: arg_count.filter(|_| !arg_spread),
+                    arguments,
                     links_enclosing_class: false,
                 });
             }
@@ -5148,6 +5194,7 @@ fn site_row(row: &NameRow, verdict: Verdict, spec: &Spec) -> SiteRow {
         label: verdict.label,
         basis: verdict.basis,
         claimed: verdict.claimed,
+        binds_other_overload: false,
         end_line,
         arg_count: row.arg_count,
     }
@@ -5165,8 +5212,16 @@ fn merge_site_rows(rows: Vec<SiteRow>) -> Vec<LabeledSite> {
             }
             Some(kept) => {
                 let end = kept.end_line.max(row.end_line);
-                let better = (row.label.rank(), !row.claimed, row.site.start_column)
-                    < (kept.label.rank(), !kept.claimed, kept.site.start_column);
+                let rank = |row: &SiteRow| {
+                    (
+                        row.label.rank(),
+                        !row.binds_other_overload,
+                        !row.claimed,
+                        !matches!(row.site.kind.as_str(), "calls" | "call" | "instantiates"),
+                        row.site.start_column,
+                    )
+                };
+                let better = rank(&row) < rank(kept);
                 if better {
                     *kept = row;
                 }
@@ -5334,6 +5389,7 @@ fn pair_identifiers(rows: &mut [NameRow]) {
                 continue;
             }
             rows[call].arg_count = rows[identifier].arg_count.filter(|_| alone_on_line);
+            rows[call].arguments = rows[identifier].arguments.clone().filter(|_| alone_on_line);
             rows[identifier].consumed = true;
             rows[call].paired = true;
             rows[call].site_line = site_line;
@@ -5346,13 +5402,14 @@ fn pair_identifiers(rows: &mut [NameRow]) {
 /// Gives each pending or relationship call that has no count (a `new Foo(a)` construction) the
 /// count of the one call identifier on its line.
 fn attach_counts_by_line(rows: &mut [NameRow]) {
-    let mut identifiers: HashMap<(String, usize), Vec<Option<u32>>> = HashMap::new();
+    type Facts = (Option<u32>, Option<Rc<overloads::ArgumentFacts>>);
+    let mut identifiers: HashMap<(String, usize), Vec<Facts>> = HashMap::new();
     for row in rows.iter() {
         if row.source == Source::Identifier && row.kind == "call" {
             identifiers
                 .entry((row.path.clone(), row.line))
                 .or_default()
-                .push(row.arg_count);
+                .push((row.arg_count, row.arguments.clone()));
         }
     }
     for row in rows.iter_mut() {
@@ -5360,9 +5417,10 @@ fn attach_counts_by_line(rows: &mut [NameRow]) {
             && row.is_call()
             && row.arg_count.is_none()
             && let Some(counts) = identifiers.get(&(row.path.clone(), row.line))
-            && let [count] = counts.as_slice()
+            && let [(count, arguments)] = counts.as_slice()
         {
             row.arg_count = *count;
+            row.arguments = arguments.clone();
         }
     }
 }

@@ -122,7 +122,7 @@ impl Arity {
         (rule_language(site_language) == Some(self.language)).then(|| self.fits(count))
     }
 
-    fn fits(&self, count: u32) -> bool {
+    pub(crate) fn fits(&self, count: u32) -> bool {
         count >= self.min && self.accepted_max.is_none_or(|max| count <= max)
     }
 
@@ -249,7 +249,6 @@ enum Receiver {
 struct Parameter {
     optional: bool,
     variadic: bool,
-    positional: bool,
 }
 
 fn definition_arity(
@@ -259,6 +258,56 @@ fn definition_arity(
     constructing: bool,
     declared: bool,
 ) -> Result<Option<Arity>, QueryError> {
+    Ok(
+        definition_shape(conn, root, symbol, constructing, Some(declared))?
+            .map(|shape| shape.arity),
+    )
+}
+
+/// Whether every constructor of the class of `constructor` is a symbol in the index, read the
+/// way a call through the class sees them: a C# struct has a default constructor, a C++ class
+/// has copy and move constructors, and a Java or Kotlin class can have one the index does not
+/// list.
+pub(crate) fn constructors_listed(
+    conn: &Connection,
+    constructor: &Symbol,
+) -> Result<bool, QueryError> {
+    Ok(match constructor.language.as_str() {
+        "java" | "kotlin" => !has_unlisted_constructor(conn, constructor)?,
+        "csharp" => constructor_is_complete(conn, constructor, "csharp")?,
+        "cpp" => false,
+        _ => true,
+    })
+}
+
+/// One formal parameter that a call fills, after the receiver: its name (empty for a C `...`),
+/// its written text, and how a call fills it.
+#[derive(Clone, Debug)]
+pub(crate) struct Formal {
+    pub name: String,
+    pub segment: String,
+    pub optional: bool,
+    pub variadic: bool,
+    pub positional: bool,
+}
+
+/// The argument range of one definition and the formal parameters behind it.
+pub(crate) struct Shape {
+    pub arity: Arity,
+    pub formals: Vec<Formal>,
+}
+
+/// The range and the formal parameters of one function, method, constructor, or primary
+/// constructor class, `None` when the index cannot tell them. With `completeness`, a constructor
+/// has a shape only when the index lists every constructor of its class (`Some(true)` reads the
+/// declared constructors of a removal); with `None` it stands alone.
+pub(crate) fn definition_shape(
+    conn: &Connection,
+    root: &Path,
+    symbol: &Symbol,
+    constructing: bool,
+    completeness: Option<bool>,
+) -> Result<Option<Shape>, QueryError> {
     let Some(language) = rule_language(&symbol.language) else {
         return Ok(None);
     };
@@ -272,7 +321,9 @@ fn definition_arity(
     let Some(indexed_signature) = symbol.signature.as_deref() else {
         return Ok(None);
     };
-    if symbol.kind == "constructor" {
+    if symbol.kind == "constructor"
+        && let Some(declared) = completeness
+    {
         let complete = if declared {
             declared_constructors_are_complete(conn, symbol, language)?
         } else {
@@ -376,21 +427,29 @@ fn definition_arity(
         return Ok(None);
     }
 
-    let mut parameters: Vec<Parameter> = segments
+    let mut formals: Vec<Formal> = segments
         .iter()
+        .zip(names)
         .enumerate()
-        .map(|(index, (segment, optional_group, positional))| {
+        .map(|(index, ((segment, optional_group, positional), name))| {
             let mut parameter = classify(segment, language);
             parameter.optional |= *optional_group;
             if php_last_required.is_some_and(|last| index < last) {
                 parameter.optional = false;
             }
-            parameter.positional = *positional;
-            parameter
+            Formal {
+                name,
+                segment: segment.clone(),
+                optional: parameter.optional,
+                variadic: parameter.variadic,
+                positional: *positional,
+            }
         })
         .collect();
     if variadic_marker {
-        parameters.push(Parameter {
+        formals.push(Formal {
+            name: String::new(),
+            segment: "...".to_string(),
             optional: false,
             variadic: true,
             positional: true,
@@ -403,26 +462,27 @@ fn definition_arity(
     let Some(receiver) = receiver_of(conn, symbol, language, &segment_refs, constructing)? else {
         return Ok(None);
     };
-    if receiver != Receiver::None && !parameters.is_empty() && is_receiver_slot(language, symbol) {
-        parameters.remove(0);
+    if receiver != Receiver::None && !formals.is_empty() && is_receiver_slot(language, symbol) {
+        formals.remove(0);
     }
-    let positional_parameters: Vec<&Parameter> = parameters
-        .iter()
-        .filter(|parameter| parameter.positional)
-        .collect();
+    let positional_parameters: Vec<&Formal> =
+        formals.iter().filter(|formal| formal.positional).collect();
     let max = (language != "php"
         && !positional_parameters
             .iter()
             .any(|parameter| parameter.variadic))
     .then_some(positional_parameters.len() as u32);
-    Ok(Some(Arity {
-        language,
-        min: positional_parameters
-            .iter()
-            .filter(|parameter| !parameter.optional && !parameter.variadic)
-            .count() as u32,
-        max,
-        accepted_max: max.map(|max| max + u32::from(receiver == Receiver::Passable)),
+    Ok(Some(Shape {
+        arity: Arity {
+            language,
+            min: positional_parameters
+                .iter()
+                .filter(|parameter| !parameter.optional && !parameter.variadic)
+                .count() as u32,
+            max,
+            accepted_max: max.map(|max| max + u32::from(receiver == Receiver::Passable)),
+        },
+        formals,
     }))
 }
 
@@ -814,11 +874,7 @@ fn classify(segment: &str, language: &str) -> Parameter {
         }
         _ => false,
     };
-    Parameter {
-        optional,
-        variadic,
-        positional: true,
-    }
+    Parameter { optional, variadic }
 }
 
 pub(crate) fn parameter_properties(segment: &str, language: &str) -> Option<(bool, bool)> {
