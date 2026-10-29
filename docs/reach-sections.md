@@ -303,7 +303,8 @@ root, the command starts with `cd dir && ` (`dir` is quoted like a path). The ma
 `go.mod`, `package.json`, `Cargo.toml`, `pom.xml`, `build.gradle`, `build.gradle.kts`,
 `build.sbt`, `Gemfile`, `.rspec`, `Rakefile`, `bin/rails`, `Package.swift`, `pubspec.yaml`,
 `CMakeLists.txt`, `composer.json`, `phpunit.xml`, `mix.exs`, `rebar.config`, `.busted`, a
-`*.rockspec`, an R `DESCRIPTION`, and `project.godot`. The nearest marker of a language is its
+`*.rockspec`, an R `DESCRIPTION`, `project.godot`, `build.zig`, and a Ceedling `project.yml`
+or `ceedling.yml`. The nearest marker of a language is its
 package boundary: when it configures no runner the test has no command, and the finder never
 borrows a runner from a folder above it. A root `Cargo.toml` with a `[workspace]` table needs no `cd`, because `cargo test -p package`
 finds the member from the root. `pytest` reads no marker, so it takes no `cd`, except for a
@@ -354,9 +355,19 @@ and `gradle` when no wrapper fits the platform, so a project with only `gradlew.
 `gradle` on Unix. `Class` is the enclosing classes joined with `$`, outermost first
 (`Outer$Inner`), and the quoting stops the shell from reading the `$`. Maven and Gradle select
 a JUnit method, so a Kotlin or Scala test that julie records as a `function` in a class (a
-ScalaTest `test("label")` or a Kotest label) has no command there. sbt runs the whole class;
-for a Scala label it adds ScalaTest's `-- -z "label"` when `build.sbt` names `scalatest` and
-the label holds no `"` or `\`. A folder with two of the three build files has no broader
+ScalaTest `test("label")` or a Kotest label) has no command there, except a Kotest label under
+Gradle. When the test file imports `io.kotest.`, Gradle gets
+`./gradlew test --tests 'pkg.Spec.group -- label'`: the file's `package`, the spec class, and
+the Kotest test path, which joins the labels of the enclosing containers (`context`,
+`describe`) and the test with ` -- `, as Kotest's Gradle filter reads it. A label is a group
+when julie flags it as a test container, and the class is the one around the outermost group,
+so a ScalaTest `it` inside `describe` also finds its class. sbt runs the whole class; for a
+Scala label it adds MUnit's `-- "--tests=name"` when `build.sbt` names `munit` and the test
+file names `munit`, else ScalaTest's `-- -z "label"` when `build.sbt` names `scalatest` and
+the label holds no `"` or `\`. MUnit reads `--tests` as a regular expression, so the name gets
+a `\` before each of `\ ^ $ . * + ? ( ) [ ] { } | /`. sbt reads a quoted argument with
+escapes, so each `\` and `"` then gets another `\`. An MUnit name with `\` runs the whole
+class. A folder with two of the three build files has no broader
 command. C#, F#, and VB.NET are `dotnet test --filter "FullyQualifiedName~Owner.name"`. `Owner`
 is the innermost class, or for F# and VB.NET the module that holds the test
 (`Demo.Tests.adds two`); F# drops the double backticks around a name. Java and C# need the
@@ -369,7 +380,12 @@ command:
   `_spec.rb` example is `rspec path:line` (`bundle exec rspec` with a `Gemfile`) when that
   folder has `.rspec` or its `Gemfile` names `rspec`. Another test is
   `bin/rails test path:line` with `bin/rails`, or, for a `test_` method in a class when the
-  `Rakefile` names `TestTask`, `rake test TEST=path TESTOPTS='--name=name'`.
+  `Rakefile` names `TestTask`, `rake test TEST=path TESTOPTS='--name=name'`. Any other test of
+  a test-unit file (one that requires `test/unit` or names `Test::Unit::TestCase`) is
+  `ruby -Ilib -Itest path '--name=name'`, with `bundle exec` before it when the folder has a
+  `Gemfile`, which then must name `test-unit` itself or through a `*.gemspec` in that folder.
+  A test that test-unit's `test "label"` defines is the method `test: label`, also inside a
+  `sub_test_case`.
 - Swift: `swift test --filter 'Class/name\b'` under the nearest `Package.swift`, with every
   enclosing class joined with `/`, or `'[./]name\b'` for a test outside a class. The filter
   is a regular expression over `Target.Class/name` (XCTest) or `Target.Suite/name()` (Swift
@@ -382,7 +398,33 @@ command:
   a prefix and an index. It needs a `CMakeLists.txt` at or above the test that calls
   `gtest_discover_tests` or `gtest_add_tests`, and exactly one folder below the nearest CMake
   folder with a `CTestTestfile.cmake` (a configured build). The command runs from that CMake
-  folder. A typed test and C have no command.
+  folder. A typed test has no command.
+- C: a test in a file that includes `unity.h`, under the nearest folder with a Ceedling
+  `project.yml` (one with a `:project:` key) or `ceedling.yml`, is
+  `ceedling test:file.c --test-case=name` when the file name starts with the project's
+  `:test_file_prefix:` (`test_` by default). `--test-case` matches a substring of the test
+  name. Any other C test runs through CTest: `ctest --test-dir build -R '^test$'`, where
+  `test` is the one `add_test` whose program (or `$<TARGET_FILE:target>`) is the one
+  `add_executable` or `target_sources` target whose sources hold the file. The nearest
+  `CMakeLists.txt` at or above the test that lists the file names that target; a source with a
+  variable other than `${CMAKE_CURRENT_SOURCE_DIR}` or `${CMAKE_CURRENT_LIST_DIR}` names no
+  file. The `add_test`, and `enable_testing()` or `include(CTest)`, are in that file or one
+  above it. The build folder is the one configured build below the nearest CMake folder, as
+  for C++. CTest runs the whole executable, so a CMocka test sets `CMOCKA_TEST_FILTER=name`
+  (cmocka 2.0 and later then run only that test), and a Check test sets `CK_RUN_CASE=case`,
+  the `tcase_create("case")` whose variable the file's `tcase_add_*` call registers the test
+  with, when exactly one such case is found.
+- Zig: under the nearest `build.zig`, `zig test path --test-filter 'test.name'` for
+  `test "name"` and `--test-filter 'decltest.name'` for a doctest `test name`: the Zig test
+  runner names them so, and the filter matches a substring of that name. When `build.zig`
+  declares a `"test-filter"` option and a `step("test", …)`, the command is
+  `zig build test -Dtest-filter='…'`. A test with no name runs under every filter, so it has no
+  command, and neither has a `test @"…"` test or a name with `\`.
+- QML: a test function of a Qt Quick Test file named `tst_*.qml` is
+  `qmltestrunner -platform offscreen -input path 'Case::name'`, where `Case` is the literal
+  `name:` of the innermost `TestCase` around the function. Qt Quick Test runs no function that
+  the command line selects in a `TestCase` with an empty name, so a `TestCase` without a
+  literal name, or with `::` in it, gives no command.
 - PHP: `vendor/bin/phpunit --filter 'Class::name\b' path` under the nearest `composer.json`
   that names `phpunit/phpunit`, or `phpunit …` under a `phpunit.xml`, `phpunit.xml.dist`, or
   `phpunit.dist.xml` without a `composer.json`. PHPUnit wraps the filter in `/…/i`.
@@ -402,13 +444,15 @@ command:
   backtick before each of `` [ ] * ? ` `` in the name.
 - Bash: a test in a `.bats` file is `bats path --filter '^name$'`, the name escaped as a
   regular expression. A name with `\` has no command.
-- GDScript: a test method under the nearest `project.godot` whose folder has
-  `addons/gut/gut_cmdln.gd` is
+- GDScript: a test method of a file that extends `GdUnitTestSuite`, under the nearest
+  `project.godot` whose folder has `addons/gdUnit4/runtest.sh`, is
+  `./addons/gdUnit4/runtest.sh -a 'res://path'`. gdUnit4's command line adds suites, not test
+  cases, so the command runs the whole file. Another test method under a `project.godot` whose
+  folder has `addons/gut/gut_cmdln.gd` is
   `godot --headless -s addons/gut/gut_cmdln.gd '-gtest=res://path' '-gunit_test_name=name' -gexit`.
 
-Zig (`test "name"`), QML (`TestCase`), C, gdUnit4, and the frameworks above that the list does
-not name (Kotest by label, MUnit by name, test-unit) have no command. `check_edit` lists such a
-test by its place (`docs/edit-check.md`).
+A test of a framework that this section does not name has no command. `check_edit` lists such
+a test by its place (`docs/edit-check.md`).
 julie gives a JavaScript or TypeScript test name as the text of its source literal, so the
 command first cuts `name` at each `${…}` hole of a template literal and decodes the escapes in
 each part. A hole runs to its matching `}`. It counts nested braces and skips the strings

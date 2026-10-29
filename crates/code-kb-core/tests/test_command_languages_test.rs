@@ -151,6 +151,26 @@ fn scala_tests_run_through_sbt_with_the_scalatest_name_filter() {
 }
 
 #[test]
+fn a_scalatest_label_inside_a_describe_block_runs_through_its_spec_class() {
+    let repo = scanned_repo(&[
+        (
+            "build.sbt",
+            "libraryDependencies += \"org.scalatest\" %% \"scalatest\" % \"3.2.18\" % Test\n",
+        ),
+        ("src/main/scala/demo/Lib.scala", SCALA_LIB),
+        (
+            "src/test/scala/demo/LibSpec.scala",
+            "package demo\n\nimport org.scalatest.funspec.AnyFunSpec\n\nclass LibSpec extends AnyFunSpec {\n  describe(\"calc\") {\n    it(\"adds two\") {\n      Lib.target()\n    }\n  }\n}\n",
+        ),
+    ]);
+
+    assert_commands(
+        &report(&repo, "target", "src/main/scala/demo/Lib.scala"),
+        &[("adds two", "sbt 'testOnly *LibSpec -- -z \"adds two\"'")],
+    );
+}
+
+#[test]
 fn scala_junit_methods_run_through_maven_like_java_but_a_scalatest_label_does_not() {
     let repo = scanned_repo(&[
         ("pom.xml", "<project></project>\n"),
@@ -557,6 +577,343 @@ fn a_gut_test_runs_through_the_gut_command_line_of_its_godot_project() {
             "test_adds",
             "cd game && godot --headless -s addons/gut/gut_cmdln.gd '-gtest=res://test/test_calc.gd' '-gunit_test_name=test_adds' -gexit",
         )],
+    );
+}
+
+const ZIG_CALC: &str = "const std = @import(\"std\");\n\nfn helper() i32 {\n    return 1;\n}\n\nfn twice() i32 {\n    return helper() * 2;\n}\n\ntest \"adds two\" {\n    try std.testing.expectEqual(@as(i32, 1), helper());\n}\n\ntest twice {\n    try std.testing.expectEqual(helper() * 2, twice());\n}\n\ntest {\n    _ = helper();\n}\n";
+
+#[test]
+fn a_zig_test_runs_through_zig_test_with_the_name_the_test_runner_gives_it() {
+    let repo = scanned_repo(&[
+        (
+            "build.zig",
+            "const std = @import(\"std\");\n\npub fn build(b: *std.Build) void {\n    _ = b;\n}\n",
+        ),
+        ("src/calc.zig", ZIG_CALC),
+    ]);
+
+    assert_commands(
+        &report(&repo, "helper", "src/calc.zig"),
+        &[
+            (
+                "adds two",
+                "zig test src/calc.zig --test-filter 'test.adds two'",
+            ),
+            (
+                "twice",
+                "zig test src/calc.zig --test-filter 'decltest.twice'",
+            ),
+            ("test", "-"),
+        ],
+    );
+}
+
+#[test]
+fn a_zig_build_with_a_test_filter_option_runs_the_test_step() {
+    let repo = scanned_repo(&[
+        (
+            "lib/build.zig",
+            "const std = @import(\"std\");\n\npub fn build(b: *std.Build) void {\n    const filters = b.option([]const []const u8, \"test-filter\", \"Skip tests that do not match\") orelse &.{};\n    const tests = b.addTest(.{ .root_source_file = b.path(\"src/calc.zig\"), .filters = filters });\n    const test_step = b.step(\"test\", \"Run unit tests\");\n    test_step.dependOn(&b.addRunArtifact(tests).step);\n}\n",
+        ),
+        ("lib/src/calc.zig", ZIG_CALC),
+    ]);
+
+    assert_commands(
+        &report(&repo, "helper", "lib/src/calc.zig"),
+        &[
+            (
+                "adds two",
+                "cd lib && zig build test -Dtest-filter='test.adds two'",
+            ),
+            (
+                "twice",
+                "cd lib && zig build test -Dtest-filter='decltest.twice'",
+            ),
+            ("test", "-"),
+        ],
+    );
+}
+
+#[test]
+fn a_qt_quick_test_runs_through_qmltestrunner_with_its_test_case_name() {
+    let repo = scanned_repo(&[
+        (
+            "tests/tst_calc.qml",
+            "import QtQuick\nimport QtTest\n\nTestCase {\n    name: \"CalcTests\" // the reported name\n    function target() { return 1 }\n    function test_adds() {\n        compare(target(), 1)\n    }\n    TestCase {\n        function test_unnamed() {\n            compare(target(), 1)\n        }\n    }\n}\n",
+        ),
+        (
+            "tests/calc_checks.qml",
+            "import QtQuick\nimport QtTest\n\nTestCase {\n    name: \"Checks\"\n    function target() { return 1 }\n    function test_adds() {\n        compare(target(), 1)\n    }\n}\n",
+        ),
+    ]);
+
+    assert_commands(
+        &report(&repo, "target", "tests/tst_calc.qml"),
+        &[
+            (
+                "test_adds",
+                "qmltestrunner -platform offscreen -input tests/tst_calc.qml 'CalcTests::test_adds'",
+            ),
+            ("test_unnamed", "-"),
+        ],
+    );
+    assert_commands(
+        &report(&repo, "target", "tests/calc_checks.qml"),
+        &[("test_adds", "-")],
+    );
+}
+
+const C_HEADER: &str = "static inline int target(void) { return 1; }\n";
+
+#[test]
+fn a_unity_test_of_a_ceedling_project_runs_through_ceedling_by_file_and_case() {
+    let repo = scanned_repo(&[
+        (
+            "project.yml",
+            ":project:\n  :build_root: build\n:paths:\n  :test:\n    - test/**\n  :source:\n    - src/**\n",
+        ),
+        ("src/calc.h", C_HEADER),
+        (
+            "test/test_calc.c",
+            "#include \"unity.h\"\n#include \"calc.h\"\n\nvoid setUp(void) {}\nvoid tearDown(void) {}\n\nvoid test_adds(void) { TEST_ASSERT_EQUAL(1, target()); }\n",
+        ),
+    ]);
+
+    assert_commands(
+        &report(&repo, "target", "src/calc.h"),
+        &[(
+            "test_adds",
+            "ceedling test:test_calc.c --test-case=test_adds",
+        )],
+    );
+}
+
+#[test]
+fn cmocka_and_check_tests_run_through_the_ctest_test_of_their_executable() {
+    let files = [
+        (
+            "CMakeLists.txt",
+            "cmake_minimum_required(VERSION 3.20)\nproject(calc C)\nenable_testing()\nadd_subdirectory(tests)\n",
+        ),
+        (
+            "tests/CMakeLists.txt",
+            "add_executable(calc_cmocka cmocka_calc.c ../src/calc.c)\nadd_test(NAME calc.cmocka COMMAND calc_cmocka)\n\nadd_executable(calc_check\n    check_calc.c # the suite\n    ${CMAKE_CURRENT_SOURCE_DIR}/../src/calc.c)\nadd_test(calc_check $<TARGET_FILE:calc_check>)\n",
+        ),
+        ("src/calc.h", C_HEADER),
+        (
+            "tests/cmocka_calc.c",
+            "#include <stdarg.h>\n#include <stddef.h>\n#include <setjmp.h>\n#include <cmocka.h>\n#include \"calc.h\"\n\nstatic void adds(void **state) { assert_int_equal(target(), 1); }\n\nint main(void) {\n    const struct CMUnitTest tests[] = { cmocka_unit_test(adds) };\n    return cmocka_run_group_tests(tests, NULL, NULL);\n}\n",
+        ),
+        (
+            "tests/check_calc.c",
+            "#include <check.h>\n#include \"calc.h\"\n\nSTART_TEST(test_check_adds)\n{\n    ck_assert_int_eq(target(), 1);\n}\nEND_TEST\n\nSuite *calc_suite(void) {\n    Suite *s = suite_create(\"Calc\");\n    TCase *tc_core = tcase_create(\"Core\");\n    tcase_add_test(tc_core, test_check_adds);\n    suite_add_tcase(s, tc_core);\n    return s;\n}\n",
+        ),
+    ];
+    let built: Vec<(&str, &str)> = files
+        .iter()
+        .copied()
+        .chain([("build/CTestTestfile.cmake", "subdirs(tests)\n")])
+        .collect();
+    let configured = scanned_repo(&built);
+    let unbuilt = scanned_repo(&files);
+
+    assert_commands(
+        &report(&configured, "target", "src/calc.h"),
+        &[
+            (
+                "test_check_adds",
+                "CK_RUN_CASE=Core ctest --test-dir build -R '^calc_check$'",
+            ),
+            (
+                "adds",
+                "CMOCKA_TEST_FILTER=adds ctest --test-dir build -R '^calc\\.cmocka$'",
+            ),
+        ],
+    );
+    assert_commands(
+        &report(&unbuilt, "target", "src/calc.h"),
+        &[("test_check_adds", "-"), ("adds", "-")],
+    );
+}
+
+#[test]
+fn a_gdunit4_suite_runs_through_its_runtest_script() {
+    let repo = scanned_repo(&[
+        ("game/project.godot", "config_version=5\n"),
+        ("game/addons/gdUnit4/runtest.sh", "#!/usr/bin/env bash\n"),
+        (
+            "game/test/test_calc.gd",
+            "class_name CalcTest\nextends GdUnitTestSuite\n\nfunc target():\n\treturn 1\n\nfunc test_adds() -> void:\n\tassert_int(target()).is_equal(1)\n",
+        ),
+    ]);
+    let without_addon = scanned_repo(&[
+        ("game/project.godot", "config_version=5\n"),
+        ("game/addons/gut/gut_cmdln.gd", "extends SceneTree\n"),
+        (
+            "game/test/test_calc.gd",
+            "class_name CalcTest\nextends GdUnitTestSuite\n\nfunc target():\n\treturn 1\n\nfunc test_adds() -> void:\n\tassert_int(target()).is_equal(1)\n",
+        ),
+    ]);
+
+    assert_commands(
+        &report(&repo, "target", "game/test/test_calc.gd"),
+        &[(
+            "test_adds",
+            "cd game && ./addons/gdUnit4/runtest.sh -a 'res://test/test_calc.gd'",
+        )],
+    );
+    assert_commands(
+        &report(&without_addon, "target", "game/test/test_calc.gd"),
+        &[("test_adds", "-")],
+    );
+}
+
+const KOTEST_SPECS: &str = "package demo\n\nimport io.kotest.core.spec.style.DescribeSpec\nimport io.kotest.core.spec.style.FunSpec\nimport io.kotest.core.spec.style.StringSpec\n\nclass LibSpec : StringSpec({\n    \"adds two\" {\n        target() shouldBe 1\n    }\n})\n\nclass LibFunSpec : FunSpec({\n    context(\"math\") {\n        test(\"adds three\") { target() shouldBe 1 }\n    }\n})\n\nclass LibInit : FunSpec() {\n    init {\n        test(\"isn't four\") { target() shouldBe 1 }\n    }\n}\n\nclass LibDescribe : DescribeSpec({\n    describe(\"calc\") {\n        it(\"adds five\") { target() shouldBe 1 }\n    }\n})\n";
+
+#[test]
+fn a_kotest_label_runs_through_gradle_by_its_spec_and_test_path() {
+    let repo = scanned_repo(&[
+        (
+            "build.gradle.kts",
+            "plugins { kotlin(\"jvm\") }\ndependencies { testImplementation(\"io.kotest:kotest-runner-junit5:6.0.0\") }\n",
+        ),
+        ("gradlew", "#!/bin/sh\n"),
+        ("gradlew.bat", "@echo off\n"),
+        ("src/main/kotlin/demo/Lib.kt", KOTLIN_LIB),
+        ("src/test/kotlin/demo/LibSpec.kt", KOTEST_SPECS),
+    ]);
+    let maven = scanned_repo(&[
+        ("pom.xml", "<project></project>\n"),
+        ("src/main/kotlin/demo/Lib.kt", KOTLIN_LIB),
+        ("src/test/kotlin/demo/LibSpec.kt", KOTEST_SPECS),
+    ]);
+    let tool = if cfg!(windows) {
+        "gradlew.bat"
+    } else {
+        "./gradlew"
+    };
+
+    assert_commands(
+        &report(&repo, "target", "src/main/kotlin/demo/Lib.kt"),
+        &[
+            (
+                "adds two",
+                &format!("{tool} test --tests 'demo.LibSpec.adds two'"),
+            ),
+            (
+                "adds three",
+                &format!("{tool} test --tests 'demo.LibFunSpec.math -- adds three'"),
+            ),
+            (
+                "isn't four",
+                &format!("{tool} test --tests 'demo.LibInit.isn'\\''t four'"),
+            ),
+            (
+                "adds five",
+                &format!("{tool} test --tests 'demo.LibDescribe.calc -- adds five'"),
+            ),
+        ],
+    );
+    assert_commands(
+        &report(&maven, "target", "src/main/kotlin/demo/Lib.kt"),
+        &[
+            ("adds two", "-"),
+            ("adds three", "-"),
+            ("isn't four", "-"),
+            ("adds five", "-"),
+        ],
+    );
+}
+
+#[test]
+fn an_munit_test_runs_through_sbt_with_an_escaped_tests_filter() {
+    let repo = scanned_repo(&[
+        (
+            "build.sbt",
+            "libraryDependencies += \"org.scalameta\" %% \"munit\" % \"1.0.0\" % Test\n",
+        ),
+        ("src/main/scala/demo/Lib.scala", SCALA_LIB),
+        (
+            "src/test/scala/demo/LibSuite.scala",
+            "package demo\n\nclass LibSuite extends munit.FunSuite {\n  test(\"adds two\") {\n    assertEquals(Lib.target(), 1)\n  }\n  test(\"adds (two) + 1\".tag(Slow)) {\n    assertEquals(Lib.target(), 1)\n  }\n}\n",
+        ),
+    ]);
+
+    assert_commands(
+        &report(&repo, "target", "src/main/scala/demo/Lib.scala"),
+        &[
+            (
+                "adds two",
+                r#"sbt 'testOnly *LibSuite -- "--tests=adds two"'"#,
+            ),
+            (
+                "adds (two) + 1",
+                r#"sbt 'testOnly *LibSuite -- "--tests=adds \\(two\\) \\+ 1"'"#,
+            ),
+        ],
+    );
+}
+
+const RUBY_TEST_UNIT: &str = "require \"test/unit\"\nrequire \"calc\"\n\nclass TestCalc < Test::Unit::TestCase\n  def test_adds\n    assert_equal 1, target\n  end\n\n  test \"adds two\" do\n    assert_equal 1, target\n  end\n\n  sub_test_case \"nested\" do\n    test \"adds three\" do\n      assert_equal 1, target\n    end\n  end\nend\n";
+
+#[test]
+fn a_test_unit_test_runs_through_ruby_by_its_method_name() {
+    let bundled = scanned_repo(&[
+        (
+            "Gemfile",
+            "source \"https://rubygems.org\"\ngem \"test-unit\"\n",
+        ),
+        ("lib/calc.rb", RUBY_LIB),
+        ("test/test_calc.rb", RUBY_TEST_UNIT),
+    ]);
+    let rakefile = scanned_repo(&[
+        ("Rakefile", "task default: :test\n"),
+        ("lib/calc.rb", RUBY_LIB),
+        ("test/test_calc.rb", RUBY_TEST_UNIT),
+    ]);
+    let unbundled = scanned_repo(&[
+        ("Gemfile", "source \"https://rubygems.org\"\ngem \"rake\"\n"),
+        ("lib/calc.rb", RUBY_LIB),
+        ("test/test_calc.rb", RUBY_TEST_UNIT),
+    ]);
+
+    assert_commands(
+        &report(&bundled, "target", "lib/calc.rb"),
+        &[
+            (
+                "test_adds",
+                "bundle exec ruby -Ilib -Itest test/test_calc.rb '--name=test_adds'",
+            ),
+            (
+                "adds two",
+                "bundle exec ruby -Ilib -Itest test/test_calc.rb '--name=test: adds two'",
+            ),
+            (
+                "adds three",
+                "bundle exec ruby -Ilib -Itest test/test_calc.rb '--name=test: adds three'",
+            ),
+        ],
+    );
+    assert_commands(
+        &report(&rakefile, "target", "lib/calc.rb"),
+        &[
+            (
+                "test_adds",
+                "ruby -Ilib -Itest test/test_calc.rb '--name=test_adds'",
+            ),
+            (
+                "adds two",
+                "ruby -Ilib -Itest test/test_calc.rb '--name=test: adds two'",
+            ),
+            (
+                "adds three",
+                "ruby -Ilib -Itest test/test_calc.rb '--name=test: adds three'",
+            ),
+        ],
+    );
+    assert_commands(
+        &report(&unbundled, "target", "lib/calc.rb"),
+        &[("test_adds", "-"), ("adds two", "-"), ("adds three", "-")],
     );
 }
 

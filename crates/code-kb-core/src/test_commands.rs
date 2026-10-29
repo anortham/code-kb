@@ -12,7 +12,8 @@ pub struct TestClass<'a> {
 
 /// A test whose command is wanted. `path` is relative to the project root and uses `/`. `kind` is
 /// the symbol kind (`function` or `method`) and `line` its first line. `classes` are the classes
-/// that enclose the test, outermost first.
+/// that enclose the test, outermost first. `groups` are the labelled test containers between the
+/// innermost class and the test, outermost first, such as a Kotest `context("math")`.
 pub struct TestSpec<'a> {
     pub language: &'a str,
     pub kind: &'a str,
@@ -22,6 +23,7 @@ pub struct TestSpec<'a> {
     pub classes: &'a [TestClass<'a>],
     /// The module or namespace that holds the test directly, such as an F# module.
     pub module: Option<&'a str>,
+    pub groups: &'a [&'a str],
 }
 
 /// Finds test commands. Runner markers and pytest configuration are read at most once per folder
@@ -61,6 +63,30 @@ struct Ruby {
     rspec: bool,
     rails: bool,
     rake_test_task: bool,
+    test_unit: bool,
+}
+
+/// A folder with a `project.godot`, and the test add-ons it has.
+#[derive(Clone)]
+struct Godot {
+    gut: bool,
+    gdunit4: bool,
+}
+
+/// A folder with a `build.zig`. `filter_option` says it declares a `test` step and a
+/// `test-filter` option, so `zig build test -Dtest-filter=…` selects tests.
+#[derive(Clone, Copy)]
+struct ZigBuild {
+    filter_option: bool,
+}
+
+/// What CTest needs from a `CMakeLists.txt`: whether it enables testing, the sources of each
+/// executable target, and the target that each test runs.
+#[derive(Default)]
+struct CMakeTests {
+    enables_testing: bool,
+    sources: Vec<(String, String)>,
+    tests: Vec<(String, String)>,
 }
 
 /// A folder with a `composer.json` or a PHPUnit configuration file.
@@ -203,17 +229,21 @@ struct Folder {
     dotnet_project_marker: bool,
     dotnet_test_scope: bool,
     sbt_scalatest: bool,
+    sbt_munit: bool,
     ruby: Option<Ruby>,
     swift_package: bool,
     dart: Option<Option<DartRunner>>,
     cmake_gtest: bool,
+    cmake_tests: Option<CMakeTests>,
     ctest_build_dir: Option<String>,
+    ceedling_prefix: Option<String>,
+    zig: Option<ZigBuild>,
     php: Option<Php>,
     mix: bool,
     rebar: bool,
     busted: Option<bool>,
     testthat: Option<Option<String>>,
-    gut: Option<bool>,
+    godot: Option<Godot>,
 }
 
 impl Folder {
@@ -255,6 +285,7 @@ impl Folder {
         let mut dotnet_test_scope = false;
         let mut rockspec = None;
         let mut ctest_build_dirs = Vec::new();
+        let mut gemspec_test_unit = false;
         for entry in fs::read_dir(dir)
             .ok()
             .into_iter()
@@ -265,7 +296,10 @@ impl Folder {
             if cmake.is_some() && entry.path().join("CTestTestfile.cmake").is_file() {
                 ctest_build_dirs.push(entry.file_name().to_string_lossy().into_owned());
             }
-            if name.ends_with(".rockspec") {
+            if name.ends_with(".gemspec") {
+                gemspec_test_unit |= fs::read_to_string(entry.path())
+                    .is_ok_and(|source| source.contains("test-unit"));
+            } else if name.ends_with(".rockspec") {
                 let mentions_busted =
                     fs::read_to_string(entry.path()).is_ok_and(|source| source.contains("busted"));
                 rockspec = Some(rockspec.unwrap_or(false) || mentions_busted);
@@ -295,6 +329,10 @@ impl Folder {
                 rake_test_task: rakefile
                     .as_deref()
                     .is_some_and(|text| text.contains("TestTask")),
+                test_unit: gemspec_test_unit
+                    || gemfile
+                        .as_deref()
+                        .is_some_and(|text| text.contains("test-unit")),
             });
         let composer = text("composer.json");
         let phpunit_config = ["phpunit.xml", "phpunit.xml.dist", "phpunit.dist.xml"]
@@ -308,7 +346,17 @@ impl Folder {
                     .is_some_and(|text| text.contains("phpunit/phpunit")),
         });
         let busted = if has(".busted") { Some(true) } else { rockspec };
-        let gut = has("project.godot").then(|| has("addons/gut/gut_cmdln.gd"));
+        let godot = has("project.godot").then(|| Godot {
+            gut: has("addons/gut/gut_cmdln.gd"),
+            gdunit4: has("addons/gdUnit4/runtest.sh"),
+        });
+        let ceedling_prefix = text("project.yml")
+            .filter(|yaml| yaml.lines().any(|line| line.trim_end() == ":project:"))
+            .or_else(|| text("ceedling.yml"))
+            .map(|yaml| ceedling_test_prefix(&yaml));
+        let zig = text("build.zig").map(|build| ZigBuild {
+            filter_option: build.contains("\"test-filter\"") && build.contains("step(\"test\""),
+        });
         Folder {
             cargo: text("Cargo.toml").map(|toml| Cargo {
                 package: package_name(&toml),
@@ -342,19 +390,25 @@ impl Folder {
             sbt_scalatest: build_sbt
                 .as_deref()
                 .is_some_and(|text| text.contains("scalatest")),
+            sbt_munit: build_sbt
+                .as_deref()
+                .is_some_and(|text| text.contains("munit")),
             ruby,
             swift_package: has("Package.swift"),
             dart: text("pubspec.yaml").map(|text| dart_runner(&text)),
             cmake_gtest: cmake.as_deref().is_some_and(|text| {
                 text.contains("gtest_discover_tests") || text.contains("gtest_add_tests")
             }),
+            cmake_tests: cmake.as_deref().map(cmake_tests),
+            ceedling_prefix,
+            zig,
             ctest_build_dir: (ctest_build_dirs.len() == 1).then(|| ctest_build_dirs.remove(0)),
             php,
             mix: has("mix.exs"),
             rebar: has("rebar.config"),
             busted,
             testthat: text("DESCRIPTION").map(|text| testthat_package(&text)),
-            gut,
+            godot,
         }
     }
 }
@@ -385,6 +439,170 @@ fn testthat_package(description: &str) -> Option<String> {
             .filter(|name| !name.is_empty())
             .map(str::to_string)
     })
+}
+
+/// The `:test_file_prefix:` of a Ceedling project file, `test_` by default.
+fn ceedling_test_prefix(yaml: &str) -> String {
+    yaml.lines()
+        .find_map(|line| line.trim().strip_prefix(":test_file_prefix:"))
+        .map(|value| value.trim().trim_matches(['"', '\'']).to_string())
+        .filter(|prefix| !prefix.is_empty())
+        .unwrap_or_else(|| "test_".to_string())
+}
+
+/// The commands of a CMake file with their arguments, the name lowercased. Comments end at the
+/// line end; a quoted argument keeps its spaces and loses its quotes.
+fn cmake_commands(text: &str) -> Vec<(String, Vec<String>)> {
+    let mut commands = Vec::new();
+    let mut chars = text.chars();
+    let mut word = String::new();
+    let mut after_word = false;
+    while let Some(c) = chars.next() {
+        if c == '#' {
+            chars.by_ref().find(|c| *c == '\n');
+            word.clear();
+        } else if c.is_ascii_alphanumeric() || c == '_' {
+            if after_word {
+                word.clear();
+                after_word = false;
+            }
+            word.push(c);
+        } else if c == '(' && !word.is_empty() {
+            let name = std::mem::take(&mut word).to_ascii_lowercase();
+            commands.push((name, cmake_arguments(&mut chars)));
+            after_word = false;
+        } else if c.is_whitespace() {
+            after_word = !word.is_empty();
+        } else {
+            word.clear();
+            after_word = false;
+        }
+    }
+    commands
+}
+
+/// The arguments of a CMake command up to its closing parenthesis.
+fn cmake_arguments(chars: &mut std::str::Chars) -> Vec<String> {
+    let mut arguments = Vec::new();
+    let mut argument = String::new();
+    let mut depth = 0;
+    while let Some(c) = chars.next() {
+        match c {
+            '"' => {
+                for quoted in chars.by_ref() {
+                    if quoted == '"' {
+                        break;
+                    }
+                    argument.push(quoted);
+                }
+            }
+            '#' => {
+                chars.by_ref().find(|c| *c == '\n');
+            }
+            '(' => {
+                depth += 1;
+                argument.push(c);
+            }
+            ')' if depth == 0 => break,
+            ')' => {
+                depth -= 1;
+                argument.push(c);
+            }
+            c if c.is_whitespace() => {
+                if !argument.is_empty() {
+                    arguments.push(std::mem::take(&mut argument));
+                }
+            }
+            c => argument.push(c),
+        }
+    }
+    if !argument.is_empty() {
+        arguments.push(argument);
+    }
+    arguments
+}
+
+/// The `add_executable`, `target_sources`, `add_test`, `enable_testing`, and `include(CTest)`
+/// calls of a `CMakeLists.txt`.
+fn cmake_tests(text: &str) -> CMakeTests {
+    const KEYWORDS: [&str; 6] = [
+        "WIN32",
+        "MACOSX_BUNDLE",
+        "EXCLUDE_FROM_ALL",
+        "PRIVATE",
+        "PUBLIC",
+        "INTERFACE",
+    ];
+    let mut tests = CMakeTests::default();
+    for (command, arguments) in cmake_commands(text) {
+        match (command.as_str(), arguments.as_slice()) {
+            ("enable_testing", _) => tests.enables_testing = true,
+            ("include", [module, ..]) if module == "CTest" => tests.enables_testing = true,
+            ("add_executable" | "target_sources", [target, sources @ ..]) => {
+                if sources
+                    .iter()
+                    .any(|source| matches!(source.as_str(), "IMPORTED" | "ALIAS"))
+                {
+                    continue;
+                }
+                tests.sources.extend(
+                    sources
+                        .iter()
+                        .filter(|source| !KEYWORDS.contains(&source.as_str()))
+                        .map(|source| (target.clone(), source.clone())),
+                );
+            }
+            ("add_test", [keyword, name, rest @ ..]) if keyword == "NAME" => {
+                if let Some(at) = rest.iter().position(|word| word == "COMMAND")
+                    && let Some(program) = rest.get(at + 1)
+                {
+                    tests.tests.push((name.clone(), program.clone()));
+                }
+            }
+            ("add_test", [name, program, ..]) => {
+                tests.tests.push((name.clone(), program.clone()));
+            }
+            _ => {}
+        }
+    }
+    tests
+}
+
+/// The target that a CTest command runs: the program itself, or the target of
+/// `$<TARGET_FILE:target>`.
+fn cmake_test_target(program: &str) -> &str {
+    program
+        .strip_prefix("$<TARGET_FILE:")
+        .and_then(|rest| rest.strip_suffix('>'))
+        .unwrap_or(program)
+}
+
+/// `source` of a CMake file in `dir` as a path below the project root, or `None` when it names a
+/// variable other than the current source folder or leaves the root.
+fn cmake_source_path(dir: &str, source: &str) -> Option<String> {
+    let source = ["${CMAKE_CURRENT_SOURCE_DIR}/", "${CMAKE_CURRENT_LIST_DIR}/"]
+        .iter()
+        .find_map(|prefix| source.strip_prefix(prefix))
+        .unwrap_or(source);
+    if source.contains("${") || source.starts_with('/') {
+        return None;
+    }
+    let mut parts: Vec<&str> = dir.split('/').filter(|part| !part.is_empty()).collect();
+    for part in source.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop()?;
+            }
+            part => parts.push(part),
+        }
+    }
+    Some(parts.join("/"))
+}
+
+/// `text` as a CMake regular expression that matches it literally.
+fn cmake_regex_escaped(text: &str) -> String {
+    backslashed(text, |c| "^$.[]*+?()|\\".contains(c))
 }
 
 /// The `name` key of the `[package]` table.
@@ -915,6 +1133,9 @@ impl CommandFinder {
             "swift" => self.swift(test),
             "dart" => self.dart(test),
             "cpp" => self.ctest(test),
+            "c" => self.c_test(test),
+            "zig" => self.zig(test),
+            "qml" => self.qml(test),
             "php" => self.phpunit(test),
             "elixir" => self.mix(test),
             "erlang" => self.rebar(test),
@@ -922,7 +1143,7 @@ impl CommandFinder {
             "r" => self.testthat(test),
             "powershell" => pester(test),
             "bash" => bats(test),
-            "gdscript" => self.gut(test),
+            "gdscript" => self.godot(test),
             _ => None,
         }
     }
@@ -1171,9 +1392,11 @@ impl CommandFinder {
     }
 
     /// A JUnit-style test of Java, Kotlin, or Scala through the nearest Maven, Gradle, or sbt
-    /// build. sbt runs the whole class, with ScalaTest's `-z` filter for a Scala test label when
-    /// `build.sbt` names ScalaTest. Maven and Gradle select JUnit methods only, so a Kotlin or
-    /// Scala test label (a `function` in a class) has no command there.
+    /// build. sbt runs the whole class, with MUnit's `--tests` filter for a Scala test label of a
+    /// file that names MUnit when `build.sbt` names it, else ScalaTest's `-z` filter when
+    /// `build.sbt` names ScalaTest. Gradle selects a Kotest label of a file that imports Kotest by
+    /// its test path; otherwise Maven and Gradle select JUnit methods only, so a Kotlin or Scala
+    /// test label (a `function` in a class) has no command there.
     fn jvm(&mut self, test: &TestSpec) -> Option<String> {
         if test.classes.is_empty() {
             return None;
@@ -1186,7 +1409,31 @@ impl CommandFinder {
             .collect::<Vec<_>>()
             .join("$");
         let (dir, build) = self.nearest(parent_dir(test.path), |folder| folder.build)?;
+        let kotest = label
+            && test.language == "kotlin"
+            && matches!(build, Build::Gradle)
+            && self.mentions(test.path, "import io.kotest.");
+        let munit = label
+            && test.language == "scala"
+            && matches!(build, Build::Sbt)
+            && self.folder(&dir).sbt_munit
+            && self.mentions(test.path, "munit");
         let command = match build {
+            Build::Gradle if kotest => {
+                let tool = self.gradle_tool(&dir);
+                let path = test
+                    .groups
+                    .iter()
+                    .copied()
+                    .chain([test.name])
+                    .collect::<Vec<_>>()
+                    .join(" -- ");
+                let filter = match self.kotlin_package(test.path) {
+                    Some(package) => format!("{package}.{class}.{path}"),
+                    None => format!("{class}.{path}"),
+                };
+                format!("{tool} test --tests {}", single_quoted(&filter))
+            }
             Build::Maven | Build::Gradle if label => return None,
             Build::Maven => format!(
                 "mvn test -Dtest={}#{}",
@@ -1200,7 +1447,14 @@ impl CommandFinder {
             }
             Build::Sbt => {
                 let mut task = format!("testOnly *{class}");
-                if label
+                if munit {
+                    if !test.name.contains('\\') {
+                        let mut pattern = String::from("--tests=");
+                        regex_escaped_into(&mut pattern, test.name);
+                        let argument = backslashed(&pattern, |c| matches!(c, '"' | '\\'));
+                        task.push_str(&format!(" -- \"{argument}\""));
+                    }
+                } else if label
                     && test.language == "scala"
                     && self.folder(&dir).sbt_scalatest
                     && !test.name.contains(['"', '\\'])
@@ -1214,7 +1468,8 @@ impl CommandFinder {
     }
 
     /// RSpec runs a `_spec.rb` example by its line; Rails and a Rake `TestTask` run a Minitest
-    /// test. The nearest folder with a `Gemfile`, `.rspec`, `Rakefile`, or `bin/rails` decides.
+    /// test; `ruby` runs any other test of a test-unit file by its method name. The nearest
+    /// folder with a `Gemfile`, `.rspec`, `Rakefile`, or `bin/rails` decides.
     fn ruby(&mut self, test: &TestSpec) -> Option<String> {
         let (dir, ruby) = self.nearest(parent_dir(test.path), |folder| folder.ruby.clone())?;
         let path = shell_word(relative(&dir, test.path));
@@ -1231,10 +1486,46 @@ impl CommandFinder {
                 "{bundle}rake test TEST={path} TESTOPTS={}",
                 shell_word(&format!("--name={}", test.name))
             )
+        } else if (!ruby.gemfile || ruby.test_unit) && self.is_test_unit_file(test.path) {
+            let method = if test.kind == "function" {
+                format!("test: {}", test.name)
+            } else {
+                test.name.to_string()
+            };
+            format!(
+                "{bundle}ruby -Ilib -Itest {path} {}",
+                shell_word(&format!("--name={method}"))
+            )
         } else {
             return None;
         };
         Some(in_folder(&dir, command))
+    }
+
+    /// Whether the file loads test-unit or defines a `Test::Unit::TestCase`.
+    fn is_test_unit_file(&mut self, path: &str) -> bool {
+        self.source(path).iter().any(|line| {
+            let line = line.trim();
+            line.contains("Test::Unit::TestCase")
+                || ["require \"test/unit\"", "require 'test/unit'"]
+                    .iter()
+                    .any(|require| line.starts_with(require))
+        })
+    }
+
+    /// Whether a line of the file holds `text`.
+    fn mentions(&mut self, path: &str, text: &str) -> bool {
+        self.source(path).iter().any(|line| line.contains(text))
+    }
+
+    /// The package that a Kotlin file declares.
+    fn kotlin_package(&mut self, path: &str) -> Option<String> {
+        self.source(path).iter().find_map(|line| {
+            line.trim()
+                .strip_prefix("package ")
+                .map(|package| package.trim().trim_end_matches(';').trim().to_string())
+                .filter(|package| !package.is_empty())
+        })
     }
 
     /// `swift test --filter` under the nearest `Package.swift`, as a regular expression over
@@ -1425,22 +1716,303 @@ impl CommandFinder {
         ))
     }
 
-    /// GUT's command line for a test method under the nearest `project.godot` that has the GUT
-    /// add-on.
-    fn gut(&mut self, test: &TestSpec) -> Option<String> {
-        let (dir, installed) = self.nearest(parent_dir(test.path), |folder| folder.gut)?;
-        if !installed || test.kind != "method" {
+    /// A test method under the nearest `project.godot`: gdUnit4's `runtest.sh` for the suite of a
+    /// file that extends `GdUnitTestSuite` when the project has the gdUnit4 add-on, else GUT's
+    /// command line for the method when the project has the GUT add-on. gdUnit4 selects suites,
+    /// not test cases, so its command runs the whole file.
+    fn godot(&mut self, test: &TestSpec) -> Option<String> {
+        let (dir, godot) = self.nearest(parent_dir(test.path), |folder| folder.godot.clone())?;
+        if test.kind != "method" {
             return None;
         }
+        let resource = format!("res://{}", relative(&dir, test.path));
+        let gdunit_suite = self.source(test.path).iter().any(|line| {
+            line.trim_start().starts_with("extends") && line.contains("GdUnitTestSuite")
+        });
+        let command = if gdunit_suite {
+            if !godot.gdunit4 {
+                return None;
+            }
+            format!("./addons/gdUnit4/runtest.sh -a {}", shell_word(&resource))
+        } else if godot.gut {
+            format!(
+                "godot --headless -s addons/gut/gut_cmdln.gd {} {} -gexit",
+                shell_word(&format!("-gtest={resource}")),
+                shell_word(&format!("-gunit_test_name={}", test.name))
+            )
+        } else {
+            return None;
+        };
+        Some(in_folder(&dir, command))
+    }
+
+    /// A C test. A Unity test of a Ceedling project runs through `ceedling test:file
+    /// --test-case=name`. Another C test runs through CTest: the `add_test` that runs the one
+    /// executable whose sources hold the file, in the one configured build folder. CTest runs the
+    /// whole executable, so a CMocka test sets `CMOCKA_TEST_FILTER` and a Check test sets
+    /// `CK_RUN_CASE` to the test case that registers it.
+    fn c_test(&mut self, test: &TestSpec) -> Option<String> {
+        let includes = |source: &[String], header: &str| {
+            source.iter().any(|line| {
+                let line = line.trim_start();
+                line.starts_with('#') && line.contains("include") && line.contains(header)
+            })
+        };
+        let source = self.source(test.path);
+        let unity = includes(source, "unity.h");
+        let cmocka = includes(source, "cmocka.h");
+        let check_case = includes(source, "check.h")
+            .then(|| check_test_case(source, test.name))
+            .flatten();
+        let file = test.path.rsplit('/').next()?;
+        if unity
+            && let Some((dir, prefix)) = self.nearest(parent_dir(test.path), |folder| {
+                folder.ceedling_prefix.clone()
+            })
+        {
+            if !file.starts_with(&prefix) {
+                return None;
+            }
+            return Some(in_folder(
+                &dir,
+                format!(
+                    "ceedling test:{} --test-case={}",
+                    shell_word(file),
+                    shell_word(test.name)
+                ),
+            ));
+        }
+        let name = self.ctest_name(test.path)?;
+        let (dir, build) = self.nearest(parent_dir(test.path), |folder| {
+            folder.ctest_build_dir.clone()
+        })?;
+        let filter = if cmocka {
+            format!("CMOCKA_TEST_FILTER={} ", shell_word(test.name))
+        } else if let Some(case) = check_case {
+            format!("CK_RUN_CASE={} ", shell_word(&case))
+        } else {
+            String::new()
+        };
         Some(in_folder(
             &dir,
             format!(
-                "godot --headless -s addons/gut/gut_cmdln.gd {} {} -gexit",
-                shell_word(&format!("-gtest=res://{}", relative(&dir, test.path))),
-                shell_word(&format!("-gunit_test_name={}", test.name))
+                "{filter}ctest --test-dir {} -R {}",
+                shell_word(&build),
+                single_quoted(&format!("^{}$", cmake_regex_escaped(&name)))
             ),
         ))
     }
+
+    /// The name of the one CTest test that runs the one executable whose sources hold `path`. A
+    /// `CMakeLists.txt` at or above the file names the executable, and that file or one above it
+    /// enables testing and adds the test.
+    fn ctest_name(&mut self, path: &str) -> Option<String> {
+        let mut dir = parent_dir(path);
+        let (cmake_dir, target) = loop {
+            let found = self.folder(dir).cmake_tests.as_ref().map(|cmake| {
+                cmake
+                    .sources
+                    .iter()
+                    .filter(|(_, source)| cmake_source_path(dir, source).as_deref() == Some(path))
+                    .map(|(target, _)| target.clone())
+                    .collect::<Vec<_>>()
+            });
+            match found.as_deref() {
+                Some([target]) => break (dir.to_string(), target.clone()),
+                Some([_, _, ..]) => return None,
+                _ if dir.is_empty() => return None,
+                _ => dir = parent_dir(dir),
+            }
+        };
+        let mut dir = cmake_dir.as_str();
+        let mut enables_testing = false;
+        let mut names = Vec::new();
+        loop {
+            if let Some(cmake) = &self.folder(dir).cmake_tests {
+                enables_testing |= cmake.enables_testing;
+                names.extend(
+                    cmake
+                        .tests
+                        .iter()
+                        .filter(|(_, program)| cmake_test_target(program) == target)
+                        .map(|(name, _)| name.clone()),
+                );
+            }
+            if dir.is_empty() {
+                break;
+            }
+            dir = parent_dir(dir);
+        }
+        match names.as_slice() {
+            [name] if enables_testing => Some(name.clone()),
+            _ => None,
+        }
+    }
+
+    /// `zig test path --test-filter` under the nearest `build.zig`, or `zig build test
+    /// -Dtest-filter=…` when that file declares the option. The filter is `test.name` for
+    /// `test "name"` and `decltest.name` for a doctest `test name`, as the test runner names them.
+    /// A test with no name runs under every filter, so it has no command.
+    fn zig(&mut self, test: &TestSpec) -> Option<String> {
+        let line = self
+            .source(test.path)
+            .get(test.line.saturating_sub(1))?
+            .trim_start();
+        let declared = line.strip_prefix("test")?;
+        let declared = declared.strip_prefix(char::is_whitespace)?.trim_start();
+        let filter = if declared.starts_with('"') {
+            if test.name.contains('\\') {
+                return None;
+            }
+            format!("test.{}", test.name)
+        } else if declared.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_') {
+            format!("decltest.{}", test.name)
+        } else {
+            return None;
+        };
+        let (dir, build) = self.nearest(parent_dir(test.path), |folder| folder.zig)?;
+        let command = if build.filter_option {
+            format!("zig build test -Dtest-filter={}", single_quoted(&filter))
+        } else {
+            format!(
+                "zig test {} --test-filter {}",
+                shell_word(relative(&dir, test.path)),
+                single_quoted(&filter)
+            )
+        };
+        Some(in_folder(&dir, command))
+    }
+
+    /// `qmltestrunner -input path 'Case::name'` for a test function of a Qt Quick Test file named
+    /// `tst_*.qml`, where `Case` is the `name` of its `TestCase`. A `TestCase` without a literal
+    /// name runs no function that the command line selects, so its tests have no command.
+    fn qml(&mut self, test: &TestSpec) -> Option<String> {
+        let file = test.path.rsplit('/').next()?;
+        if !file.starts_with("tst_") || !file.ends_with(".qml") {
+            return None;
+        }
+        let case = qml_test_case_name(self.source(test.path), test.line)?;
+        if case.contains("::") {
+            return None;
+        }
+        Some(format!(
+            "qmltestrunner -platform offscreen -input {} {}",
+            shell_word(test.path),
+            shell_word(&format!("{case}::{}", test.name))
+        ))
+    }
+}
+
+/// The name of the Check test case that registers `test` with `tcase_add_test(tc, test)` or
+/// another `tcase_add_*` call, where `tc = tcase_create("name")`. `None` unless exactly one test
+/// case name is found.
+fn check_test_case(source: &[String], test: &str) -> Option<String> {
+    let cases: Vec<&str> = source
+        .iter()
+        .filter_map(|line| {
+            let call = &line[line.find("tcase_add_")?..];
+            let inner = call.split_once('(')?.1.split_once(')')?.0;
+            let mut arguments = inner.split(',').map(str::trim);
+            let variable = arguments.next()?;
+            (arguments.next() == Some(test)).then_some(variable)
+        })
+        .filter_map(|variable| {
+            source.iter().find_map(|line| {
+                let (before, after) = line.split_once("tcase_create(")?;
+                let assigned = before.trim_end().strip_suffix('=')?.trim_end();
+                let name = assigned
+                    .rsplit(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+                    .next()?;
+                (name == variable)
+                    .then(|| after.trim_start().strip_prefix('"')?.split_once('"'))
+                    .flatten()
+                    .map(|(case, _)| case)
+            })
+        })
+        .collect();
+    match cases.as_slice() {
+        [case] => Some(case.to_string()),
+        [first, rest @ ..] if rest.iter().all(|case| case == first) => Some(first.to_string()),
+        _ => None,
+    }
+}
+
+/// The `name: "…"` of the innermost `TestCase` object that holds line `line`. Braces inside
+/// strings and `//` comments do not count.
+fn qml_test_case_name(source: &[String], line: usize) -> Option<String> {
+    let mut objects: Vec<(bool, Option<String>)> = Vec::new();
+    for text in source.iter().take(line.saturating_sub(1)) {
+        if let Some(value) = text.trim_start().strip_prefix("name:")
+            && let Some((is_case, name)) = objects.last_mut()
+            && *is_case
+        {
+            *name = value
+                .trim_start()
+                .strip_prefix('"')
+                .and_then(|rest| rest.split_once('"'))
+                .map(|(literal, _)| literal)
+                .filter(|literal| !literal.contains('\\'))
+                .map(str::to_string);
+        }
+        let code = qml_code(text);
+        let mut word_before = String::new();
+        let mut word = String::new();
+        for c in code.chars() {
+            match c {
+                '{' => {
+                    let label = if word.is_empty() { &word_before } else { &word };
+                    let is_case = label.rsplit('.').next() == Some("TestCase");
+                    objects.push((is_case, None));
+                    word.clear();
+                    word_before.clear();
+                }
+                '}' => {
+                    objects.pop();
+                    word.clear();
+                    word_before.clear();
+                }
+                c if c.is_ascii_alphanumeric() || c == '_' || c == '.' => word.push(c),
+                c if c.is_whitespace() => {
+                    if !word.is_empty() {
+                        word_before = std::mem::take(&mut word);
+                    }
+                }
+                _ => {
+                    word.clear();
+                    word_before.clear();
+                }
+            }
+        }
+    }
+    objects
+        .into_iter()
+        .rev()
+        .find(|(is_case, _)| *is_case)
+        .and_then(|(_, name)| name)
+}
+
+/// A line of QML without its `//` comment and with each string literal emptied.
+fn qml_code(line: &str) -> String {
+    let mut code = String::with_capacity(line.len());
+    let mut chars = line.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '"' | '\'' | '`' => {
+                code.push(c);
+                while let Some(inner) = chars.next() {
+                    if inner == '\\' {
+                        chars.next();
+                    } else if inner == c {
+                        break;
+                    }
+                }
+                code.push(c);
+            }
+            '/' if chars.peek() == Some(&'/') => break,
+            c => code.push(c),
+        }
+    }
+    code
 }
 
 /// `dotnet test --filter` on `Owner.name`: the innermost class, or for F# and VB.NET the module
@@ -1572,6 +2144,7 @@ mod tests {
             name,
             classes: &classes,
             module: None,
+            groups: &[],
         })
     }
 
@@ -2958,6 +3531,7 @@ mod tests {
             name: "case",
             classes: &[],
             module: None,
+            groups: &[],
         };
         let first = finder.command(&spec("a.test.ts"));
 
@@ -2999,6 +3573,7 @@ mod tests {
             name,
             classes: &[],
             module: None,
+            groups: &[],
         })
     }
 
@@ -3018,6 +3593,7 @@ mod tests {
             name: "test_m",
             classes: &classes,
             module: None,
+            groups: &[],
         })
     }
 
@@ -3081,6 +3657,7 @@ mod tests {
             name: "TestSuiteMethod",
             classes: &[],
             module: None,
+            groups: &[],
         });
         assert_eq!(method, None);
     }
@@ -3345,6 +3922,7 @@ mod tests {
         name: &'a str,
         classes: &'a [&'a str],
         module: Option<&'a str>,
+        groups: &'a [&'a str],
     }
 
     impl Spec<'_> {
@@ -3365,6 +3943,7 @@ mod tests {
                 name: self.name,
                 classes: &classes,
                 module: self.module,
+                groups: self.groups,
             })
         }
     }
@@ -3378,6 +3957,7 @@ mod tests {
             name,
             classes: &[],
             module: None,
+            groups: &[],
         }
     }
 
@@ -3698,6 +4278,217 @@ mod tests {
         assert_eq!(
             spec("gdscript", "method", "test/test_calc.gd", "test_adds").run(&bare),
             None
+        );
+    }
+
+    #[test]
+    fn a_zig_test_needs_a_name_without_escapes_and_a_build_zig() {
+        let source = "test {\n}\ntest \"a\\tb\" {\n}\ntest @\"odd\" {\n}\ntest \"plain\" {\n}\n";
+        let built = project(&[("build.zig", ""), ("src/a.zig", source)]);
+        let bare = project(&[("src/a.zig", source)]);
+        let at = |line, name| Spec {
+            line,
+            ..spec("zig", "function", "src/a.zig", name)
+        };
+
+        assert_eq!(at(1, "test").run(&built), None);
+        assert_eq!(at(3, "a\\tb").run(&built), None);
+        assert_eq!(at(5, "odd").run(&built), None);
+        assert_eq!(
+            at(7, "plain").run(&built).as_deref(),
+            Some("zig test src/a.zig --test-filter 'test.plain'")
+        );
+        assert_eq!(at(7, "plain").run(&bare), None);
+    }
+
+    #[test]
+    fn a_qml_test_takes_the_literal_name_of_its_innermost_test_case() {
+        let source = "TestCase {\n    name: \"Outer\"\n    TestCase {\n        name: \"Inner\" // nested\n        function test_inner() {}\n    }\n    function test_outer() {}\n}\nTestCase {\n    name: caseName\n    function test_computed() {}\n}\nTestCase {\n    name: \"A::B\"\n    function test_colons() {}\n}\n";
+        let files = project(&[("tst_cases.qml", source), ("cases.qml", source)]);
+        let at = |path, line, name| Spec {
+            line,
+            ..spec("qml", "function", path, name)
+        };
+
+        assert_eq!(
+            at("tst_cases.qml", 5, "test_inner").run(&files).as_deref(),
+            Some("qmltestrunner -platform offscreen -input tst_cases.qml 'Inner::test_inner'")
+        );
+        assert_eq!(
+            at("tst_cases.qml", 7, "test_outer").run(&files).as_deref(),
+            Some("qmltestrunner -platform offscreen -input tst_cases.qml 'Outer::test_outer'")
+        );
+        assert_eq!(at("tst_cases.qml", 11, "test_computed").run(&files), None);
+        assert_eq!(at("tst_cases.qml", 15, "test_colons").run(&files), None);
+        assert_eq!(at("cases.qml", 5, "test_inner").run(&files), None);
+    }
+
+    #[test]
+    fn a_ceedling_test_needs_the_test_file_prefix_of_its_project() {
+        let unity = "#include \"unity.h\"\nvoid test_adds(void) {}\n";
+        let custom = project(&[
+            ("project.yml", ":project:\n  :test_file_prefix: check_\n"),
+            ("test/check_calc.c", unity),
+            ("test/test_calc.c", unity),
+        ]);
+        let other_yaml = project(&[("project.yml", "name: calc\n"), ("test/test_calc.c", unity)]);
+
+        assert_eq!(
+            spec("c", "function", "test/check_calc.c", "test_adds")
+                .run(&custom)
+                .as_deref(),
+            Some("ceedling test:check_calc.c --test-case=test_adds")
+        );
+        assert_eq!(
+            spec("c", "function", "test/test_calc.c", "test_adds").run(&custom),
+            None
+        );
+        assert_eq!(
+            spec("c", "function", "test/test_calc.c", "test_adds").run(&other_yaml),
+            None
+        );
+    }
+
+    #[test]
+    fn a_ctest_command_for_c_needs_one_executable_one_test_and_enabled_testing() {
+        let source = "#include \"unity.h\"\nvoid test_adds(void) {}\n";
+        let with = |cmake: &str| {
+            project(&[
+                ("CMakeLists.txt", cmake),
+                ("build/CTestTestfile.cmake", ""),
+                ("tests/calc.c", source),
+            ])
+        };
+        let test = spec("c", "function", "tests/calc.c", "test_adds");
+
+        assert_eq!(
+            test.run(&with(
+                "ENABLE_TESTING()\nADD_EXECUTABLE(calc \"tests/calc.c\")\nadd_test(NAME calc-unit COMMAND calc --verbose)\n"
+            ))
+            .as_deref(),
+            Some("ctest --test-dir build -R '^calc-unit$'")
+        );
+        assert_eq!(
+            test.run(&with(
+                "add_executable(calc tests/calc.c)\nadd_test(NAME calc COMMAND calc)\n"
+            )),
+            None
+        );
+        assert_eq!(
+            test.run(&with(
+                "include(CTest)\nadd_executable(a tests/calc.c)\nadd_executable(b tests/calc.c)\nadd_test(NAME a COMMAND a)\n"
+            )),
+            None
+        );
+        assert_eq!(
+            test.run(&with(
+                "enable_testing()\nadd_executable(calc ${SOURCES})\nadd_test(NAME calc COMMAND calc)\n"
+            )),
+            None
+        );
+        assert_eq!(
+            test.run(&with(
+                "enable_testing() # add_executable(calc tests/calc.c)\nadd_test(NAME calc COMMAND calc)\n"
+            )),
+            None
+        );
+    }
+
+    #[test]
+    fn a_check_test_case_comes_from_the_one_tcase_that_registers_the_test() {
+        let lines = |text: &str| text.lines().map(str::to_string).collect::<Vec<_>>();
+        let one = lines(
+            "TCase *core = tcase_create(\"Core\");\ntcase_add_test(core, adds);\ntcase_add_loop_test(core, adds, 0, 3);\n",
+        );
+        let two = lines(
+            "TCase *a = tcase_create(\"A\");\nTCase *b = tcase_create(\"B\");\ntcase_add_test(a, adds);\ntcase_add_test(b, adds);\n",
+        );
+
+        assert_eq!(check_test_case(&one, "adds").as_deref(), Some("Core"));
+        assert_eq!(check_test_case(&one, "subtracts"), None);
+        assert_eq!(check_test_case(&two, "adds"), None);
+    }
+
+    #[test]
+    fn a_kotest_label_needs_a_kotest_import_and_names_its_groups() {
+        let gradle = project(&[
+            ("build.gradle.kts", ""),
+            (
+                "src/test/kotlin/CalcSpec.kt",
+                "import io.kotest.core.spec.style.FunSpec\n",
+            ),
+            ("src/test/kotlin/PlainSpec.kt", "class PlainSpec\n"),
+        ]);
+        let label = Spec {
+            classes: &["CalcSpec"],
+            groups: &["math", "sums"],
+            ..spec(
+                "kotlin",
+                "function",
+                "src/test/kotlin/CalcSpec.kt",
+                "adds two",
+            )
+        };
+        let plain = Spec {
+            path: "src/test/kotlin/PlainSpec.kt",
+            ..label
+        };
+
+        assert_eq!(
+            label.run(&gradle).as_deref(),
+            Some("gradle test --tests 'CalcSpec.math -- sums -- adds two'")
+        );
+        assert_eq!(plain.run(&gradle), None);
+    }
+
+    #[test]
+    fn a_test_unit_file_needs_the_gem_when_a_gemfile_exists() {
+        let source = "require 'test/unit'\nclass TestCalc < Test::Unit::TestCase\nend\n";
+        let gemspec = project(&[
+            ("Gemfile", "gemspec\n"),
+            (
+                "calc.gemspec",
+                "spec.add_development_dependency \"test-unit\"\n",
+            ),
+            ("test/test_calc.rb", source),
+        ]);
+        let minitest = project(&[
+            ("Rakefile", ""),
+            (
+                "test/test_calc.rb",
+                "require \"minitest/autorun\"\nclass TestCalc < Minitest::Test\nend\n",
+            ),
+        ]);
+        let method = Spec {
+            classes: &["TestCalc"],
+            ..spec("ruby", "method", "test/test_calc.rb", "test_adds")
+        };
+
+        assert_eq!(
+            method.run(&gemspec).as_deref(),
+            Some("bundle exec ruby -Ilib -Itest test/test_calc.rb '--name=test_adds'")
+        );
+        assert_eq!(method.run(&minitest), None);
+    }
+
+    #[test]
+    fn cmake_commands_skip_comments_and_unquote_arguments() {
+        assert_eq!(
+            cmake_commands(
+                "# add_test(x y)\nAdd_Test (NAME \"a b\" COMMAND $<TARGET_FILE:t>) # c\nset(V (x))\n"
+            ),
+            vec![
+                (
+                    "add_test".to_string(),
+                    vec![
+                        "NAME".to_string(),
+                        "a b".to_string(),
+                        "COMMAND".to_string(),
+                        "$<TARGET_FILE:t>".to_string()
+                    ]
+                ),
+                ("set".to_string(), vec!["V".to_string(), "(x)".to_string()]),
+            ]
         );
     }
 }

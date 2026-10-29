@@ -3224,6 +3224,7 @@ struct TestSymbol {
     language: String,
     is_test: bool,
     lifecycle: bool,
+    container: bool,
     parent_id: Option<String>,
     parent_kind: Option<String>,
 }
@@ -3265,6 +3266,7 @@ fn load_test_symbol(
             lifecycle: row.get(7)?,
             parent_id: row.get(8)?,
             parent_kind: row.get(9)?,
+            container: row.get(10)?,
         })
     })?;
     Ok(rows.next().transpose()?)
@@ -3309,6 +3311,38 @@ fn test_of(load: &mut rusqlite::Statement, caller: &str) -> Result<Option<TestSy
         };
     }
     Ok(None)
+}
+
+/// The labelled test containers that hold a test, outermost first, such as a Kotest
+/// `context("math")`, with the outermost one. A helper function between them gives none.
+fn test_groups(
+    load: &mut rusqlite::Statement,
+    test: &TestSymbol,
+) -> Result<(Vec<String>, Option<TestSymbol>), QueryError> {
+    let callable_parent = |symbol: &TestSymbol| {
+        symbol.parent_id.clone().filter(|_| {
+            symbol
+                .parent_kind
+                .as_deref()
+                .is_some_and(TestSymbol::is_callable)
+        })
+    };
+    let mut groups = Vec::new();
+    let mut outermost = None;
+    let mut parent = callable_parent(test);
+    while let Some(id) = parent {
+        let Some(group) = load_test_symbol(load, &id)? else {
+            break;
+        };
+        if !group.container || groups.len() >= MAX_HELPER_DEPTH {
+            return Ok((Vec::new(), None));
+        }
+        groups.push(group.name.clone());
+        parent = callable_parent(&group);
+        outermost = Some(group);
+    }
+    groups.reverse();
+    Ok((groups, outermost))
 }
 
 /// The classes that enclose a test, outermost first, and the function or method that holds the
@@ -3424,9 +3458,14 @@ fn test_symbol_loader(conn: &Connection) -> Result<rusqlite::Statement<'_>, Quer
     } else {
         "0"
     };
+    let container = if has_column(conn, "symbols", "test_container") {
+        "COALESCE(s.test_container, 0)"
+    } else {
+        "0"
+    };
     Ok(conn.prepare(&format!(
         "SELECT s.symbol_id, s.name, s.kind, s.path, s.start_line, s.language, s.is_test,
-                {lifecycle}, s.parent_symbol_id, p.kind
+                {lifecycle}, s.parent_symbol_id, p.kind, {container}
          FROM symbols s
          LEFT JOIN symbols p ON p.symbol_id = s.parent_symbol_id
          WHERE s.symbol_id = ?1"
@@ -3515,7 +3554,9 @@ fn with_commands(
     let mut bases = TestCaseBases::new(conn)?;
     let mut rows = Vec::with_capacity(tests.len());
     for (test, name_only) in tests {
-        let chain = class_chain(load, &test)?;
+        let (groups, outermost) = test_groups(load, &test)?;
+        let groups: Vec<&str> = groups.iter().map(String::as_str).collect();
+        let chain = class_chain(load, outermost.as_ref().unwrap_or(&test))?;
         let mut classes = Vec::with_capacity(chain.classes.len());
         for class in &chain.classes {
             classes.push(TestClass {
@@ -3537,6 +3578,7 @@ fn with_commands(
             name: &test.name,
             classes: &classes,
             module: module.as_deref(),
+            groups: &groups,
         });
         rows.push(CallingTest {
             command,
