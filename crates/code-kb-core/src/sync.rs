@@ -445,9 +445,25 @@ pub fn ensure_index_matches_extractor(
 pub fn scan_remedy(root: &Path) -> String {
     format!(
         "Run `{} scan --root {}` to rebuild the index.",
-        running_binary(),
-        root.display()
+        shell_argument(&running_binary()),
+        shell_argument(&root.display().to_string())
     )
+}
+
+/// `arg` as one shell word: bare when it holds only path characters, else quoted for `sh` on
+/// Unix and for `cmd` and PowerShell on Windows, where a path cannot hold `"`.
+fn shell_argument(arg: &str) -> String {
+    let bare = !arg.is_empty()
+        && arg.chars().all(|c| {
+            c.is_alphanumeric() || "/:._-+@%,=".contains(c) || (cfg!(windows) && c == '\\')
+        });
+    if bare {
+        arg.to_string()
+    } else if cfg!(windows) {
+        format!("\"{arg}\"")
+    } else {
+        format!("'{}'", arg.replace('\'', r"'\''"))
+    }
 }
 
 /// The path of the running `code-kb` binary, or `code-kb` when the platform cannot tell.
@@ -1257,6 +1273,44 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn the_scan_remedy_quotes_a_root_with_a_space() {
+        let remedy = scan_remedy(Path::new("/home/me/My Projects/app"));
+
+        #[cfg(unix)]
+        assert!(
+            remedy.ends_with(" scan --root '/home/me/My Projects/app'` to rebuild the index."),
+            "{remedy}"
+        );
+        #[cfg(windows)]
+        assert!(
+            remedy.ends_with(" scan --root \"/home/me/My Projects/app\"` to rebuild the index."),
+            "{remedy}"
+        );
+    }
+
+    #[test]
+    fn a_shell_argument_without_special_characters_stays_bare() {
+        assert_eq!(
+            shell_argument("/repo/src-1/app_v2.rs"),
+            "/repo/src-1/app_v2.rs"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_windows_path_with_backslashes_stays_bare() {
+        assert_eq!(shell_argument(r"C:\Users\me\app"), r"C:\Users\me\app");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_unix_shell_argument_with_a_quote_or_a_backslash_is_quoted() {
+        assert_eq!(shell_argument("/a/it's here"), r"'/a/it'\''s here'");
+        assert_eq!(shell_argument("/a/$HOME"), "'/a/$HOME'");
+        assert_eq!(shell_argument(r"/a/b\c"), r"'/a/b\c'");
+    }
 
     #[test]
     fn a_long_failure_detail_ends_at_a_whole_word() {
