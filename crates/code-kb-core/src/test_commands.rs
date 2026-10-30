@@ -1,8 +1,12 @@
 //! The shell command that runs one test, from the marker files of the project.
 
 mod gradle;
+mod maven;
+mod sbt;
 
 use gradle::GradleSettings;
+use maven::Pom;
+use sbt::{SbtBuild, scala_build_defines_projects};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -129,7 +133,9 @@ impl TestFamily {
         }
     }
 
-    fn root_command(self, folder: &Folder, gradle: Option<&str>) -> Option<String> {
+    /// The command of the whole project in `folder`. `build` is the command of the Gradle or
+    /// Maven build there.
+    fn root_command(self, folder: &Folder, build: Option<&str>) -> Option<String> {
         match self {
             Self::Rust => folder.cargo.as_ref().and_then(|cargo| {
                 if cargo.workspace {
@@ -148,9 +154,9 @@ impl TestFamily {
                 if folder.jvm_build_ambiguous {
                     None
                 } else {
-                    folder.build.map(|build| match build {
-                        Build::Maven => "mvn test".to_string(),
-                        Build::Gradle => gradle.unwrap_or("gradle test").to_string(),
+                    folder.build.map(|kind| match kind {
+                        Build::Maven => build.unwrap_or("mvn test").to_string(),
+                        Build::Gradle => build.unwrap_or("gradle test").to_string(),
                         Build::Sbt => "sbt test".to_string(),
                     })
                 }
@@ -161,9 +167,9 @@ impl TestFamily {
     }
 
     /// The broader command of the package in `folder`: `Some(None)` when the folder bounds the
-    /// search but configures no command. `gradle` is the Gradle command of the folder, `None`
-    /// when Gradle cannot name its project with certainty.
-    fn scoped_command(self, folder: &Folder, gradle: Option<&str>) -> Option<Option<String>> {
+    /// search but configures no command. `build` is the command of the Maven, Gradle, or sbt
+    /// project there, `None` when the build cannot name its project with certainty.
+    fn scoped_command(self, folder: &Folder, build: Option<&str>) -> Option<Option<String>> {
         match self {
             Self::Rust => folder.cargo.as_ref().map(|cargo| {
                 cargo.package.as_ref().map(|_| {
@@ -183,11 +189,7 @@ impl TestFamily {
                 if folder.jvm_build_ambiguous {
                     Some(None)
                 } else {
-                    folder.build.map(|build| match build {
-                        Build::Maven => Some("mvn test".to_string()),
-                        Build::Gradle => gradle.map(str::to_string),
-                        Build::Sbt => Some("sbt test".to_string()),
-                    })
+                    folder.build.map(|_| build.map(str::to_string))
                 }
             }
             Self::Python => {
@@ -236,6 +238,13 @@ struct Folder {
     gradlew: bool,
     gradlew_bat: bool,
     gradle_settings: Option<GradleSettings>,
+    maven: Option<Pom>,
+    mvnw: bool,
+    mvnw_cmd: bool,
+    sbt: Option<SbtBuild>,
+    /// Whether the folder has a `build.sbt` and a `project` folder, which makes it the root of
+    /// its own sbt build.
+    sbt_build_root: bool,
     pytest_config: bool,
     python_project_marker: bool,
     dotnet_project_marker: bool,
@@ -289,7 +298,8 @@ impl Folder {
             .as_deref()
             .is_some_and(|content| content.lines().any(|line| line.trim() == "[metadata]"))
             || has("setup.py");
-        let maven = has("pom.xml");
+        let pom = text("pom.xml");
+        let maven = pom.is_some();
         let gradle = has("build.gradle") || has("build.gradle.kts");
         let build_sbt = text("build.sbt");
         let cmake = text("CMakeLists.txt");
@@ -298,6 +308,7 @@ impl Folder {
         let mut rockspec = None;
         let mut ctest_build_dirs = Vec::new();
         let mut gemspec_test_unit = false;
+        let mut sbt_sources = Vec::new();
         for entry in fs::read_dir(dir)
             .ok()
             .into_iter()
@@ -308,7 +319,9 @@ impl Folder {
             if cmake.is_some() && entry.path().join("CTestTestfile.cmake").is_file() {
                 ctest_build_dirs.push(entry.file_name().to_string_lossy().into_owned());
             }
-            if name.ends_with(".gemspec") {
+            if build_sbt.is_some() && name.ends_with(".sbt") {
+                sbt_sources.extend(fs::read_to_string(entry.path()).ok());
+            } else if name.ends_with(".gemspec") {
                 gemspec_test_unit |= fs::read_to_string(entry.path())
                     .is_ok_and(|source| source.contains("test-unit"));
             } else if name.ends_with(".rockspec") {
@@ -393,6 +406,13 @@ impl Folder {
                 .filter(|found| **found)
                 .count()
                 > 1,
+            maven: pom.as_deref().map(Pom::parse),
+            mvnw: has("mvnw"),
+            mvnw_cmd: has("mvnw.cmd"),
+            sbt: build_sbt
+                .is_some()
+                .then(|| SbtBuild::parse(&sbt_sources, scala_build_defines_projects(dir))),
+            sbt_build_root: build_sbt.is_some() && dir.join("project").is_dir(),
             gradlew: has("gradlew"),
             gradlew_bat: has("gradlew.bat"),
             gradle_settings: match (text("settings.gradle"), text("settings.gradle.kts")) {
@@ -784,6 +804,46 @@ fn shell_word(text: &str) -> String {
         text.to_string()
     } else {
         single_quoted(text)
+    }
+}
+
+/// The code of one line of a C-style source without its `//` and `/* */` comments.
+/// `in_comment` carries an open block comment from one line to the next.
+fn uncommented(line: &str, in_comment: &mut bool) -> String {
+    let mut code = String::new();
+    let mut rest = line;
+    loop {
+        if *in_comment {
+            match rest.find("*/") {
+                Some(end) => {
+                    rest = &rest[end + 2..];
+                    *in_comment = false;
+                }
+                None => return code,
+            }
+        }
+        let block = rest.find("/*");
+        let line_comment = rest.find("//");
+        match (block, line_comment) {
+            (Some(start), Some(slash)) if slash < start => {
+                code.push_str(&rest[..slash]);
+                return code;
+            }
+            (Some(start), _) => {
+                code.push_str(&rest[..start]);
+                code.push(' ');
+                rest = &rest[start + 2..];
+                *in_comment = true;
+            }
+            (None, Some(slash)) => {
+                code.push_str(&rest[..slash]);
+                return code;
+            }
+            (None, None) => {
+                code.push_str(rest);
+                return code;
+            }
+        }
     }
 }
 
@@ -1179,7 +1239,7 @@ impl CommandFinder {
         if self.folder("").jvm_build_ambiguous {
             return None;
         }
-        let gradle = self.gradle_command("");
+        let build = self.build_command("");
         let folder = self.folder("");
         let mut command = None;
         for family in [
@@ -1190,7 +1250,7 @@ impl CommandFinder {
             TestFamily::Python,
             TestFamily::Dotnet,
         ] {
-            if let Some(candidate) = family.root_command(folder, gradle.as_deref()) {
+            if let Some(candidate) = family.root_command(folder, build.as_deref()) {
                 if command.is_some() {
                     return None;
                 }
@@ -1207,17 +1267,17 @@ impl CommandFinder {
     ) -> Option<(String, String)> {
         let mut directory = folder;
         loop {
-            let gradle = (matches!(family, TestFamily::Jvm)
-                && matches!(self.folder(directory).build, Some(Build::Gradle)))
-            .then(|| self.gradle_run(directory, folder))
-            .flatten();
-            let gradle_command = gradle
-                .as_ref()
-                .map(|run| format!("{} {}", run.tool, run.task));
-            if let Some(command) =
-                family.scoped_command(self.folder(directory), gradle_command.as_deref())
-            {
-                let run_dir = gradle.map_or_else(|| directory.to_string(), |run| run.dir);
+            let build = match self.folder(directory).build {
+                Some(kind) if matches!(family, TestFamily::Jvm) => {
+                    self.build_run(kind, directory, folder)
+                }
+                _ => None,
+            };
+            if let Some(command) = family.scoped_command(
+                self.folder(directory),
+                build.as_ref().map(|(_, command)| command.as_str()),
+            ) {
+                let run_dir = build.map_or_else(|| directory.to_string(), |(dir, _)| dir);
                 return command.map(|command| (run_dir, command));
             }
             if directory.is_empty() {
@@ -1227,12 +1287,38 @@ impl CommandFinder {
         }
     }
 
-    /// The Gradle command for the whole build in `dir`, or `None` when `dir` has none.
-    fn gradle_command(&mut self, dir: &str) -> Option<String> {
-        if !matches!(self.folder(dir).build, Some(Build::Gradle)) {
-            return None;
+    /// The Gradle or Maven command for the whole build in `dir`, or `None` when `dir` has
+    /// neither.
+    fn build_command(&mut self, dir: &str) -> Option<String> {
+        match self.folder(dir).build? {
+            Build::Gradle => Some(format!("{} test", self.gradle_tool(dir))),
+            Build::Maven => Some(self.maven_build_command(dir)),
+            Build::Sbt => None,
         }
-        Some(format!("{} test", self.gradle_tool(dir)))
+    }
+
+    /// The folder and the command that run every test of the project of a test in `folder`,
+    /// whose nearest build file of the kind `kind` is in `build_dir`. `None` when the build
+    /// cannot name that project with certainty.
+    fn build_run(
+        &mut self,
+        kind: Build,
+        build_dir: &str,
+        folder: &str,
+    ) -> Option<(String, String)> {
+        match kind {
+            Build::Gradle => self
+                .gradle_run(build_dir, folder)
+                .map(|run| (run.dir, format!("{} {}", run.tool, run.task))),
+            Build::Maven => self.maven_run(build_dir).map(|run| {
+                let command = run.command();
+                (run.dir, command)
+            }),
+            Build::Sbt => self.sbt_run(build_dir, folder).map(|run| {
+                let command = run.command();
+                (run.dir, command)
+            }),
+        }
     }
 
     /// How Gradle runs only the tests of the project whose build file is in `build_dir`, for a
@@ -1495,11 +1581,13 @@ impl CommandFinder {
 
     /// A JUnit-style test of Java, Kotlin, or Scala through the nearest Maven, Gradle, or sbt
     /// build. sbt runs the whole class, with MUnit's `--tests` filter for a Scala test label of a
-    /// file that names MUnit when `build.sbt` names it, else ScalaTest's `-z` filter when
-    /// `build.sbt` names ScalaTest. Gradle selects a Kotest label of a file that imports Kotest by
-    /// its test path; otherwise Maven and Gradle select JUnit methods only, so a Kotlin or Scala
-    /// test label (a `function` in a class) has no command there. Gradle runs the task of the
-    /// test's own project (`gradle_run`).
+    /// file that names MUnit when a `build.sbt` of its build names it, else ScalaTest's `-z`
+    /// filter when one names ScalaTest. Gradle selects a Kotest label of a file that imports
+    /// Kotest by its test path; otherwise Maven and Gradle select JUnit methods only, so a Kotlin
+    /// or Scala test label (a `function` in a class) has no command there. Each build runs the
+    /// test's own project: Gradle its task (`gradle_run`), Maven its reactor module
+    /// (`maven_run`), and sbt its project id (`sbt_run`). Maven names the class with its
+    /// package, so that the filter matches no class of that name in another package.
     fn jvm(&mut self, test: &TestSpec) -> Option<String> {
         if test.classes.is_empty() {
             return None;
@@ -1511,19 +1599,15 @@ impl CommandFinder {
             .map(|class| class.name)
             .collect::<Vec<_>>()
             .join("$");
-        let (dir, build) = self.nearest(parent_dir(test.path), |folder| folder.build)?;
-        let kotest = label
-            && test.language == "kotlin"
-            && matches!(build, Build::Gradle)
-            && self.mentions(test.path, "import io.kotest.");
-        let munit = label
-            && test.language == "scala"
-            && matches!(build, Build::Sbt)
-            && self.folder(&dir).sbt_munit
-            && self.mentions(test.path, "munit");
-        let command = match build {
-            Build::Gradle if kotest => {
-                let run = self.gradle_run(&dir, parent_dir(test.path))?;
+        let folder = parent_dir(test.path);
+        let (dir, build) = self.nearest(folder, |folder| folder.build)?;
+        match build {
+            Build::Gradle
+                if label
+                    && test.language == "kotlin"
+                    && self.mentions(test.path, "import io.kotest.") =>
+            {
+                let run = self.gradle_run(&dir, folder)?;
                 let path = test
                     .groups
                     .iter()
@@ -1535,7 +1619,7 @@ impl CommandFinder {
                     Some(package) => format!("{package}.{class}.{path}"),
                     None => format!("{class}.{path}"),
                 };
-                return Some(in_folder(
+                Some(in_folder(
                     &run.dir,
                     format!(
                         "{} {} --tests {}",
@@ -1543,42 +1627,51 @@ impl CommandFinder {
                         run.task,
                         single_quoted(&filter)
                     ),
-                ));
+                ))
             }
-            Build::Maven | Build::Gradle if label => return None,
-            Build::Maven => format!(
-                "mvn test -Dtest={}#{}",
-                shell_word(&class),
-                shell_word(test.name)
-            ),
+            Build::Maven | Build::Gradle if label => None,
+            Build::Maven => {
+                let run = self.maven_run(&dir)?;
+                let class = match self.jvm_package(test.path) {
+                    Some(package) => format!("{package}.{class}"),
+                    None => class,
+                };
+                Some(in_folder(&run.dir, run.test_command(&class, test.name)))
+            }
             Build::Gradle => {
-                let run = self.gradle_run(&dir, parent_dir(test.path))?;
+                let run = self.gradle_run(&dir, folder)?;
                 let filter = single_quoted(&format!("{class}.{}", test.name));
-                return Some(in_folder(
+                Some(in_folder(
                     &run.dir,
                     format!("{} {} --tests {filter}", run.tool, run.task),
-                ));
+                ))
             }
             Build::Sbt => {
+                let run = self.sbt_run(&dir, folder)?;
+                let names = |finder: &mut Self, pick: fn(&Folder) -> bool| {
+                    pick(finder.folder(&dir)) || pick(finder.folder(&run.dir))
+                };
+                let scala_label = label && test.language == "scala";
                 let mut task = format!("testOnly *{class}");
-                if munit {
+                if scala_label
+                    && names(self, |folder| folder.sbt_munit)
+                    && self.mentions(test.path, "munit")
+                {
                     if !test.name.contains('\\') {
                         let mut pattern = String::from("--tests=");
                         regex_escaped_into(&mut pattern, test.name);
                         let argument = backslashed(&pattern, |c| matches!(c, '"' | '\\'));
                         task.push_str(&format!(" -- \"{argument}\""));
                     }
-                } else if label
-                    && test.language == "scala"
-                    && self.folder(&dir).sbt_scalatest
+                } else if scala_label
+                    && names(self, |folder| folder.sbt_scalatest)
                     && !test.name.contains(['"', '\\'])
                 {
                     task.push_str(&format!(" -- -z \"{}\"", test.name));
                 }
-                format!("sbt {}", single_quoted(&task))
+                Some(in_folder(&run.dir, run.task_command(&task)))
             }
-        };
-        Some(in_folder(&dir, command))
+        }
     }
 
     /// RSpec runs a `_spec.rb` example by its line; Rails and a Rake `TestTask` run a Minitest
@@ -1630,6 +1723,35 @@ impl CommandFinder {
     /// Whether a line of the file holds `text`.
     fn mentions(&mut self, path: &str, text: &str) -> bool {
         self.source(path).iter().any(|line| line.contains(text))
+    }
+
+    /// The package of the classes of a Java, Kotlin, or Scala file: the package clauses at its
+    /// head joined with `.`, since Scala chains them (`package a.b` then `package c` is
+    /// `a.b.c`). Comments and file annotations may come between them; the first other statement
+    /// ends the head. `None` when the file declares none, or when a Scala package block
+    /// (`package a { … }`) leaves the package of a class unknown.
+    fn jvm_package(&mut self, path: &str) -> Option<String> {
+        let mut clauses = Vec::new();
+        let mut in_comment = false;
+        for line in self.source(path) {
+            let code = uncommented(line, &mut in_comment);
+            let code = code.trim();
+            if code.is_empty() || code.starts_with('@') {
+                continue;
+            }
+            let Some(clause) = code.strip_prefix("package ") else {
+                break;
+            };
+            let clause = clause.trim().trim_end_matches(';').trim();
+            if clause.starts_with("object ") {
+                break;
+            }
+            if clause.is_empty() || clause.contains(['{', '}']) {
+                return None;
+            }
+            clauses.push(clause.to_string());
+        }
+        (!clauses.is_empty()).then(|| clauses.join("."))
     }
 
     /// The package that a Kotlin file declares.
@@ -3444,7 +3566,7 @@ mod tests {
             ("Cargo.toml", "[package]\nname = \"app\"\n"),
             ("go.mod", "module example.com/app\n\ngo 1.22\n"),
             ("package.json", r#"{"scripts":{"test":"node --test"}}"#),
-            ("pom.xml", ""),
+            ("pom.xml", "<project/>"),
             ("pyproject.toml", "[tool.pytest.ini_options]\n"),
             (
                 "app.csproj",
@@ -3476,7 +3598,7 @@ mod tests {
             ("Cargo.toml", "[package]\nname = \"app\"\n"),
             ("go.mod", "module example.com/app\n\ngo 1.22\n"),
             ("package.json", r#"{"scripts":{"test":"node --test"}}"#),
-            ("pom.xml", ""),
+            ("pom.xml", "<project/>"),
             ("pyproject.toml", "[tool.pytest.ini_options]\n"),
             (
                 "app.csproj",
@@ -4837,6 +4959,477 @@ mod tests {
                 ),
                 ("set".to_string(), vec!["V".to_string(), "(x)".to_string()]),
             ]
+        );
+    }
+
+    const REACTOR_POM: &str = "<project>\n  <modelVersion>4.0.0</modelVersion>\n  <groupId>g</groupId>\n  <artifactId>parent</artifactId>\n  <packaging>pom</packaging>\n  <modules>\n    <module>core</module>\n    <module>libs</module>\n    <module>extras</module>\n  </modules>\n  <profiles>\n    <profile>\n      <id>bench</id>\n      <modules><module>bench</module></modules>\n    </profile>\n  </profiles>\n</project>\n";
+    const CHILD_POM: &str = "<project>\n  <parent>\n    <groupId>g</groupId>\n    <artifactId>parent</artifactId>\n  </parent>\n</project>\n";
+
+    fn java_run(project: &tempfile::TempDir, dir: &str) -> Option<String> {
+        let path = if dir.is_empty() {
+            "src/test/java/FooTest.java".to_string()
+        } else {
+            format!("{dir}/src/test/java/FooTest.java")
+        };
+        command(project, "java", &path, "checks", Some("FooTest"))
+    }
+
+    fn broader(project: &tempfile::TempDir, dir: &str) -> Option<String> {
+        CommandFinder::new(project.path())
+            .broader_test_command(Some(&format!("{dir}/src/test/java/FooTest.java")))
+    }
+
+    fn reactor() -> tempfile::TempDir {
+        project(&[
+            ("pom.xml", REACTOR_POM),
+            ("core/pom.xml", CHILD_POM),
+            (
+                "libs/pom.xml",
+                "<project><packaging>pom</packaging><modules><module>json</module></modules></project>",
+            ),
+            ("libs/json/pom.xml", CHILD_POM),
+            ("extras/pom.xml", CHILD_POM),
+            ("bench/pom.xml", CHILD_POM),
+            (
+                "samples/demo/pom.xml",
+                "<project><parent><groupId>g</groupId><artifactId>parent</artifactId><relativePath>../../pom.xml</relativePath></parent></project>",
+            ),
+            (
+                "tools/pom.xml",
+                "<project><artifactId>tools</artifactId></project>",
+            ),
+            (
+                "published/pom.xml",
+                "<project><parent><relativePath/></parent></project>",
+            ),
+        ])
+    }
+
+    #[test]
+    fn a_maven_module_runs_from_its_reactor_root_with_the_modules_it_needs() {
+        let reactor = reactor();
+
+        assert_eq!(
+            java_run(&reactor, "extras").as_deref(),
+            Some(
+                "mvn package -pl extras -am -Dtest=FooTest#checks -Dsurefire.failIfNoSpecifiedTests=false"
+            )
+        );
+        assert_eq!(
+            java_run(&reactor, "libs/json").as_deref(),
+            Some(
+                "mvn package -pl libs/json -am -Dtest=FooTest#checks -Dsurefire.failIfNoSpecifiedTests=false"
+            )
+        );
+        assert_eq!(
+            broader(&reactor, "extras").as_deref(),
+            Some("mvn package -pl extras -am")
+        );
+        assert_eq!(
+            broader(&reactor, "libs/json").as_deref(),
+            Some("mvn package -pl libs/json -am")
+        );
+        assert_eq!(
+            CommandFinder::new(reactor.path())
+                .broader_test_command(None)
+                .as_deref(),
+            Some("mvn package")
+        );
+    }
+
+    #[test]
+    fn a_test_in_the_folder_of_a_nested_aggregator_pom_has_no_command() {
+        let reactor = reactor();
+
+        assert_eq!(java_run(&reactor, "libs"), None);
+        assert_eq!(broader(&reactor, "libs"), None);
+    }
+
+    #[test]
+    fn a_maven_test_names_its_class_with_the_package_of_its_file() {
+        let reactor = reactor();
+        let java = "extras/src/test/java/x/y/FooTest.java";
+        let scala = "extras/src/test/scala/x/FooSuite.scala";
+        let block = "extras/src/test/scala/x/BlockSuite.scala";
+        fs::create_dir_all(reactor.path().join("extras/src/test/java/x/y")).unwrap();
+        fs::create_dir_all(reactor.path().join("extras/src/test/scala/x")).unwrap();
+        fs::write(
+            reactor.path().join(java),
+            "/*\n package notes in a license\n */\npackage x.y;\n\nclass FooTest {}\n",
+        )
+        .unwrap();
+        fs::write(
+            reactor.path().join(scala),
+            "package x\npackage scaled\n\npackage object helpers\n\nclass FooSuite\n",
+        )
+        .unwrap();
+        fs::write(
+            reactor.path().join(block),
+            "package x {\n  class BlockSuite\n}\n",
+        )
+        .unwrap();
+        let flags = "-Dsurefire.failIfNoSpecifiedTests=false";
+
+        assert_eq!(
+            nested(&reactor, "java", java, "checks", &["FooTest", "Inner"]),
+            Some(format!(
+                "mvn package -pl extras -am -Dtest='x.y.FooTest$Inner'#checks {flags}"
+            ))
+        );
+        assert_eq!(
+            Spec {
+                classes: &["FooSuite"],
+                ..spec("scala", "method", scala, "checks")
+            }
+            .run(&reactor),
+            Some(format!(
+                "mvn package -pl extras -am -Dtest=x.scaled.FooSuite#checks {flags}"
+            ))
+        );
+        assert_eq!(
+            Spec {
+                classes: &["BlockSuite"],
+                ..spec("scala", "method", block, "checks")
+            }
+            .run(&reactor),
+            Some(format!(
+                "mvn package -pl extras -am -Dtest=BlockSuite#checks {flags}"
+            ))
+        );
+    }
+
+    #[test]
+    fn a_maven_module_that_only_a_profile_lists_has_no_command() {
+        let reactor = reactor();
+
+        assert_eq!(java_run(&reactor, "bench"), None);
+        assert_eq!(broader(&reactor, "bench"), None);
+    }
+
+    #[test]
+    fn a_maven_project_outside_the_reactor_runs_alone_only_without_a_local_reactor_parent() {
+        let reactor = reactor();
+
+        assert_eq!(java_run(&reactor, "samples/demo"), None);
+        assert_eq!(broader(&reactor, "samples/demo"), None);
+        assert_eq!(
+            java_run(&reactor, "tools").as_deref(),
+            Some("cd tools && mvn test -Dtest=FooTest#checks")
+        );
+        assert_eq!(
+            java_run(&reactor, "published").as_deref(),
+            Some("cd published && mvn test -Dtest=FooTest#checks")
+        );
+        assert_eq!(
+            broader(&reactor, "tools").as_deref(),
+            Some("cd tools && mvn test")
+        );
+    }
+
+    #[test]
+    fn a_maven_project_with_a_local_parent_that_aggregates_nothing_runs_alone() {
+        let parent_only = project(&[
+            (
+                "build/pom.xml",
+                "<project><groupId>g</groupId><artifactId>build</artifactId><packaging>pom</packaging></project>",
+            ),
+            (
+                "app/pom.xml",
+                "<project><parent><groupId>g</groupId><artifactId>build</artifactId><relativePath>../build</relativePath></parent></project>",
+            ),
+        ]);
+
+        assert_eq!(
+            java_run(&parent_only, "app").as_deref(),
+            Some("cd app && mvn test -Dtest=FooTest#checks")
+        );
+    }
+
+    #[test]
+    fn a_maven_project_whose_parent_is_not_the_aggregator_above_it_runs_alone() {
+        let external = project(&[
+            (
+                "pom.xml",
+                "<project><groupId>rv</groupId><artifactId>root</artifactId><version>1</version><packaging>pom</packaging><modules><module>core</module></modules></project>",
+            ),
+            ("core/pom.xml", CHILD_POM),
+            (
+                "tools/pom.xml",
+                "<project><parent><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-parent</artifactId><version>3.3.0</version></parent><artifactId>tools</artifactId></project>",
+            ),
+            (
+                "skewed/pom.xml",
+                "<project><parent><groupId>rv</groupId><artifactId>root</artifactId><version>0.9</version></parent><artifactId>skewed</artifactId></project>",
+            ),
+            (
+                "matched/pom.xml",
+                "<project><parent><groupId>rv</groupId><artifactId>root</artifactId><version>1</version></parent><artifactId>matched</artifactId></project>",
+            ),
+            (
+                "unknown/pom.xml",
+                "<project><parent><groupId>rv</groupId><artifactId>root</artifactId><version>${revision}</version></parent><artifactId>unknown</artifactId></project>",
+            ),
+        ]);
+
+        assert_eq!(
+            java_run(&external, "tools").as_deref(),
+            Some("cd tools && mvn test -Dtest=FooTest#checks")
+        );
+        assert_eq!(
+            broader(&external, "tools").as_deref(),
+            Some("cd tools && mvn test")
+        );
+        assert_eq!(
+            java_run(&external, "skewed").as_deref(),
+            Some("cd skewed && mvn test -Dtest=FooTest#checks")
+        );
+        assert_eq!(java_run(&external, "matched"), None);
+        assert_eq!(java_run(&external, "unknown"), None);
+    }
+
+    #[test]
+    fn a_maven_project_with_a_quoted_angle_bracket_in_an_attribute_keeps_its_command() {
+        let solo = project(&[(
+            "pom.xml",
+            "<project><artifactId>solo</artifactId><build><plugins><plugin><configuration><target><echo message=\"generated -> target\"/><echo message='a > b'/></target></configuration></plugin></plugins></build></project>",
+        )]);
+
+        assert_eq!(
+            java_run(&solo, "").as_deref(),
+            Some("mvn test -Dtest=FooTest#checks")
+        );
+    }
+
+    #[test]
+    fn a_maven_module_that_a_sibling_aggregator_lists_runs_from_that_folder() {
+        let sibling = project(&[
+            (
+                "parent/pom.xml",
+                "<project><modules><module>../core</module></modules></project>",
+            ),
+            (
+                "core/pom.xml",
+                "<project><parent><relativePath>../parent/pom.xml</relativePath></parent></project>",
+            ),
+        ]);
+
+        assert_eq!(
+            java_run(&sibling, "core").as_deref(),
+            Some(
+                "cd parent && mvn package -pl ../core -am -Dtest=FooTest#checks -Dsurefire.failIfNoSpecifiedTests=false"
+            )
+        );
+    }
+
+    #[test]
+    fn a_maven_reactor_the_reader_cannot_follow_gives_no_command() {
+        for root in [
+            "<project><modules><module>${core}</module></modules></project>",
+            "<project><modules><module>core</module></project>",
+            "<project><modules><module>core/other-pom.xml</module></modules></project>",
+            "<project><modelVersion>4.1.0</modelVersion><packaging>pom</packaging></project>",
+        ] {
+            let unknown = project(&[("pom.xml", root), ("core/pom.xml", CHILD_POM)]);
+
+            assert_eq!(java_run(&unknown, "core"), None, "{root}");
+            assert_eq!(broader(&unknown, "core"), None, "{root}");
+        }
+    }
+
+    #[test]
+    fn a_test_in_the_folder_of_an_aggregator_pom_has_no_command() {
+        let root_tests = project(&[(
+            "pom.xml",
+            "<project><modules><module>core</module></modules></project>",
+        )]);
+        let profile_root = project(&[(
+            "pom.xml",
+            "<project><profiles><profile><modules><module>core</module></modules></profile></profiles></project>",
+        )]);
+
+        assert_eq!(java_run(&root_tests, ""), None);
+        assert_eq!(java_run(&profile_root, ""), None);
+    }
+
+    #[test]
+    fn maven_runs_through_the_wrapper_in_the_folder_it_runs_from() {
+        let wrapped = project(&[
+            ("mvnw", "#!/bin/sh\n"),
+            ("mvnw.cmd", "@echo off\n"),
+            (
+                "pom.xml",
+                "<project><modules><module>core</module></modules></project>",
+            ),
+            ("core/pom.xml", CHILD_POM),
+            ("solo/pom.xml", "<project/>"),
+        ]);
+        let tool = if cfg!(windows) { "mvnw.cmd" } else { "./mvnw" };
+
+        assert_eq!(
+            java_run(&wrapped, "core"),
+            Some(format!(
+                "{tool} package -pl core -am -Dtest=FooTest#checks -Dsurefire.failIfNoSpecifiedTests=false"
+            ))
+        );
+        assert_eq!(
+            java_run(&wrapped, "solo").as_deref(),
+            Some("cd solo && mvn test -Dtest=FooTest#checks")
+        );
+        assert_eq!(
+            CommandFinder::new(wrapped.path()).broader_test_command(None),
+            Some(format!("{tool} package"))
+        );
+    }
+
+    const SBT_ROOT: &str = "lazy val root = (project in file(\".\")).aggregate(core, web)\n\nlazy val core = project\n\nlazy val web = project.in(file(\"apps/web\")).dependsOn(core)\n\nlibraryDependencies += \"org.scalatest\" %% \"scalatest\" % \"3.2.18\" % Test\n";
+
+    fn scala_label(project: &tempfile::TempDir, dir: &str) -> Option<String> {
+        let path = format!("{dir}/src/test/scala/CalcSpec.scala");
+        Spec {
+            classes: &["CalcSpec"],
+            ..spec("scala", "function", path.trim_start_matches('/'), "adds")
+        }
+        .run(project)
+    }
+
+    #[test]
+    fn an_sbt_subproject_test_runs_from_the_build_root_by_its_project_id() {
+        let build = project(&[
+            ("build.sbt", SBT_ROOT),
+            ("core/build.sbt", "name := \"core\"\n"),
+            ("examples/demo/build.sbt", "name := \"demo\"\n"),
+        ]);
+
+        assert_eq!(
+            scala_label(&build, "core").as_deref(),
+            Some("sbt 'core/testOnly *CalcSpec -- -z \"adds\"'")
+        );
+        assert_eq!(
+            scala_label(&build, "apps/web").as_deref(),
+            Some("sbt 'web/testOnly *CalcSpec -- -z \"adds\"'")
+        );
+        assert_eq!(
+            CommandFinder::new(build.path())
+                .broader_test_command(Some("core/src/test/scala/CalcSpec.scala"))
+                .as_deref(),
+            Some("sbt core/test")
+        );
+        assert_eq!(
+            CommandFinder::new(build.path())
+                .broader_test_command(Some("src/test/scala/CalcSpec.scala"))
+                .as_deref(),
+            Some("sbt test")
+        );
+        assert_eq!(
+            scala_label(&build, "examples/demo").as_deref(),
+            Some("cd examples/demo && sbt 'testOnly *CalcSpec'")
+        );
+        assert_eq!(scala_label(&build, "apps").as_deref(), None);
+    }
+
+    #[test]
+    fn an_sbt_build_nested_in_a_subproject_folder_runs_from_its_own_folder() {
+        let nested_build = project(&[
+            ("build.sbt", SBT_ROOT),
+            ("project/build.properties", "sbt.version=1.10.7\n"),
+            ("core/examples/demo/build.sbt", "name := \"demo\"\n"),
+            (
+                "core/examples/plain/build.sbt",
+                "name := \"plain\"\nlibraryDependencies += \"org.scalatest\" %% \"scalatest\" % \"3.2.18\" % Test\n",
+            ),
+            (
+                "core/examples/demo/project/build.properties",
+                "sbt.version=1.10.7\n",
+            ),
+            ("core/build.sbt", "name := \"core\"\n"),
+        ]);
+
+        assert_eq!(
+            scala_label(&nested_build, "core/examples/demo").as_deref(),
+            Some("cd core/examples/demo && sbt 'testOnly *CalcSpec'")
+        );
+        assert_eq!(
+            scala_label(&nested_build, "core/examples/plain").as_deref(),
+            Some("cd core/examples/plain && sbt 'testOnly *CalcSpec -- -z \"adds\"'")
+        );
+        assert_eq!(
+            scala_label(&nested_build, "core").as_deref(),
+            Some("sbt 'core/testOnly *CalcSpec -- -z \"adds\"'")
+        );
+        assert_eq!(
+            CommandFinder::new(nested_build.path())
+                .broader_test_command(Some("core/examples/demo/src/test/scala/CalcSpec.scala"))
+                .as_deref(),
+            Some("cd core/examples/demo && sbt test")
+        );
+    }
+
+    #[test]
+    fn an_sbt_build_under_a_root_the_reader_cannot_follow_runs_from_its_own_root() {
+        let independent = project(&[
+            (
+                "build.sbt",
+                "lazy val core = crossProject(JVMPlatform, JSPlatform).in(file(\"core\"))\n",
+            ),
+            ("examples/demo/build.sbt", "name := \"demo\"\n"),
+            (
+                "examples/demo/project/build.properties",
+                "sbt.version=1.10.7\n",
+            ),
+        ]);
+
+        assert_eq!(
+            scala_label(&independent, "examples/demo").as_deref(),
+            Some("cd examples/demo && sbt 'testOnly *CalcSpec'")
+        );
+    }
+
+    #[test]
+    fn an_sbt_subproject_test_outside_its_src_folder_has_no_command() {
+        let build = project(&[
+            ("build.sbt", SBT_ROOT),
+            ("core/build.sbt", "name := \"core\"\n"),
+        ]);
+        let path = "core/test/CalcSpec.scala";
+
+        assert_eq!(
+            Spec {
+                classes: &["CalcSpec"],
+                ..spec("scala", "function", path, "adds")
+            }
+            .run(&build),
+            None
+        );
+        assert_eq!(
+            CommandFinder::new(build.path()).broader_test_command(Some(path)),
+            None
+        );
+    }
+
+    #[test]
+    fn an_sbt_build_whose_projects_the_reader_cannot_follow_gives_no_command() {
+        let cross = project(&[
+            (
+                "build.sbt",
+                "lazy val core = crossProject(JVMPlatform, JSPlatform).in(file(\"core\"))\n",
+            ),
+            ("core/build.sbt", "name := \"core\"\n"),
+        ]);
+        let scala_defined = project(&[
+            ("build.sbt", "name := \"app\"\n"),
+            (
+                "project/Build.scala",
+                "object Build { lazy val core = Project(\"core\", file(\"core\")) }\n",
+            ),
+        ]);
+
+        assert_eq!(scala_label(&cross, "core"), None);
+        assert_eq!(scala_label(&cross, ""), None);
+        assert_eq!(scala_label(&scala_defined, ""), None);
+        assert_eq!(
+            CommandFinder::new(cross.path())
+                .broader_test_command(Some("core/src/test/scala/CalcSpec.scala")),
+            None
         );
     }
 }

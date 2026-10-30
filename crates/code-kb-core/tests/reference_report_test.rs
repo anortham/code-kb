@@ -11098,7 +11098,7 @@ fn java_tests_in_a_build_folder_below_the_root_list_the_cd_prefix() {
         (
             vec![("mvn/pom.xml", "<project></project>\n")],
             "mvn",
-            "cd mvn && mvn test -Dtest=FooTest#checksTarget",
+            "cd mvn && mvn test -Dtest=x.FooTest#checksTarget",
         ),
         (
             vec![("gr/gradlew", ""), ("gr/build.gradle", "")],
@@ -11344,7 +11344,7 @@ fn java_and_csharp_tests_list_with_their_build_tool_commands() {
     assert_eq!(
         running(&java_report),
         [format!(
-            "checksTarget src/test/java/x/FooTest.java:{} mvn test -Dtest=FooTest#checksTarget",
+            "checksTarget src/test/java/x/FooTest.java:{} mvn test -Dtest=x.FooTest#checksTarget",
             line_of(&java, "src/test/java/x/FooTest.java", "@Test")
         )],
         "{}",
@@ -11381,11 +11381,11 @@ fn a_java_test_in_a_nested_class_lists_the_binary_class_name_in_its_command() {
         running(&target),
         [
             format!(
-                "top src/test/java/x/OuterTest.java:{} mvn test -Dtest=OuterTest#top",
+                "top src/test/java/x/OuterTest.java:{} mvn test -Dtest=x.OuterTest#top",
                 line_of(&repo, "src/test/java/x/OuterTest.java", "@Test")
             ),
             format!(
-                "checks src/test/java/x/OuterTest.java:{} mvn test -Dtest='OuterTest$InnerTest'#checks",
+                "checks src/test/java/x/OuterTest.java:{} mvn test -Dtest='x.OuterTest$InnerTest'#checks",
                 line_of(&repo, "src/test/java/x/OuterTest.java", "        @Test")
             ),
         ],

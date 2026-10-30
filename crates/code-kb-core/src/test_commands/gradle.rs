@@ -281,7 +281,7 @@ impl Project {
 
 /// `rel` inside `base`, a folder relative to the project root, with `.` and `..` resolved;
 /// `None` when it leaves the project root.
-fn joined(base: &str, rel: &str) -> Option<String> {
+pub(super) fn joined(base: &str, rel: &str) -> Option<String> {
     let mut parts: Vec<&str> = base.split('/').filter(|part| !part.is_empty()).collect();
     for part in rel.split('/') {
         match part {
@@ -296,7 +296,7 @@ fn joined(base: &str, rel: &str) -> Option<String> {
 }
 
 /// Whether the folder `outer` is `inner` or a folder above it.
-fn holds(outer: &str, inner: &str) -> bool {
+pub(super) fn holds(outer: &str, inner: &str) -> bool {
     outer.is_empty()
         || inner == outer
         || inner

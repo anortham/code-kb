@@ -354,9 +354,54 @@ compiles it and runs nothing). JavaScript and TypeScript follow the nearest `pac
 relative to that folder. `jest` reads a bare path as a regular expression and `node --test`
 reads it as a glob, so a path with `( ) [ ] + $` or `{ } * ? !` could run 0 tests;
 `--runTestsByPath` and running the file itself avoid that. Java, Kotlin, and Scala are
-`mvn test -Dtest=Class#name` under a `pom.xml`, `./gradlew test --tests 'Class.name'` under
+`mvn test -Dtest=pkg.Class#name` under a `pom.xml`, `./gradlew test --tests 'Class.name'` under
 a Gradle build, and `sbt 'testOnly *Class'` under a `build.sbt`. Each runs from the folder of
-the nearest build file (`cd dir && …`), except a Gradle build with a settings file. A plain
+the nearest build file (`cd dir && …`), except a module of a Maven multi-module build, a Gradle
+build with a settings file, and an sbt project that a `build.sbt` defines in a folder.
+
+A Maven module run alone cannot resolve the `SNAPSHOT` of a sibling module that only the reactor
+builds (gson's `extras` needs `gson`), and `-Dtest` run from the reactor root reaches every
+module, where surefire fails each one whose filter matches nothing. So a module runs from its
+reactor root, with the module and the modules it needs: `mvn package -pl extras -am
+-Dtest=pkg.Class#name -Dsurefire.failIfNoSpecifiedTests=false` (`failIfNoSpecifiedTests` is the
+surefire name since 2.12), and its broader command is `mvn package -pl extras -am`, which also
+runs the tests of the modules it needs. The phase is `package`, not `test`: in the `test` phase
+the reactor hands a module the classes folder of each module it needs, while `package` hands it
+their jars, as an installed module would be. A plugin bound to `package` can change a jar, and
+gson adds its `module-info` there, so `mvn test -pl test-jpms -am` fails with `Module
+com.google.gson not found` and `mvn package -pl test-jpms -am` passes. The filter names the
+class with the package of its test file (`-Dtest=rv.app.FooTest#checks`,
+`-Dtest='x.Outer$Inner'#name`): with `-am` it also reaches the modules that the module needs,
+and a bare `FooTest#checks` there runs, and can fail on, a `FooTest` of another package. The
+package is the file's package clauses joined with `.` (Scala chains `package a` and `package
+b`), read past comments and file annotations; a file with no package clause, or a Scala package
+block (`package a { … }`), keeps the bare class. The reactor root is the topmost folder whose
+`pom.xml` `<modules>` (Maven 4 `<subprojects>`) chain reaches the module's folder, through
+folders below it (`libs` lists `json`, the root lists `libs`: `-pl libs/json`) or through a
+`../` module of the `pom.xml` that the module's `<parent><relativePath>` points at
+(`parent/pom.xml` lists `../core`: `cd parent && mvn package -pl ../core -am …`). `Pom`
+(`test_commands/maven.rs`) reads the modules, the profile modules, the parent's `relativePath`
+(default `../pom.xml`, an empty `<relativePath/>` takes the parent from a repository), and the
+coordinates of the project and its `<parent>`; a `>` inside a quoted attribute value (`<echo
+message="a -> b"/>`) does not end a tag. A `pom.xml` that no reactor lists keeps `cd dir && mvn
+test -Dtest=pkg.Class#name`, unless its local parent aggregates modules or is a module, since
+the build may need modules that only that reactor makes. Its local parent is the `pom.xml` that
+`relativePath` names only when that file has the `groupId` and `artifactId` that `<parent>`
+names, and its version when both name one, as Maven reads it: a Spring Boot module with the
+parent `spring-boot-starter-parent` under an unrelated aggregator takes its parent from a
+repository and runs alone. A coordinate that interpolates a property, or is absent, leaves the
+parent unknown, and the test has no command. The test also has no command when the reactor
+cannot be read with certainty: a module from a property (`${dir}`), a CDATA section or an
+entity, a POM file other than `pom.xml`, malformed XML, a Maven 4.1.0 aggregator with no listed
+subprojects (Maven 4 finds them itself), a module that only a `<profile>` lists, two reactors
+that list one folder, or a test in the folder of a `pom.xml` that aggregates modules, also when
+a reactor above lists it (its packaging is `pom`, so it builds no tests, and `-pl libs` runs
+none and passes). The program is `./mvnw` when the folder the command runs from has `mvnw`,
+`mvnw.cmd` on Windows when it has that, and `mvn` otherwise. The broader command with no target
+file runs from the root: `mvn package` when the root `pom.xml` aggregates modules, for the
+reason above (`mvn test` at the gson root fails in `test-jpms`), else `mvn test`.
+
+A plain
 `test` run from a Gradle project folder also runs the test task of every project below it, where
 the `--tests` filter matches nothing and Gradle fails with `No tests found for given includes`.
 So when a `settings.gradle` or `settings.gradle.kts` defines the build of the build file, the
@@ -399,10 +444,29 @@ Gradle. When the test file imports `io.kotest.`, Gradle gets
 the Kotest test path, which joins the labels of the enclosing containers (`context`,
 `describe`) and the test with ` -- `, as Kotest's Gradle filter reads it. A label is a group
 when julie flags it as a test container, and the class is the one around the outermost group,
-so a ScalaTest `it` inside `describe` also finds its class. sbt runs the whole class; for a
-Scala label it adds MUnit's `-- "--tests=name"` when `build.sbt` names `munit` and the test
-file names `munit`, else ScalaTest's `-- -z "label"` when `build.sbt` names `scalatest` and
-the label holds no `"` or `\`. MUnit reads `--tests` as a regular expression, so the name gets
+so a ScalaTest `it` inside `describe` also finds its class. sbt started in a project folder
+loads a separate build without the root build's settings and projects, so a test in a folder that
+the `.sbt` files of its nearest `build.sbt` folder, or of a folder above it, place in a project
+other than the root project runs from that build folder with the project id: `sbt
+'core/testOnly *Class'`, and the broader command `sbt core/test`. Only a folder under the
+project's `src` folder counts as that project's, since sbt builds a project from its `src`; a
+build nested in a project folder (`core/examples/demo` with its own `build.sbt`) is another
+build, and `sbt 'core/testOnly …'` there runs no test and passes. `SbtBuild`
+(`test_commands/sbt.rs`) reads the literal definitions `lazy val core = project` (folder
+`core`), `project.in(file("dir"))`, `(project in file("dir"))`, and `Project("id",
+file("dir"))`, with a backticked id, and the deepest project whose `src` holds the test wins.
+The walk up from the nearest `build.sbt` stops after a folder with a `project` folder, the root
+of its own build. A test in no such project runs in the root project of its nearest `build.sbt`
+folder, as before; when that build defines other projects, only a test under its `src` folder
+does. A test outside the `src` folder of a project that a build above defines in the folder of
+its nearest `build.sbt` has no command, since that `build.sbt` holds the project's settings, not
+a build of its own. A build folder
+on the way that defines projects in a way the reader cannot follow (`crossProject`,
+`projectMatrix`, `.withId`, a folder that is no literal, `Project(` with other arguments, or a
+Scala file in its `project` folder that names projects) gives no command. sbt runs the whole
+class; for a Scala label it adds MUnit's `-- "--tests=name"` when a `build.sbt` of the nearest
+or the run folder names `munit` and the test file names `munit`, else ScalaTest's `-- -z
+"label"` when one names `scalatest` and the label holds no `"` or `\`. MUnit reads `--tests` as a regular expression, so the name gets
 a `\` before each of `\ ^ $ . * + ? ( ) [ ] { } | /`. sbt reads a quoted argument with
 escapes, so each `\` and `"` then gets another `\`. An MUnit name with `\` runs the whole
 class. A folder with two of the three build files has no broader

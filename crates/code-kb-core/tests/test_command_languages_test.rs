@@ -433,6 +433,248 @@ fn a_scalatest_label_inside_a_describe_block_runs_through_its_spec_class() {
     );
 }
 
+const MAVEN_REACTOR: &str = "<project xmlns=\"http://maven.apache.org/POM/4.0.0\">\n  <modelVersion>4.0.0</modelVersion>\n  <groupId>x</groupId>\n  <artifactId>parent</artifactId>\n  <version>1.0-SNAPSHOT</version>\n  <packaging>pom</packaging>\n  <modules>\n    <module>lib</module>\n    <module>kotlin-tests</module>\n    <module>scala</module>\n  </modules>\n  <profiles>\n    <profile>\n      <id>bench</id>\n      <modules>\n        <module>bench</module>\n      </modules>\n    </profile>\n  </profiles>\n</project>\n";
+const MAVEN_MODULE: &str = "<project xmlns=\"http://maven.apache.org/POM/4.0.0\">\n  <modelVersion>4.0.0</modelVersion>\n  <parent>\n    <groupId>x</groupId>\n    <artifactId>parent</artifactId>\n    <version>1.0-SNAPSHOT</version>\n  </parent>\n  <artifactId>module</artifactId>\n</project>\n";
+const MAVEN_FLAGS: &str = "-Dsurefire.failIfNoSpecifiedTests=false";
+
+#[test]
+fn java_kotlin_and_scala_tests_in_maven_modules_run_from_the_reactor_root() {
+    let repo = scanned_repo(&[
+        ("pom.xml", MAVEN_REACTOR),
+        ("lib/pom.xml", MAVEN_MODULE),
+        ("lib/src/main/java/x/Foo.java", JAVA_LIB),
+        ("lib/src/test/java/x/FooTest.java", &java_test("FooTest")),
+        ("bench/pom.xml", MAVEN_MODULE),
+        (
+            "bench/src/test/java/x/BenchTest.java",
+            &java_test("BenchTest"),
+        ),
+        (
+            "samples/demo/pom.xml",
+            "<project>\n  <parent>\n    <groupId>x</groupId>\n    <artifactId>parent</artifactId>\n    <relativePath>../../pom.xml</relativePath>\n  </parent>\n</project>\n",
+        ),
+        (
+            "samples/demo/src/test/java/x/DemoTest.java",
+            &java_test("DemoTest"),
+        ),
+        (
+            "tools/pom.xml",
+            "<project>\n  <artifactId>tools</artifactId>\n</project>\n",
+        ),
+        (
+            "tools/src/test/java/x/ToolTest.java",
+            &java_test("ToolTest"),
+        ),
+        ("kotlin-tests/pom.xml", MAVEN_MODULE),
+        (
+            "kotlin-tests/src/main/kotlin/demo/Lib.kt",
+            &KOTLIN_LIB.replace("target", "kotlinTarget"),
+        ),
+        (
+            "kotlin-tests/src/test/kotlin/demo/LibTest.kt",
+            &KOTLIN_TEST.replace("target", "kotlinTarget"),
+        ),
+        ("scala/pom.xml", MAVEN_MODULE),
+        ("scala/src/main/scala/demo/Lib.scala", SCALA_LIB),
+        ("scala/src/test/scala/demo/LibSuite.scala", SCALA_TEST),
+    ]);
+
+    assert_commands(
+        &report(&repo, "target", "lib/src/main/java/x/Foo.java"),
+        &[
+            ("checksTarget", "-"),
+            (
+                "checksTarget",
+                &format!("mvn package -pl lib -am -Dtest=x.FooTest#checksTarget {MAVEN_FLAGS}"),
+            ),
+            ("checksTarget", "-"),
+            (
+                "checksTarget",
+                "cd tools && mvn test -Dtest=x.ToolTest#checksTarget",
+            ),
+        ],
+    );
+    assert_commands(
+        &report(
+            &repo,
+            "kotlinTarget",
+            "kotlin-tests/src/main/kotlin/demo/Lib.kt",
+        ),
+        &[
+            (
+                "addsTwo",
+                &format!(
+                    "mvn package -pl kotlin-tests -am -Dtest=demo.LibTest#addsTwo {MAVEN_FLAGS}"
+                ),
+            ),
+            (
+                "adds two numbers",
+                &format!(
+                    "mvn package -pl kotlin-tests -am -Dtest=demo.LibTest#'adds two numbers' {MAVEN_FLAGS}"
+                ),
+            ),
+            (
+                "innerCase",
+                &format!(
+                    "mvn package -pl kotlin-tests -am -Dtest='demo.LibTest$Inner'#innerCase {MAVEN_FLAGS}"
+                ),
+            ),
+        ],
+    );
+    assert_commands(
+        &report(&repo, "target", "scala/src/main/scala/demo/Lib.scala"),
+        &[
+            (
+                "addsTwo",
+                &format!(
+                    "mvn package -pl scala -am -Dtest=demo.LibJUnitTest#addsTwo {MAVEN_FLAGS}"
+                ),
+            ),
+            ("adds two", "-"),
+        ],
+    );
+}
+
+const SPRING_CHILD: &str = "<project xmlns=\"http://maven.apache.org/POM/4.0.0\">\n  <modelVersion>4.0.0</modelVersion>\n  <parent>\n    <groupId>org.springframework.boot</groupId>\n    <artifactId>spring-boot-starter-parent</artifactId>\n    <version>3.3.0</version>\n  </parent>\n  <groupId>x</groupId>\n  <artifactId>tools</artifactId>\n</project>\n";
+const QUOTED_BRACKET_POM: &str = "<project xmlns=\"http://maven.apache.org/POM/4.0.0\">\n  <modelVersion>4.0.0</modelVersion>\n  <groupId>x</groupId>\n  <artifactId>solo</artifactId>\n  <version>1</version>\n  <build>\n    <plugins>\n      <plugin>\n        <artifactId>maven-antrun-plugin</artifactId>\n        <configuration>\n          <target>\n            <echo message=\"generated -> target\"/>\n          </target>\n        </configuration>\n      </plugin>\n    </plugins>\n  </build>\n</project>\n";
+
+#[test]
+fn maven_tests_of_nested_aggregators_external_parents_and_quoted_brackets_run_as_maven_builds_them()
+{
+    let repo = scanned_repo(&[
+        (
+            "pom.xml",
+            &MAVEN_REACTOR.replace(
+                "<module>lib</module>",
+                "<module>lib</module>\n    <module>libs</module>",
+            ),
+        ),
+        ("lib/pom.xml", MAVEN_MODULE),
+        ("lib/src/main/java/x/Foo.java", JAVA_LIB),
+        (
+            "lib/src/test/java/y/FooTest.java",
+            &java_test("FooTest").replace("package x;", "package y;\n\nimport x.Foo;"),
+        ),
+        (
+            "libs/pom.xml",
+            "<project xmlns=\"http://maven.apache.org/POM/4.0.0\">\n  <modelVersion>4.0.0</modelVersion>\n  <parent>\n    <groupId>x</groupId>\n    <artifactId>parent</artifactId>\n    <version>1.0-SNAPSHOT</version>\n  </parent>\n  <artifactId>libs</artifactId>\n  <packaging>pom</packaging>\n  <modules>\n    <module>json</module>\n  </modules>\n</project>\n",
+        ),
+        ("libs/src/test/java/x/LibsTest.java", &java_test("LibsTest")),
+        ("libs/json/pom.xml", MAVEN_MODULE),
+        (
+            "libs/json/src/test/java/x/FooTest.java",
+            &java_test("FooTest"),
+        ),
+        ("tools/pom.xml", SPRING_CHILD),
+        (
+            "tools/src/test/java/x/ToolTest.java",
+            &java_test("ToolTest"),
+        ),
+        ("solo/pom.xml", QUOTED_BRACKET_POM),
+        ("solo/src/test/java/x/SoloTest.java", &java_test("SoloTest")),
+    ]);
+
+    assert_commands(
+        &report(&repo, "target", "lib/src/main/java/x/Foo.java"),
+        &[
+            (
+                "checksTarget",
+                &format!("mvn package -pl lib -am -Dtest=y.FooTest#checksTarget {MAVEN_FLAGS}"),
+            ),
+            (
+                "checksTarget",
+                &format!(
+                    "mvn package -pl libs/json -am -Dtest=x.FooTest#checksTarget {MAVEN_FLAGS}"
+                ),
+            ),
+            ("checksTarget", "-"),
+            (
+                "checksTarget",
+                "cd solo && mvn test -Dtest=x.SoloTest#checksTarget",
+            ),
+            (
+                "checksTarget",
+                "cd tools && mvn test -Dtest=x.ToolTest#checksTarget",
+            ),
+        ],
+    );
+}
+
+#[test]
+fn a_scala_test_of_an_sbt_build_nested_in_a_subproject_folder_runs_in_that_build() {
+    let repo = scanned_repo(&[
+        (
+            "build.sbt",
+            "lazy val root = (project in file(\".\")).aggregate(core)\n\nlazy val core = project\n  .settings(libraryDependencies += \"org.scalatest\" %% \"scalatest\" % \"3.2.18\" % Test)\n",
+        ),
+        ("project/build.properties", "sbt.version=1.10.7\n"),
+        ("core/src/main/scala/demo/Lib.scala", SCALA_LIB),
+        ("core/src/test/scala/demo/LibSuite.scala", SCALA_TEST),
+        (
+            "core/examples/demo/build.sbt",
+            "libraryDependencies += \"org.scalatest\" %% \"scalatest\" % \"3.2.18\" % Test\n",
+        ),
+        (
+            "core/examples/demo/project/build.properties",
+            "sbt.version=1.10.7\n",
+        ),
+        (
+            "core/examples/demo/src/main/scala/ex/Ex.scala",
+            "package ex\n\nobject Ex {\n  def exampleTarget(): Int = 1\n}\n",
+        ),
+        (
+            "core/examples/demo/src/test/scala/ex/ExSuite.scala",
+            "package ex\n\nimport org.scalatest.funsuite.AnyFunSuite\n\nclass ExSuite extends AnyFunSuite {\n  test(\"example works\") { Ex.exampleTarget() }\n}\n",
+        ),
+    ]);
+
+    assert_commands(
+        &report(
+            &repo,
+            "exampleTarget",
+            "core/examples/demo/src/main/scala/ex/Ex.scala",
+        ),
+        &[(
+            "example works",
+            "cd core/examples/demo && sbt 'testOnly *ExSuite -- -z \"example works\"'",
+        )],
+    );
+    assert_commands(
+        &report(&repo, "target", "core/src/main/scala/demo/Lib.scala"),
+        &[
+            ("addsTwo", "sbt 'core/testOnly *LibJUnitTest'"),
+            (
+                "adds two",
+                "sbt 'core/testOnly *LibSuite -- -z \"adds two\"'",
+            ),
+        ],
+    );
+}
+
+#[test]
+fn scala_tests_of_an_sbt_subproject_run_from_the_build_root_by_project_id() {
+    let repo = scanned_repo(&[
+        (
+            "build.sbt",
+            "lazy val root = (project in file(\".\")).aggregate(core)\n\nlazy val core = project\n  .settings(libraryDependencies += \"org.scalatest\" %% \"scalatest\" % \"3.2.18\" % Test)\n",
+        ),
+        ("core/build.sbt", "name := \"core\"\n"),
+        ("core/src/main/scala/demo/Lib.scala", SCALA_LIB),
+        ("core/src/test/scala/demo/LibSuite.scala", SCALA_TEST),
+    ]);
+
+    assert_commands(
+        &report(&repo, "target", "core/src/main/scala/demo/Lib.scala"),
+        &[
+            ("addsTwo", "sbt 'core/testOnly *LibJUnitTest'"),
+            (
+                "adds two",
+                "sbt 'core/testOnly *LibSuite -- -z \"adds two\"'",
+            ),
+        ],
+    );
+}
+
 #[test]
 fn scala_junit_methods_run_through_maven_like_java_but_a_scalatest_label_does_not() {
     let repo = scanned_repo(&[
@@ -446,7 +688,7 @@ fn scala_junit_methods_run_through_maven_like_java_but_a_scalatest_label_does_no
     assert_commands(
         &target,
         &[
-            ("addsTwo", "mvn test -Dtest=LibJUnitTest#addsTwo"),
+            ("addsTwo", "mvn test -Dtest=demo.LibJUnitTest#addsTwo"),
             ("adds two", "-"),
         ],
     );
