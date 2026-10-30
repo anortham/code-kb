@@ -1556,7 +1556,7 @@ fn blast_radius_names_missing_runner_evidence_when_no_broader_command_is_known()
         "{text}"
     );
     assert!(
-        text.contains("No supported runner configuration was found"),
+        text.contains("No supported runner configuration covers the reported paths"),
         "{text}"
     );
 }
@@ -1654,7 +1654,12 @@ fn broader_scope_does_not_claim_one_package_covers_another() {
     assert!(text.contains("routeA"), "{text}");
     assert!(text.contains("routeB"), "{text}");
     assert!(!text.contains("Broader test command:"), "{text}");
-    assert!(text.contains("run the full suite manually"), "{text}");
+    assert!(
+        text.contains(
+            "  - `cd packages/a && npm test` (1 path)\n  - `cd packages/b && npm test` (1 path)\n"
+        ),
+        "{text}"
+    );
 }
 
 #[test]

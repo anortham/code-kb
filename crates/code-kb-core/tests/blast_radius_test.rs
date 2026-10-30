@@ -2194,3 +2194,96 @@ fn a_c_test_that_a_framework_registers_outside_a_test_path_reaches_the_function_
     related.sort_unstable();
     assert_eq!(related, expected);
 }
+
+const CLI_WITH_MAIN_MODULE: &[(&str, &str)] = &[
+    (
+        "pyproject.toml",
+        "[project]\nname = \"pkg\"\n\n[tool.pytest.ini_options]\ntestpaths = [\"tests\"]\n",
+    ),
+    ("src/pkg/__init__.py", ""),
+    (
+        "src/pkg/cli.py",
+        "def main(as_module=False):\n    return load()\n\n\ndef load():\n    return 1\n\n\ndef run():\n    return 2\n\n\ndef show():\n    return 3\n\n\ndef hook():\n    return 4\n",
+    ),
+    (
+        "src/pkg/__main__.py",
+        "from .cli import main\n\nmain(as_module=True)\n",
+    ),
+    (
+        "tests/test_cli.py",
+        "from pkg.cli import load, run, show\n\n\ndef test_load():\n    assert load() == 1\n\n\ndef test_run():\n    assert run() == 2\n\n\ndef test_show():\n    assert show() == 3\n",
+    ),
+    (
+        "examples/demo/pyproject.toml",
+        "[project]\nname = \"demo\"\n\n[tool.pytest.ini_options]\ntestpaths = [\"tests\"]\n",
+    ),
+    (
+        "examples/demo/demo/__init__.py",
+        "from pkg.cli import main\n\n\ndef start():\n    return main()\n",
+    ),
+    (
+        "examples/bare/pyproject.toml",
+        "[project]\nname = \"bare\"\n",
+    ),
+    (
+        "examples/bare/bare/__init__.py",
+        "from pkg.cli import main\n\n\ndef go():\n    return main()\n",
+    ),
+];
+
+#[test]
+fn a_page_size_never_changes_the_rows_a_file_target_finds() {
+    let (_temp, workspace, conn) = scanned(CLI_WITH_MAIN_MODULE);
+
+    let all = blast_radius_op(&workspace, &conn, None, Some("src/pkg/cli.py"), 2, 200).unwrap();
+    let page = blast_radius_op(&workspace, &conn, None, Some("src/pkg/cli.py"), 2, 1).unwrap();
+
+    let text = format_blast_radius(&all);
+    assert!(
+        all.impacted_symbols
+            .iter()
+            .any(|row| row.path == "src/pkg/__main__.py"),
+        "{text}"
+    );
+    assert_eq!(
+        page.impacted_symbols_found,
+        all.impacted_symbols.len(),
+        "{text}"
+    );
+    assert_eq!(page.likely_tests_found, all.likely_tests.len(), "{text}");
+    assert_eq!(page.impacted_symbols.len(), 1);
+    assert!(page.impacted_symbols_truncated && page.likely_tests_truncated);
+}
+
+#[test]
+fn a_broader_scope_lists_the_command_of_each_runner_and_the_paths_none_covers() {
+    let (_temp, workspace, conn) = scanned(CLI_WITH_MAIN_MODULE);
+
+    let result = blast_radius_op(&workspace, &conn, None, Some("src/pkg/cli.py"), 2, 200).unwrap();
+    let text = code_kb_core::formatters::format_blast_radius_report(
+        &workspace.root,
+        &result,
+        0,
+        200,
+        false,
+    );
+
+    assert!(
+        result.open_ends.iter().any(|end| end.name == "hook"),
+        "{text}"
+    );
+    let scope = &text[text.find("### Broader Test Scope").expect(&text)..];
+    assert!(
+        scope.contains("Broader test commands, each for the reported paths its runner covers:"),
+        "{scope}"
+    );
+    assert!(
+        scope.contains("  - `cd examples/demo && pytest` (1 path)\n  - `pytest` (3 paths)\n"),
+        "{scope}"
+    );
+    assert!(
+        scope.contains("No supported runner configuration covers 1 reported path: `examples/bare/bare/__init__.py`"),
+        "{scope}"
+    );
+    assert!(!scope.contains("for every reported path"), "{scope}");
+}

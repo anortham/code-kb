@@ -3071,24 +3071,56 @@ pub fn format_blast_radius_report(
     paths.sort_unstable();
     paths.dedup();
     let mut finder = crate::test_commands::CommandFinder::new(root);
-    let command = paths
-        .first()
-        .and_then(|path| finder.broader_test_command(Some(path)))
-        .filter(|command| {
-            paths
-                .iter()
-                .skip(1)
-                .all(|path| finder.broader_test_command(Some(path)).as_ref() == Some(command))
-        });
-    out.push_str("\n### Broader Test Scope\n");
-    if let Some(command) = command {
-        out.push_str(&format!("Broader test command: `{command}`\n"));
-        if cfg!(windows) {
-            out.push_str("Command syntax uses POSIX shell quoting; translate it before running in a Windows shell.\n");
+    let mut commands: BTreeMap<String, usize> = BTreeMap::new();
+    let mut uncovered: Vec<&str> = Vec::new();
+    for path in &paths {
+        match finder.broader_test_command(Some(path)) {
+            Some(command) => *commands.entry(command).or_default() += 1,
+            None => uncovered.push(path),
         }
-    } else {
+    }
+    out.push_str("\n### Broader Test Scope\n");
+    if commands.is_empty() {
         out.push_str(
-            "Broader scope: full project test suite.\nNo supported runner configuration was found for every reported path; run the full suite manually.\n",
+            "Broader scope: full project test suite.\nNo supported runner configuration covers the reported paths; run the full suite manually.\n",
+        );
+        return out;
+    }
+    if commands.len() == 1 && uncovered.is_empty() {
+        let command = commands.keys().next().expect("one command");
+        out.push_str(&format!("Broader test command: `{command}`\n"));
+    } else {
+        out.push_str("Broader test commands, each for the reported paths its runner covers:\n");
+        for (command, count) in &commands {
+            out.push_str(&format!(
+                "  - `{command}` ({count} {})\n",
+                plural(*count, "path")
+            ));
+        }
+    }
+    if !uncovered.is_empty() {
+        let shown: Vec<String> = uncovered
+            .iter()
+            .take(3)
+            .map(|path| format!("`{path}`"))
+            .collect();
+        let more = uncovered.len().saturating_sub(shown.len());
+        out.push_str(&format!(
+            "No supported runner configuration covers {} reported {}: {}{}; check {} by hand.\n",
+            uncovered.len(),
+            plural(uncovered.len(), "path"),
+            shown.join(", "),
+            if more > 0 {
+                format!(" and {more} more")
+            } else {
+                String::new()
+            },
+            if uncovered.len() == 1 { "it" } else { "them" },
+        ));
+    }
+    if cfg!(windows) {
+        out.push_str(
+            "Command syntax uses POSIX shell quoting; translate it before running in a Windows shell.\n",
         );
     }
     out

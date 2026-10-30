@@ -752,8 +752,46 @@ pub fn blast_radius_selected_op(
 }
 
 /// Analyze a selected seed, optionally including import, module, and namespace rows.
+///
+/// The walk and the callers reports it joins always run to the discovery ceiling, and `limit`
+/// cuts the lists only at the end, so a page size never changes which rows are found.
 #[allow(clippy::too_many_arguments)]
 pub fn blast_radius_selected_op_with_options(
+    workspace: &Workspace,
+    db_path: Option<&Path>,
+    conn: &Connection,
+    selector: Option<SymbolSelector>,
+    file: Option<&str>,
+    max_depth: usize,
+    limit: usize,
+    include_low_signal: bool,
+) -> Result<BlastRadiusResult, OpError> {
+    let mut res = discover_blast_radius(
+        workspace,
+        db_path,
+        conn,
+        selector,
+        file,
+        max_depth,
+        queries::MAX_RESULT_LIMIT,
+        include_low_signal,
+    )?;
+    cut_to_limit(&mut res, limit);
+    Ok(res)
+}
+
+fn cut_to_limit(res: &mut BlastRadiusResult, limit: usize) {
+    res.limit_at_maximum = limit >= queries::MAX_RESULT_LIMIT;
+    res.likely_tests_found = res.likely_tests_found.max(res.likely_tests.len());
+    res.impacted_symbols_found = res.impacted_symbols_found.max(res.impacted_symbols.len());
+    res.likely_tests_truncated |= res.likely_tests.len() > limit;
+    res.impacted_symbols_truncated |= res.impacted_symbols.len() > limit;
+    res.likely_tests.truncate(limit);
+    res.impacted_symbols.truncate(limit);
+}
+
+#[allow(clippy::too_many_arguments)]
+fn discover_blast_radius(
     workspace: &Workspace,
     db_path: Option<&Path>,
     conn: &Connection,
