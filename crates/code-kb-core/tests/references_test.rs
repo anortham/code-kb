@@ -2509,6 +2509,20 @@ fn an_attribute_write_stays_when_only_an_unrelated_class_of_the_base_name_define
 }
 
 #[test]
+fn a_class_that_extends_a_library_class_of_its_own_name_keeps_its_attributes() {
+    let (repo, db_path) = scanned_repo(&[(
+        "src/testing.py",
+        "import werkzeug.test\n\n\nclass EnvironBuilder(werkzeug.test.EnvironBuilder):\n    def __init__(self, app):\n        self.app = app\n",
+    )]);
+    let conn = open_read_only(&db_path).unwrap();
+    let workspace = Workspace::new(repo.path().to_path_buf());
+
+    let skeleton = file_skeleton_op(&workspace, &db_path, &conn, "src/testing.py").unwrap();
+
+    assert!(skeleton.contains("self.app = app"), "{skeleton}");
+}
+
+#[test]
 fn lookup_fills_its_limit_after_leaving_out_inherited_writes() {
     let (_repo, db_path) = scanned_repo(&[
         (

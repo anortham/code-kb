@@ -2939,7 +2939,7 @@ fn edit_site_row(site: &EditSite) -> String {
 /// first three on the first page, else the rows of the page window.
 fn open_ends_text(open_ends: &[OpenEnd], page: Option<(usize, usize)>) -> String {
     const FIRST_PAGE: usize = 3;
-    const INTRO: &str = "No indexed code calls these symbols, so the walk stopped at them. The runtime, a framework, a library, or a call that the index cannot tie calls them. The list above does not show the tests that reach the target through them:\n";
+    const INTRO: &str = "No indexed code calls these symbols, so the walk stopped at them. The runtime, a framework, a library, or a call that the index cannot tie may call them, or nothing does. The list above does not show the tests that reach the target through them:\n";
     if open_ends.is_empty() {
         return String::new();
     }

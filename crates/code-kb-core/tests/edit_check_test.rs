@@ -1097,6 +1097,36 @@ fn the_tests_that_call_a_changed_function_are_named_with_their_commands() {
     );
 }
 
+const INHERITED_BASE: &str = "class App:\n    def __init__(self):\n        self._started = False\n\n    @property\n    def debug(self):\n        return False\n";
+
+const INHERITED_SUBCLASS: &str = "from base import App\n\n\nclass Flask(App):\n    def __init__(self):\n        super().__init__()\n        self.cli = object()\n        self.debug = True\n        self._started = False\n";
+
+fn inherited_writes_repo() -> Repo {
+    committed_repo(&[("base.py", INHERITED_BASE), ("app.py", INHERITED_SUBCLASS)])
+}
+
+#[test]
+fn a_blank_line_in_a_subclass_that_writes_inherited_attributes_changes_no_shape() {
+    let repo = inherited_writes_repo();
+    write(
+        &repo.root,
+        "app.py",
+        &INHERITED_SUBCLASS.replace("class Flask", "\nclass Flask"),
+    );
+    assert_has(&text_of(&repo), "no symbol changed shape");
+}
+
+#[test]
+fn a_removed_field_of_a_subclass_is_the_only_field_it_loses() {
+    let repo = inherited_writes_repo();
+    write(
+        &repo.root,
+        "app.py",
+        &INHERITED_SUBCLASS.replace("        self.cli = object()\n", ""),
+    );
+    assert_has(&text_of(&repo), "fields +0, -1 (cli)");
+}
+
 const CONFIG_APP: &str = "def debug_flag():\n    return True\n\n\ndef make_config():\n    return {\"debug\": debug_flag()}\n\n\nclass App:\n    def __init__(self):\n        self.config = make_config()\n";
 
 fn config_app_repo() -> Repo {

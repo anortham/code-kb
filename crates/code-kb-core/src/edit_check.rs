@@ -1500,6 +1500,17 @@ impl Detector<'_> {
                 .into_iter()
                 .chain(after_inherited_writes)
                 .collect();
+            let inherited_names = crate::queries::inherited_write_names(
+                self.conn,
+                &is.symbol.symbol_id,
+                before
+                    .iter()
+                    .filter(|row| {
+                        row.symbol.parent_symbol_id.as_deref() == Some(&was.symbol.symbol_id)
+                            && is_attribute_write(row)
+                    })
+                    .map(|row| row.symbol.name.as_str()),
+            )?;
             let prior_class_members: HashSet<String> = before
                 .iter()
                 .filter(|row| {
@@ -1526,7 +1537,8 @@ impl Detector<'_> {
                     && !constructor_parameters.contains(&row.symbol.symbol_id)
                     && !dynamic_replacement
                     && (!is_attribute_write(row)
-                        || !inherited_writes.contains(&row.symbol.symbol_id))
+                        || !inherited_writes.contains(&row.symbol.symbol_id)
+                            && !inherited_names.contains(&row.symbol.name))
             };
             let (added, removed) = member_changes(before, &was.symbol, after, &is.symbol, is_field);
             if added.is_empty() && removed.is_empty() {

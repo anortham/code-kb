@@ -611,6 +611,7 @@ pub(crate) fn inherited_attribute_write(alias: &str) -> String {
                 JOIN base ON pe.from_symbol_id = base.symbol_id
                 JOIN symbols c ON c.name = pe.target_terminal_name
                 WHERE +pe.kind = 'extends' AND base.depth < 8
+                  AND c.symbol_id != {alias}.parent_symbol_id
                   AND c.kind IN ('class', 'interface', 'struct', 'trait', 'protocol')
                   AND NOT EXISTS (
                       SELECT 1 FROM symbols rival
@@ -687,6 +688,30 @@ pub fn inherited_writes_among<'a>(
     ))?;
     let found = stmt
         .query_map(params![ids], |row| row.get(0))?
+        .collect::<Result<_, _>>()?;
+    Ok(found)
+}
+
+/// The names among `names` that [`inherited_attribute_write`] would leave out as `self.` writes
+/// in the class `class_id`. `check_edit` asks the current index about the rows of its base scan,
+/// which holds only the changed files and so cannot see a base class in another file.
+pub(crate) fn inherited_write_names<'a>(
+    conn: &Connection,
+    class_id: &str,
+    names: impl Iterator<Item = &'a str>,
+) -> Result<HashSet<String>, QueryError> {
+    if inherited_write_exclusion(conn).is_empty() {
+        return Ok(HashSet::new());
+    }
+    let names = serde_json::to_string(&names.collect::<Vec<_>>()).unwrap_or_default();
+    let mut stmt = conn.prepare(&format!(
+        "WITH s(parent_symbol_id, name, kind, signature) AS (
+             SELECT ?1, value, 'property', 'self.' || value FROM json_each(?2))
+         SELECT s.name FROM s WHERE {}",
+        inherited_attribute_write("s")
+    ))?;
+    let found = stmt
+        .query_map(params![class_id, names], |row| row.get(0))?
         .collect::<Result<_, _>>()?;
     Ok(found)
 }
@@ -8864,7 +8889,8 @@ impl CallerWalk {
     }
 
     /// The reached symbols that no caller step of the walk leaves, other than through a call to
-    /// themselves: the runtime, a framework, a library, or a call the index cannot tie calls them.
+    /// themselves: the runtime, a framework, a library, or a call the index cannot tie may call
+    /// them, or nothing does.
     fn open_ends(
         &mut self,
         conn: &Connection,
