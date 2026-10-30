@@ -22,6 +22,7 @@ use crate::queries::{
 use crate::text_scan::scan_word;
 
 pub(crate) mod arity;
+pub(crate) mod include_reach;
 mod js_bindings;
 mod js_modules;
 mod library_types;
@@ -1817,6 +1818,7 @@ struct Accounting<'a> {
     js: js_modules::JsCaches,
     receivers: receiver_types::ReceiverCaches,
     loads: loaded_files::LoadCaches,
+    includes: include_reach::IncludeCaches,
 }
 
 impl<'a> Accounting<'a> {
@@ -1845,6 +1847,7 @@ impl<'a> Accounting<'a> {
             js: js_modules::JsCaches::default(),
             receivers: receiver_types::ReceiverCaches::default(),
             loads: loaded_files::LoadCaches::default(),
+            includes: include_reach::IncludeCaches::default(),
         }
     }
 
@@ -2537,6 +2540,7 @@ impl<'a> Accounting<'a> {
                         || row.is_bare_use() && other.is_property_method()
                         || row.language == "python"
                             && other.is_python_class_annotation_without_value()
+                        || self.include_excludes(row, other)?
                     {
                         kept.push(index);
                         continue;
@@ -3325,6 +3329,9 @@ impl<'a> Accounting<'a> {
                 false,
             )));
         }
+        if let Some(verdict) = self.include_reach_verdict(row, spec)? {
+            return Ok(Some(verdict));
+        }
         if let Some(verdict) = self.csharp_qualified_constructor(row, target)? {
             return Ok(Some(verdict));
         }
@@ -3544,6 +3551,7 @@ impl<'a> Accounting<'a> {
             && !(row.language == "r"
                 && inherited_writes_among(self.conn, std::iter::once(to))?.contains(to))
             && let Some(other) = self.definition_by_id(to)?
+            && !self.include_excludes(row, &other)?
         {
             return Ok(Some(Verdict::new(
                 SiteLabel::Excluded,

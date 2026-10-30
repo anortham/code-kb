@@ -23,6 +23,8 @@ use crate::models::Symbol;
 const MAX_LOAD_HOPS: usize = 4;
 const MAX_LOADED_FILES: usize = 64;
 const MAX_BASE_HOPS: usize = 8;
+/// An include that more indexed files can resolve than this names an unknown file.
+const MAX_INCLUDE_CANDIDATES: usize = 8;
 /// At this many rows that could load a file, the file counts as loaded by another one, unchecked.
 const MAX_LOADER_ROWS: usize = 200;
 
@@ -50,7 +52,7 @@ const DEFINES_TOP_LEVEL_SQL: &str = "SELECT 1 FROM symbols
 
 const SUFFIX_FILES_SQL: &str = "SELECT replace(path, '\\', '/') FROM files
      WHERE replace(path, '\\', '/') = ?1 OR replace(path, '\\', '/') GLOB '*/' || ?1
-     ORDER BY path LIMIT 8";
+     ORDER BY path LIMIT 9";
 
 const PUBSPECS_SQL: &str = "SELECT replace(path, '\\', '/') FROM files
      WHERE path = 'pubspec.yaml' OR replace(path, '\\', '/') LIKE '%/pubspec.yaml'
@@ -122,6 +124,15 @@ impl LoadRow {
         })
     }
 
+    /// Whether the row is a C or C++ `#include`.
+    pub(super) fn is_include(&self) -> bool {
+        matches!(self.language.as_str(), "c" | "cpp") && self.form == "#include"
+    }
+
+    pub(super) fn source(&self) -> &str {
+        &self.source
+    }
+
     /// Whether the row brings `name` in: a Dart `show` list that leaves it out, or a `hide`
     /// list that names it, keeps it out.
     fn admits(&self, name: &str) -> bool {
@@ -160,6 +171,7 @@ pub(super) struct LoadCaches {
     defines: HashMap<(String, String), bool>,
     pubspecs: Option<Rc<Vec<(String, String)>>>,
     r_packages: HashMap<String, Option<String>>,
+    suffix_files: HashMap<String, Vec<String>>,
 }
 
 /// Whether an import row binds its name or alias as a receiver in code (`const Helper =
@@ -237,7 +249,7 @@ fn parent_dir(path: &str) -> &str {
 
 /// `rest` read from the folder `dir`, with `.` and `name/..` segments removed; `None` when it
 /// climbs above the project root.
-fn join(dir: &str, rest: &str) -> Option<String> {
+pub(super) fn join(dir: &str, rest: &str) -> Option<String> {
     let mut parts: Vec<&str> = dir.split('/').filter(|part| !part.is_empty()).collect();
     for part in rest.split('/') {
         match part {
@@ -282,7 +294,7 @@ fn display_list(paths: &[String]) -> String {
 }
 
 impl<'a> Accounting<'a> {
-    fn load_directives(&mut self, path: &str) -> Result<Rc<Vec<LoadRow>>, QueryError> {
+    pub(super) fn load_directives(&mut self, path: &str) -> Result<Rc<Vec<LoadRow>>, QueryError> {
         if let Some(rows) = self.loads.rows.get(path) {
             return Ok(rows.clone());
         }
@@ -291,7 +303,7 @@ impl<'a> Accounting<'a> {
         Ok(rows)
     }
 
-    fn indexed_file(&self, path: &str) -> Result<bool, QueryError> {
+    pub(super) fn indexed_file(&self, path: &str) -> Result<bool, QueryError> {
         let windows = path.replace('/', "\\");
         self.with_statement(FILE_EXISTS_SQL, |stmt| stmt.exists(params![path, windows]))
     }
@@ -320,11 +332,18 @@ impl<'a> Accounting<'a> {
 
     /// The indexed files whose path ends with `suffix` at a folder boundary, as an include
     /// folder or a load path would find them.
-    fn files_by_suffix(&self, suffix: &str) -> Result<Vec<String>, QueryError> {
-        self.with_statement(SUFFIX_FILES_SQL, |stmt| {
+    pub(super) fn files_by_suffix(&mut self, suffix: &str) -> Result<Vec<String>, QueryError> {
+        if let Some(found) = self.loads.suffix_files.get(suffix) {
+            return Ok(found.clone());
+        }
+        let found = self.with_statement(SUFFIX_FILES_SQL, |stmt| {
             stmt.query_map(params![suffix], |r| r.get::<_, String>(0))?
                 .collect::<Result<Vec<_>, _>>()
-        })
+        })?;
+        self.loads
+            .suffix_files
+            .insert(suffix.to_string(), found.clone());
+        Ok(found)
     }
 
     /// Where the import `row` of the file `importer` leads.
@@ -366,6 +385,8 @@ impl<'a> Accounting<'a> {
                 let found = self.files_by_suffix(source.trim_start_matches("./"))?;
                 Ok(if found.is_empty() {
                     Reach::Outside
+                } else if found.len() > MAX_INCLUDE_CANDIDATES {
+                    Reach::Unknown
                 } else {
                     Reach::Files(found)
                 })
@@ -906,18 +927,20 @@ impl<'a> Accounting<'a> {
 
     /// Whether the other definition `other` cannot reach `row`: the files the caller's file
     /// loads decide a bare call and do not hold it, a C or C++ `static` function lives in a file
-    /// that the caller's file does not include, or a Dart prefix or GDScript constant names other
-    /// files.
+    /// that the caller's file does not include, a C or C++ definition is outside the files the
+    /// site can see, or a Dart prefix or GDScript constant names other files.
     pub(super) fn load_excludes(
         &mut self,
         row: &NameRow,
         other: &Definition,
     ) -> Result<bool, QueryError> {
-        if other.language != row.language || other.path == row.path {
+        let c_family = matches!(row.language.as_str(), "c" | "cpp")
+            && matches!(other.language.as_str(), "c" | "cpp");
+        if (other.language != row.language && !c_family) || other.path == row.path {
             return Ok(false);
         }
-        if matches!(row.language.as_str(), "c" | "cpp") {
-            return self.static_out_of_reach(row, other);
+        if c_family {
+            return Ok(self.static_out_of_reach(row, other)? || self.include_excludes(row, other)?);
         }
         if let Some(files) = self.receiver_files(row, &other.name)? {
             return Ok(files.excludes(other));

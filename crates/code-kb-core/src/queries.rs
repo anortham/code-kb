@@ -8700,6 +8700,17 @@ fn blast_radius_walk_with_options(
     })
 }
 
+/// The project root that the index records, or an empty path when it records none.
+fn index_root(conn: &Connection) -> std::path::PathBuf {
+    conn.query_row(
+        "SELECT value FROM artifact_metadata WHERE key = 'root_path'",
+        [],
+        |row| row.get::<_, String>(0),
+    )
+    .map(std::path::PathBuf::from)
+    .unwrap_or_default()
+}
+
 /// The walk depth for a `max_depth`: one level past it tells a walk that a deeper call would
 /// extend from one that ran out.
 fn walk_bound(max_depth: usize) -> usize {
@@ -8805,6 +8816,8 @@ impl CallerWalk {
         let mut full_stmt = None;
         let mut legacy_stmt = None;
         let mut overloads = crate::reference_report::overloads::OverloadSteps::new(conn);
+        let root = index_root(conn);
+        let mut includes = crate::reference_report::include_reach::IncludeSteps::new(conn, &root);
         while self.depth < bound && !self.frontier.is_empty() {
             let frontier = std::mem::take(&mut self.frontier);
             let needs_full = pending_receiver_chain_requires_full_for_frontier(conn, &frontier);
@@ -8831,7 +8844,8 @@ impl CallerWalk {
                 let Some(caller) = step.caller else {
                     continue;
                 };
-                if !overloads.keeps(&caller, &step.origin) {
+                if !overloads.keeps(&caller, &step.origin) || !includes.keeps(&caller, &step.origin)
+                {
                     continue;
                 }
                 if caller != step.origin {
@@ -8872,9 +8886,14 @@ impl CallerWalk {
             };
             let mut stmt = conn.prepare(sql)?;
             let mut overloads = crate::reference_report::overloads::OverloadSteps::new(conn);
+            let root = index_root(conn);
+            let mut includes =
+                crate::reference_report::include_reach::IncludeSteps::new(conn, &root);
             for step in level_callers(&mut stmt, MAX_BLAST_DEPTH + 1, &unexpanded)? {
                 if step.caller.is_some_and(|caller| {
-                    caller != step.origin && overloads.keeps(&caller, &step.origin)
+                    caller != step.origin
+                        && overloads.keeps(&caller, &step.origin)
+                        && includes.keeps(&caller, &step.origin)
                 }) {
                     self.called.insert(step.origin);
                 }
@@ -9564,6 +9583,39 @@ fn walk_caller_branches(
                AND {pending_language_filter}
                {target_signal_filter}
                {ns_condition}"
+        ));
+    }
+
+    // julie records no namespace that a macro opens (`NLOHMANN_JSON_NAMESPACE_BEGIN`) and keeps
+    // the functions and types inside it top-level, so a C or C++ call qualified only by project
+    // namespaces (`detail::input_adapter()`) can reach a top-level one. The include check of the
+    // walk then keeps only a file that the caller's file can see.
+    if has_pending
+        && has_pending_namespace_column(conn)
+        && has_column(conn, "pending_relationships", "target_receiver")
+    {
+        let qualifiers = "json_insert(
+            CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END,
+            '$[#]', p.target_receiver)";
+        recursive_branches.push(format!(
+            "SELECT p.from_symbol_id, iw.depth + 1, iw.via, iw.symbol_id
+             FROM pending_relationships p
+             JOIN symbols s_target ON p.target_terminal_name = s_target.name
+             JOIN impact_walk iw ON s_target.symbol_id = iw.symbol_id
+             JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+             WHERE iw.depth < {depth_bound}
+               AND s_target.parent_symbol_id IS NULL
+               AND s_target.language IN ('c', 'cpp')
+               AND s_from.language IN ('c', 'cpp')
+               AND s_target.kind IN ('function', 'class', 'struct', 'union', 'enum', 'type')
+               AND p.target_receiver IS NOT NULL AND p.target_receiver != ''
+               AND NOT EXISTS (
+                   SELECT 1 FROM json_each({qualifiers}) q
+                   WHERE q.value = 'std' OR NOT EXISTS (
+                       SELECT 1 FROM symbols n
+                       WHERE n.name = q.value AND n.kind = 'namespace'
+                         AND n.language IN ('c', 'cpp')))
+               {target_signal_filter}"
         ));
     }
 

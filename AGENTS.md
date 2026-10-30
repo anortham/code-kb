@@ -424,7 +424,26 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   imports without a prefix bring in; a conditional import or a Dart method of that name decides
   nothing. In C and C++ an included header's declaration is proven, the definition in
   the source file with that header's stem is likely, and a `static` definition in a file that is
-  not included is excluded. `docs/language-support.md` (File-path imports) has every rule. A Java
+  not included is excluded. A C or C++ site sees only its own file, the headers it includes
+  (directly or through other headers), and the files that include its file and what they include
+  (`reference_report/include_reach.rs`); a source file that no file includes is a root, and one
+  that a file includes (a template `.cpp`, a unity build) is not. A definition in a header
+  outside those files is never proven, never the definition a site `resolves to`, and no other
+  definition of the site; when every definition of the target is outside them, the site is
+  excluded: ``this file includes `binary_reader` from `include/nlohmann/detail/input/binary_reader.hpp`,
+  not from `tests/abi/include/nlohmann/json_v3_10_5.hpp` `` or ``this file does not include `x.hpp` ``.
+  The rule leaves a site alone when an include does not resolve or matches more than 8 indexed
+  files, a header on the way has no indexed includer, the walk passes 16 steps, 2048 files, or
+  512 includers, or runs out of its time limit, or a file holds an include that julie did not
+  record (`#include CONFIG_H`, `#import`, `#include_next`); and it leaves alone a function or
+  variable in a source file (linking), a definition that a bodiless declaration of the same kind
+  and name in reach can complete, and a type that a file in reach names by its tag (`struct S;`,
+  `class S *p`). The `blast_radius` walk drops a step that the rule rules out, and a C or C++ call
+  qualified only by project namespaces (`detail::input_adapter()`) steps to a top-level function
+  or type, since julie records no namespace that a macro opens, unless every such call of the
+  caller names a namespace that defines the name in a file the caller sees (`util::helper()`).
+  `docs/language-support.md` (File-path imports)
+  has every rule. A Java
   receiver imported from a package that no project folder holds (`Assert.assertEquals()` after
   `import org.junit.Assert;`) is excluded the same way; julie's `source` names only the package,
   so the package is the segments of the line before the first capitalized one.
