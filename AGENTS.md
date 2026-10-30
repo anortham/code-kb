@@ -450,7 +450,7 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   stands for any type that fits its bound: a type parameter of the caller, of a function that
   encloses it, or of a class or interface that encloses it (Java `<T extends Greeter>`, C#
   `ViaT<T>(T x) where T : IGreeter`, TypeScript `<T extends …>` on a function, method, class, or
-  interface, Kotlin and Rust `<T>`, C++ `template<typename T>`), and a Python `TypeVar`. The lists are read from the
+  interface, Kotlin and Rust `<T>`, C++ `template<typename T>`, VB.NET `(Of T)`), and a Python `TypeVar`. The lists are read from the
   signatures, from julie's `typeParameters` of a TypeScript function, and, for a TypeScript class
   or interface, from the first 600 bytes of its source.
   julie names a test call after its label (`test("strictObject", …)`); such a label is not a

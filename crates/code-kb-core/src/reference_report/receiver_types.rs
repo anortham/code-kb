@@ -56,7 +56,8 @@ pub(super) struct ReceiverCaches {
     aliases: RefCell<HashMap<String, bool>>,
 }
 
-struct Enclosing {
+/// A declaration that holds a symbol, read for the type parameters it declares.
+pub(super) struct Enclosing {
     symbol_id: String,
     name: String,
     kind: String,
@@ -122,20 +123,8 @@ impl Accounting<'_> {
             return Ok(true);
         }
         let scopes = self.with_statement(ENCLOSING_DECLARATIONS_SQL, |stmt| {
-            stmt.query_map(params![caller_id], |r| {
-                Ok(Enclosing {
-                    symbol_id: r.get(0)?,
-                    name: r.get(1)?,
-                    kind: r.get(2)?,
-                    language: r.get(3)?,
-                    path: r.get(4)?,
-                    start_byte: r.get::<_, i64>(5)?.max(0) as usize,
-                    end_byte: r.get::<_, i64>(6)?.max(0) as usize,
-                    signature: r.get(7)?,
-                    type_parameters_json: r.get(8)?,
-                })
-            })?
-            .collect::<Result<Vec<_>, _>>()
+            stmt.query_map(params![caller_id], enclosing_row)?
+                .collect::<Result<Vec<_>, _>>()
         })?;
         Ok(scopes.iter().any(|scope| {
             self.declared_type_parameters(scope)
@@ -148,19 +137,7 @@ impl Accounting<'_> {
         if let Some(names) = self.receivers.declared.borrow().get(&scope.symbol_id) {
             return names.clone();
         }
-        let mut names = type_parameters_in(&scope.signature, &scope.name, true);
-        names.extend(metadata_type_parameters(&scope.type_parameters_json));
-        let typescript = matches!(scope.language.as_str(), "typescript" | "tsx");
-        if typescript && matches!(scope.kind.as_str(), "class" | "interface") && names.is_empty() {
-            let length = scope
-                .end_byte
-                .saturating_sub(scope.start_byte)
-                .min(MAX_HEADER);
-            if let Some(header) = read_bytes(self.root, &scope.path, scope.start_byte, length) {
-                names = type_parameters_in(&header, &scope.name, false);
-            }
-        }
-        let names = Rc::new(names);
+        let names = Rc::new(scope.type_parameters(self.root));
         self.receivers
             .declared
             .borrow_mut()
@@ -233,6 +210,52 @@ impl Accounting<'_> {
     }
 }
 
+fn enclosing_row(r: &rusqlite::Row) -> rusqlite::Result<Enclosing> {
+    Ok(Enclosing {
+        symbol_id: r.get(0)?,
+        name: r.get(1)?,
+        kind: r.get(2)?,
+        language: r.get(3)?,
+        path: r.get(4)?,
+        start_byte: r.get::<_, i64>(5)?.max(0) as usize,
+        end_byte: r.get::<_, i64>(6)?.max(0) as usize,
+        signature: r.get(7)?,
+        type_parameters_json: r.get(8)?,
+    })
+}
+
+/// `id` and the declarations that hold it, innermost first.
+pub(super) fn enclosing_declarations(
+    conn: &rusqlite::Connection,
+    id: &str,
+) -> Result<Vec<Enclosing>, QueryError> {
+    Ok(conn
+        .prepare(ENCLOSING_DECLARATIONS_SQL)?
+        .query_map(params![id], enclosing_row)?
+        .collect::<Result<Vec<_>, _>>()?)
+}
+
+impl Enclosing {
+    /// The type parameters this declaration declares: its signature's list, julie's
+    /// `typeParameters` of a TypeScript function, and the list in the source header of a
+    /// TypeScript class or interface.
+    pub(super) fn type_parameters(&self, root: &Path) -> Vec<String> {
+        let mut names = type_parameters_in(&self.signature, &self.name, true);
+        names.extend(metadata_type_parameters(&self.type_parameters_json));
+        let typescript = matches!(self.language.as_str(), "typescript" | "tsx");
+        if typescript && matches!(self.kind.as_str(), "class" | "interface") && names.is_empty() {
+            let length = self
+                .end_byte
+                .saturating_sub(self.start_byte)
+                .min(MAX_HEADER);
+            if let Some(header) = read_bytes(root, &self.path, self.start_byte, length) {
+                names = type_parameters_in(&header, &self.name, false);
+            }
+        }
+        names
+    }
+}
+
 fn read_bytes(root: &Path, path: &str, start: usize, length: usize) -> Option<String> {
     let mut file = File::open(root.join(path)).ok()?;
     file.seek(SeekFrom::Start(start as u64)).ok()?;
@@ -274,10 +297,19 @@ fn type_parameters_in(text: &str, owner: &str, before_name: bool) -> Vec<String>
     let mut at = 0;
     while at < bytes.len() {
         match bytes[at] {
-            b'(' => match matching_close(bytes, at) {
-                Some(close) => at = close,
-                None => break,
-            },
+            b'(' => {
+                let Some(close) = matching_close(bytes, at) else {
+                    break;
+                };
+                if let Some(list) = vbnet_of_list(text, at, close, owner) {
+                    names.extend(
+                        split_items(list)
+                            .iter()
+                            .filter_map(|item| parameter_name(item)),
+                    );
+                }
+                at = close;
+            }
             b'{' | b'=' => break,
             b'<' if owner != "template" && follows_template(&text[..at]) => {
                 let Some(close) = matching_close(bytes, at) else {
@@ -306,6 +338,19 @@ fn type_parameters_in(text: &str, owner: &str, before_name: bool) -> Vec<String>
         at += 1;
     }
     names
+}
+
+/// The items of a VB.NET `(Of T, U As IFoo)` list that opens at `open`, right after `owner`.
+fn vbnet_of_list<'t>(text: &'t str, open: usize, close: usize, owner: &str) -> Option<&'t str> {
+    let named = !owner.is_empty()
+        && text[..open]
+            .strip_suffix(owner)
+            .is_some_and(|rest| !rest.ends_with(is_word_char));
+    let inside = text[open + 1..close].trim_start();
+    let keyword = inside.get(..2)?;
+    let after = &inside[2..];
+    (named && keyword.eq_ignore_ascii_case("of") && after.starts_with(char::is_whitespace))
+        .then_some(after)
 }
 
 /// Whether `before` ends with the C++ keyword `template`, which opens a parameter list.
@@ -417,6 +462,23 @@ mod tests {
             names("template <class T, int N> struct Array", "Array", false),
             ["T", "N"]
         );
+    }
+
+    #[test]
+    fn a_vbnet_of_list_after_the_name_declares_its_names() {
+        assert_eq!(
+            names(
+                "public Sub Put(Of Entity As Class)(value As Entity)",
+                "Put",
+                true
+            ),
+            ["Entity"]
+        );
+        assert_eq!(
+            names("public Class Repo(Of T, U)", "Repo", true),
+            ["T", "U"]
+        );
+        assert!(names("public Sub Run(often As Integer)", "Run", true).is_empty());
     }
 
     #[test]

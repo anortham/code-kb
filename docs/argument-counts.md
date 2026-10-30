@@ -148,9 +148,15 @@ argument list of the call at its line and column and accepts:
 - a literal: a number, a character, a string, `true`, or `false`;
 - a C# `new T(…)` or `new T { … }` whose type has no `?` (not a target-typed
   `new()`);
-- a Swift construction `T(…)` of a project struct or class that has no
-  `init?` or `init!`, in its body or in an extension, when no other symbol has
-  the name (a library initializer can be failable, as `Int("5")` is);
+- a Swift construction `T(…)` of a project struct or class, when no other
+  symbol has the name (a library initializer can be failable, as `Int("5")`
+  is), and no `init?` or `init!` is in its body, in an extension of it, in a
+  superclass it inherits initializers from, or in a protocol it conforms to or
+  an extension of that protocol. Every superclass and protocol that an
+  inheritance clause or an extension names must be a project type, read the
+  same way up to 8 levels, so `Sub(code: 3)` with `class Sub: Base` and
+  `init?(code:)` in `Base`, and `Lp(x: 1)` with `struct Lp: Equatable`, can be
+  optional;
 - a name whose nearest declaration in the caller, its enclosing symbols, or its
   type (a local, a parameter, a field, or a property) writes a type without `?`
   or `!` that is no type parameter of those symbols. C# and Kotlin read the
@@ -216,21 +222,38 @@ names one of these:
 
 - A project type. A qualified name names the one project type whose namespaces
   or package and enclosing types end with it. A simple name names a type nested
-  in a type that encloses the code; else, when no project type of the name is
-  nested in another type or a function (an inherited nested type could take the
-  name), the type the language reaches:
+  in a type that encloses the code. A type nested in another type can take a
+  simple name also where an owner of it is a type that encloses the code or a
+  base type of one (by name, through the `extends` and `implements` rows), where
+  an import of the file or of the build project names an owner
+  (`import p.Graph.*`, `using static App.Graph;`), and anywhere in VB.NET when a
+  `Module` holds it; there the name is unknown. Elsewhere such a type and a type
+  defined in a function do not take the name, which names the type the language
+  reaches:
   - Java, Kotlin, Scala: a type of the file, or the type that an import of the
     name writes (`import a.Node`), else the one type of the file's package,
-    else the one type of a package that a star import names. Scala ranks a
-    wildcard import above the package of another file in some versions and
-    below it in others, so a Scala name that both reach with different types is
-    unknown.
-  - C# and VB.NET (VB.NET ignores case): the one type of the innermost
-    namespace that holds the code and has such a type, else the one type of a
-    namespace that a `using` or `Imports` line of the file, a `global using`,
-    or the build project opens (the `<Using Include>` or `<Import Include>`
-    items of the nearest `.csproj` or `.vbproj`, and the SDK's implicit usings
-    when it sets `ImplicitUsings` and removes none).
+    else the one type of a package that a star import names. A Scala name is
+    looked up in each package that the package clauses and packaging blocks
+    open, innermost first: `package a` then `package b` opens `a.b`, then `a`,
+    and `package a.b` opens only `a.b`. Scala ranks a wildcard import above the
+    package of another file in some versions and below it in others, so a Scala
+    name that both reach with different types is unknown. A Scala wildcard
+    import inside a body (`object S { import lib._ }`) shadows the outer
+    imports only where it stands, so in a file with one a name that no package
+    of the file reaches is unknown.
+  - C# and VB.NET (VB.NET ignores case): a name is looked up level by level.
+    C# goes through each namespace that holds the code, innermost first, with
+    the `using` lines of that namespace block, and then the global namespace
+    with the file's `using` lines, every `global using`, and the build project's
+    usings (the `<Using Include>` items of the nearest `.csproj` and the SDK's
+    implicit usings when it sets `ImplicitUsings` and removes none). VB.NET goes
+    through each namespace that holds the code, then the file's `Imports`
+    lines, then the `<Import Include>` items of the nearest `.vbproj`. At each
+    level a type of its namespace comes first, then the one type of a namespace
+    that the level opens. A level that opens a library namespace can hold the
+    name, so a project type or a known library type of a later level leaves the
+    name unknown: in `namespace App { using Lib1; … }` beside a file-level
+    `using System;`, `Exception` can be `Lib1.Exception`.
 - A library type by its full name: an explicit import of a type that the index
   does not have (`import java.sql.Date`); a Java name of `java.lang`
   (`Process`, `String`); a Java name that a star import of `java.util` or
@@ -245,23 +268,29 @@ names one of these:
   names rest on one assumption: no library that a star import opens defines a
   type with a built-in name.
 - A library type known only by what the code opens: the star imports, or the
-  `using` and `Imports` lines and enclosing namespaces, without the packages
-  and namespaces the project declares. Two such names are one type in Java,
+  namespaces that the one C# or VB.NET level that can hold the name opens,
+  without the packages and namespaces the project declares. When two levels can
+  hold the name, it is unknown. Two such names are one type in Java,
   C#, and VB.NET when one set holds the other (a name that two opened places
   hold does not compile), in Kotlin and Scala when the sets are equal, and in
   C# and VB.NET only inside one build project, whose project-wide usings both
   files see. A library type by its full name is that type when its package or
   namespace is in the set.
 - A qualified name of no project type, known only by its text.
-- Unknown: a `using` or `Imports` alias of the name or of a qualifier, a
-  Kotlin import alias (`import a.Other as Node`), a Scala import with
-  selectors, a static import of the name, a `using` inside a namespace block
-  that opens a namespace with a project type of the name, an MSBuild `<Using>`
-  item beside a project type of the name, and more than 100 types of the name.
+- Unknown: a type parameter of the code or of a declaration that holds it
+  (Java `class Repo<Entity>`, C# `Put<Entity>(…)`, Scala `[Entity]`, VB.NET
+  `(Of Entity)`, C++ `template <typename Entity>`), which hides a type of that
+  name and stands for any type that fits its bound (a qualified name such as
+  `p.Entity` never names a type parameter); a `using` or `Imports`
+  alias of the name or of a qualifier, a Kotlin import alias
+  (`import a.Other as Node`), a Scala import with selectors, a static import of
+  the name, an MSBuild `<Using>` item beside a project type of the name, and
+  more than 100 types of the name.
 
 A project type and a library type by its full name, two different project
 types, and two different full names are different types. C++ and Swift keep
-the text rule: equal text names one type when the index has at most one
+the text rule after the type-parameter rule above: equal text names one type
+when the index has at most one
 project type of the name (in Swift two rows of one name are two types, since
 the index names no module), and a qualified name names the one project type it
 ends with; every other comparison is unknown.
@@ -276,8 +305,9 @@ keeps `run(Object)` beside a project `run(q.Process)`, and `Handle(ex)` with a
 `Newtonsoft.Json.JsonException` keeps `Handle(Exception)` beside
 `Handle(System.Text.Json.JsonException)`, while `Handle(error)` with an
 `Exception` binds only `Handle(Exception)`. Known limits: a library type in a
-package or namespace that the project also declares, and an inherited nested
-type of a library base class, are not seen.
+package or namespace that the project also declares, an inherited nested
+type of a library base class, and a library type that a Scala wildcard import
+opens beside a project type of the file's package, are not seen.
 
 A call written on the line of its caller's definition (`string Parse(string
 json) { return Parse(json, null); }`) gets these checks too. The call

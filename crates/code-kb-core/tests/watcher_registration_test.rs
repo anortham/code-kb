@@ -29,6 +29,7 @@ fn watcher_reconciles_ignore_file_transitions() {
     let root = temp_dir.path().join("project");
     let source = root.join("src");
     fs::create_dir_all(&source).unwrap();
+    fs::create_dir_all(root.join(".git")).unwrap();
     fs::write(
         source.join("lib.rs"),
         "pub fn ignored_after_rule_change() {}\n",
@@ -440,7 +441,7 @@ fn watcher_does_not_register_ignored_descendants() {
 
     let temp_dir = safe_tempdir();
     let root = temp_dir.path().join("project");
-    fs::create_dir_all(&root).unwrap();
+    fs::create_dir_all(root.join(".git")).unwrap();
     fs::write(root.join(".gitignore"), "vendor/\nlate-ignore/\n").unwrap();
     fs::create_dir_all(root.join("src")).unwrap();
     fs::write(root.join("src/lib.rs"), "pub fn allowed() {}\n").unwrap();

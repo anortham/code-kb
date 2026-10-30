@@ -1689,3 +1689,357 @@ fn a_kotlin_basis_names_a_nullable_overload_with_its_marker() {
         "arguments `(Int)` bind only `f(Int)` or `f(Any?)`",
     );
 }
+
+#[test]
+fn a_type_parameter_with_the_name_of_a_project_type_never_names_that_type() {
+    let java = scanned_repo(&[
+        (
+            "src/p/Entity.java",
+            "package p;\n\npublic class Entity {\n}\n",
+        ),
+        (
+            "src/p/Store.java",
+            "package p;\n\npublic class Store {\n    public static void keep(Entity e) {\n    }\n\n    public static void keep(Object o) {\n    }\n}\n",
+        ),
+        (
+            "src/p/Repo.java",
+            "package p;\n\npublic class Repo<Entity> {\n    public void save(Entity item) {\n        Store.keep(item);\n    }\n\n    public <Entity> void put(Entity value) {\n        Store.keep(value);\n    }\n}\n",
+        ),
+        (
+            "src/p/Plain.java",
+            "package p;\n\npublic class Plain {\n    void go(Entity e) {\n        Store.keep(e);\n    }\n}\n",
+        ),
+    ]);
+    let keep_object = report_of(&java, "keep", "src/p/Store.java", 1);
+    for call in ["Store.keep(item)", "Store.keep(value)"] {
+        assert_kept(
+            &keep_object,
+            "src/p/Repo.java",
+            line_of(&java, "src/p/Repo.java", call),
+        );
+    }
+    assert_excluded(
+        &keep_object,
+        "src/p/Plain.java",
+        line_of(&java, "src/p/Plain.java", "Store.keep(e)"),
+        "arguments `(Entity)` bind only `keep(Entity)`",
+    );
+
+    let csharp = scanned_repo(&[
+        (
+            "src/All.cs",
+            "namespace App\n{\n    public class Entity { }\n\n    public static class Store\n    {\n        public static void Keep(Entity e) { }\n        public static void Keep(object o) { }\n    }\n}\n",
+        ),
+        (
+            "src/Repo.cs",
+            "namespace App\n{\n    public class Repo<Entity>\n    {\n        public void Save(Entity item)\n        {\n            Store.Keep(item);\n        }\n\n        public void Put<Entity>(Entity value)\n        {\n            Store.Keep(value);\n        }\n    }\n}\n",
+        ),
+    ]);
+    let keep_object = report_of(&csharp, "Keep", "src/All.cs", 1);
+    for call in ["Store.Keep(item)", "Store.Keep(value)"] {
+        assert_kept(
+            &keep_object,
+            "src/Repo.cs",
+            line_of(&csharp, "src/Repo.cs", call),
+        );
+    }
+
+    let scala = scanned_repo(&[
+        (
+            "src/p/Store.scala",
+            "package p\n\nclass Entity\n\nobject Store {\n  def keep(e: Entity): Unit = {}\n  def keep(o: Any): Unit = {}\n}\n",
+        ),
+        (
+            "src/p/Repo.scala",
+            "package p\n\nclass Repo[Entity] {\n  def save(item: Entity): Unit = {\n    Store.keep(item)\n  }\n\n  def put[Entity](value: Entity): Unit = {\n    Store.keep(value)\n  }\n}\n",
+        ),
+    ]);
+    let keep_any = report_of(&scala, "keep", "src/p/Store.scala", 1);
+    for call in ["Store.keep(item)", "Store.keep(value)"] {
+        assert_kept(
+            &keep_any,
+            "src/p/Repo.scala",
+            line_of(&scala, "src/p/Repo.scala", call),
+        );
+    }
+
+    let vbnet = scanned_repo(&[(
+        "src/All.vb",
+        "Namespace App\n    Public Class Entity\n    End Class\n\n    Public Module Store\n        Public Sub Keep(e As Entity)\n        End Sub\n\n        Public Sub Keep(o As Object)\n        End Sub\n    End Module\n\n    Public Class Repo(Of Entity)\n        Public Sub Save(item As Entity)\n            Keep(item)\n        End Sub\n    End Class\n\n    Public Class Box\n        Public Sub Put(Of entity)(value As Entity)\n            Keep(value)\n        End Sub\n    End Class\nEnd Namespace\n",
+    )]);
+    let path = "src/All.vb";
+    let keep_object = report_of(&vbnet, "Keep", path, 1);
+    for call in ["Keep(item)", "Keep(value)"] {
+        assert_kept(&keep_object, path, line_of(&vbnet, path, call));
+    }
+
+    let cpp = scanned_repo(&[(
+        "src/main.cpp",
+        "struct Entity {};\n\nvoid keep(Entity e) {}\nvoid keep(int n) {}\n\ntemplate <typename Entity>\nvoid save(Entity item) {\n    keep(item);\n}\n\nvoid plain(Entity e) {\n    keep(e);\n}\n\nint main() {\n    save(5);\n    return 0;\n}\n",
+    )]);
+    let path = "src/main.cpp";
+    let keep_int = report_of(&cpp, "keep", path, 1);
+    assert_kept(&keep_int, path, line_of(&cpp, path, "keep(item);"));
+    assert_excluded(
+        &keep_int,
+        path,
+        line_of(&cpp, path, "keep(e);"),
+        "arguments `(Entity)` bind only `keep(Entity)`",
+    );
+}
+
+#[test]
+fn a_csharp_using_inside_a_namespace_block_is_a_lookup_level_of_its_own() {
+    let repo = scanned_repo(&[
+        (
+            "App.csproj",
+            "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net8.0</TargetFramework>\n  </PropertyGroup>\n</Project>\n",
+        ),
+        (
+            "src/S.cs",
+            "using Lib2;\n\nnamespace App\n{\n    using Lib1;\n\n    public static class S\n    {\n        public static void Take(Widget w) { }\n        public static void Take(object o) { }\n    }\n}\n",
+        ),
+        (
+            "src/S2.cs",
+            "using System;\n\nnamespace App\n{\n    using Lib1;\n\n    public static class S2\n    {\n        public static void Fail(Exception e) { }\n        public static void Fail(object o) { }\n    }\n}\n",
+        ),
+        (
+            "src/S3.cs",
+            "using Lib2;\n\nnamespace App\n{\n    public static class S3\n    {\n        public static void Take3(Widget w) { }\n        public static void Take3(object o) { }\n    }\n}\n",
+        ),
+        (
+            "src/C.cs",
+            "using Lib2;\n\nnamespace App\n{\n    public static class C\n    {\n        public static void Go(Widget w, System.Exception e)\n        {\n            S.Take(w);\n            S2.Fail(e);\n            S3.Take3(w);\n        }\n    }\n}\n",
+        ),
+    ]);
+    let user = "src/C.cs";
+    let line = |needle| line_of(&repo, user, needle);
+    assert_kept(
+        &report_of(&repo, "Take", "src/S.cs", 1),
+        user,
+        line("S.Take(w)"),
+    );
+    assert_kept(
+        &report_of(&repo, "Fail", "src/S2.cs", 1),
+        user,
+        line("S2.Fail(e)"),
+    );
+    assert_excluded(
+        &report_of(&repo, "Take3", "src/S3.cs", 1),
+        user,
+        line("S3.Take3(w)"),
+        "arguments `(Widget)` bind only `Take3(Widget)`",
+    );
+}
+
+#[test]
+fn a_vbnet_file_import_is_looked_up_before_the_project_imports() {
+    let repo = scanned_repo(&[
+        (
+            "App.vbproj",
+            "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net8.0</TargetFramework>\n  </PropertyGroup>\n  <ItemGroup>\n    <Import Include=\"Lib2\" />\n    <Import Include=\"System.Collections\" />\n  </ItemGroup>\n</Project>\n",
+        ),
+        (
+            "src/S.vb",
+            "Imports Lib1\n\nNamespace App\n    Public Class S\n        Public Shared Sub Take(w As Widget)\n        End Sub\n\n        Public Shared Sub Take(o As Object)\n        End Sub\n\n        Public Shared Sub Hold(q As Queue)\n        End Sub\n\n        Public Shared Sub Hold(o As Object)\n        End Sub\n    End Class\nEnd Namespace\n",
+        ),
+        (
+            "src/S3.vb",
+            "Namespace App\n    Public Class S3\n        Public Shared Sub Take3(w As Widget)\n        End Sub\n\n        Public Shared Sub Take3(o As Object)\n        End Sub\n    End Class\nEnd Namespace\n",
+        ),
+        (
+            "src/C.vb",
+            "Namespace App\n    Public Class C\n        Public Shared Sub Go(w As Widget, q As Queue)\n            S.Take(w)\n            S.Hold(q)\n            S3.Take3(w)\n        End Sub\n    End Class\nEnd Namespace\n",
+        ),
+    ]);
+    let user = "src/C.vb";
+    let line = |needle| line_of(&repo, user, needle);
+    assert_kept(
+        &report_of(&repo, "Take", "src/S.vb", 1),
+        user,
+        line("S.Take(w)"),
+    );
+    assert_kept(
+        &report_of(&repo, "Hold", "src/S.vb", 1),
+        user,
+        line("S.Hold(q)"),
+    );
+    assert_excluded(
+        &report_of(&repo, "Take3", "src/S3.vb", 1),
+        user,
+        line("S3.Take3(w)"),
+        "arguments `(Widget)` bind only `Take3(Widget)`",
+    );
+}
+
+#[test]
+fn a_scala_name_is_looked_up_through_chained_package_clauses_innermost_first() {
+    let repo = scanned_repo(&[
+        (
+            "src/a/S.scala",
+            "package a\n\nclass Node\nclass Leaf\n\nobject S {\n  def take(n: Node): Unit = {}\n  def take(o: Any): Unit = {}\n  def leaf(l: Leaf): Unit = {}\n  def leaf(o: Any): Unit = {}\n}\n",
+        ),
+        ("src/a/b/Node.scala", "package a.b\n\nclass Node\n"),
+        (
+            "src/a/b/Use.scala",
+            "package a\npackage b\n\nobject Use {\n  def go(n: Node, l: Leaf): Unit = {\n    S.take(n)\n    S.leaf(l)\n  }\n}\n",
+        ),
+    ]);
+    let user = "src/a/b/Use.scala";
+    let line = |needle| line_of(&repo, user, needle);
+    assert_kept(
+        &report_of(&repo, "take", "src/a/S.scala", 1),
+        user,
+        line("S.take(n)"),
+    );
+    assert_excluded(
+        &report_of(&repo, "leaf", "src/a/S.scala", 1),
+        user,
+        line("S.leaf(l)"),
+        "arguments `(Leaf)` bind only `leaf(Leaf)`",
+    );
+}
+
+#[test]
+fn a_scala_wildcard_import_inside_a_body_leaves_an_opened_name_unknown() {
+    let repo = scanned_repo(&[
+        (
+            "src/s/S.scala",
+            "package s\n\nimport lib1._\n\nobject S {\n  import lib2._\n\n  def take(w: Widget): Unit = {}\n  def take(o: Any): Unit = {}\n}\n",
+        ),
+        (
+            "src/s/S2.scala",
+            "package s\n\nimport lib2._\n\nobject S2 {\n  def take2(w: Widget): Unit = {}\n  def take2(o: Any): Unit = {}\n}\n",
+        ),
+        (
+            "src/c/U.scala",
+            "package c\n\nimport lib2._\n\nobject U {\n  import lib1._\n\n  def go(w: Widget): Unit = {\n    s.S.take(w)\n  }\n}\n",
+        ),
+        (
+            "src/d/V.scala",
+            "package d\n\nimport lib2._\n\nobject V {\n  def go(w: Widget): Unit = {\n    s.S2.take2(w)\n  }\n}\n",
+        ),
+    ]);
+    assert_kept(
+        &report_of(&repo, "take", "src/s/S.scala", 1),
+        "src/c/U.scala",
+        line_of(&repo, "src/c/U.scala", "s.S.take(w)"),
+    );
+    assert_excluded(
+        &report_of(&repo, "take2", "src/s/S2.scala", 1),
+        "src/d/V.scala",
+        line_of(&repo, "src/d/V.scala", "s.S2.take2(w)"),
+        "arguments `(Widget)` bind only `take2(Widget)`",
+    );
+}
+
+#[test]
+fn a_swift_construction_is_optional_through_an_inherited_or_protocol_failable_init() {
+    let repo = scanned_repo(&[(
+        "Sources/App/P.swift",
+        "class Base {\n    init() {}\n    init?(code: Int) {\n        if code < 0 { return nil }\n    }\n}\n\nclass Sub: Base {}\n\nprotocol Parsable {\n    init()\n}\n\nextension Parsable {\n    init?(text: String) {\n        if text.isEmpty { return nil }\n        self.init()\n    }\n}\n\nstruct Pt: Parsable {\n    var x: Int = 0\n}\n\nstruct Lp: Equatable {\n    var x: Int\n}\n\nclass Root {\n    init() {}\n}\n\nclass Leaf: Root {}\n\nfunc g(_ p: Sub) {}\nfunc g(_ p: Sub?) {}\nfunc h(_ p: Pt) {}\nfunc h(_ p: Pt?) {}\nfunc k(_ p: Lp) {}\nfunc k(_ p: Lp?) {}\nfunc m(_ p: Leaf) {}\nfunc m(_ p: Leaf?) {}\n\nfunc run() {\n    g(Sub(code: 3))\n    h(Pt(text: \"a\"))\n    k(Lp(x: 1))\n    m(Leaf())\n}\n",
+    )]);
+    let path = "Sources/App/P.swift";
+    let line = |needle| line_of(&repo, path, needle);
+    assert_kept(
+        &report_of(&repo, "g", path, 1),
+        path,
+        line("g(Sub(code: 3))"),
+    );
+    assert_kept(&report_of(&repo, "h", path, 1), path, line("h(Pt(text:"));
+    assert_kept(&report_of(&repo, "k", path, 1), path, line("k(Lp(x: 1))"));
+    assert_excluded(
+        &report_of(&repo, "m", path, 1),
+        path,
+        line("m(Leaf())"),
+        "arguments `(Leaf)` bind only `m(_: Leaf)`",
+    );
+}
+
+#[test]
+fn a_nested_type_leaves_a_simple_name_unknown_only_where_a_simple_name_reaches_it() {
+    let java = scanned_repo(&[(
+        "src/p/All.java",
+        "package p;\n\nclass Node {\n}\n\nclass Graph {\n    static class Node {\n    }\n}\n\nclass Svc {\n    static void take(Node n) {\n    }\n\n    static void take(Object o) {\n    }\n}\n\nclass Use {\n    void run(Node n) {\n        Svc.take(n);\n    }\n}\n\nclass Walker extends Graph {\n    void walk(Node n) {\n        Svc.take(n);\n    }\n}\n",
+    )]);
+    let path = "src/p/All.java";
+    let take_object = report_of(&java, "take", path, 1);
+    assert_excluded(
+        &take_object,
+        path,
+        line_of(&java, path, "    void run(Node n)") + 1,
+        "arguments `(Node)` bind only `take(Node)`",
+    );
+    assert_kept(
+        &take_object,
+        path,
+        line_of(&java, path, "    void walk(Node n)") + 1,
+    );
+
+    let csharp = scanned_repo(&[(
+        "src/All.cs",
+        "namespace App\n{\n    public class Node { }\n\n    public class Graph\n    {\n        public class Node { }\n    }\n\n    public static class Svc\n    {\n        public static void Take(Node n) { }\n        public static void Take(object o) { }\n    }\n\n    public class Use\n    {\n        public void Run(Node n)\n        {\n            Svc.Take(n);\n        }\n    }\n\n    public class Walker : Graph\n    {\n        public void Walk(Node n)\n        {\n            Svc.Take(n);\n        }\n    }\n}\n",
+    )]);
+    let path = "src/All.cs";
+    let take_object = report_of(&csharp, "Take", path, 1);
+    assert_excluded(
+        &take_object,
+        path,
+        line_of(&csharp, path, "public void Run(Node n)") + 2,
+        "arguments `(Node)` bind only `Take(Node)`",
+    );
+    assert_kept(
+        &take_object,
+        path,
+        line_of(&csharp, path, "public void Walk(Node n)") + 2,
+    );
+}
+
+#[test]
+fn a_swift_failable_init_with_modifiers_still_makes_a_construction_optional() {
+    let repo = scanned_repo(&[(
+        "Sources/App/P.swift",
+        "public class PBase {\n    public init() {}\n    public init?(c: Int) {\n        if c < 0 { return nil }\n    }\n}\n\npublic class PSub: PBase {}\n\nclass Base {\n    init() {}\n}\n\nextension Base {\n    convenience init?(s: String) {\n        if s.isEmpty { return nil }\n        self.init()\n    }\n}\n\nclass Sub: Base {}\n\npublic protocol Named {\n    init()\n}\n\nextension Named {\n    public init?(name: String) {\n        if name.isEmpty { return nil }\n        self.init()\n    }\n}\n\npublic struct Tag: Named {\n    public init() {}\n}\n\nfunc n(_ p: PSub) {}\nfunc n(_ p: PSub?) {}\nfunc q(_ p: Sub) {}\nfunc q(_ p: Sub?) {}\nfunc t(_ p: Tag) {}\nfunc t(_ p: Tag?) {}\n\nfunc run() {\n    n(PSub(c: 1))\n    q(Sub(s: \"a\"))\n    t(Tag(name: \"a\"))\n}\n",
+    )]);
+    let path = "Sources/App/P.swift";
+    let line = |needle| line_of(&repo, path, needle);
+    assert_kept(&report_of(&repo, "n", path, 1), path, line("n(PSub(c: 1))"));
+    assert_kept(&report_of(&repo, "q", path, 1), path, line("q(Sub(s:"));
+    assert_kept(&report_of(&repo, "t", path, 1), path, line("t(Tag(name:"));
+}
+
+#[test]
+fn a_qualified_name_never_names_a_type_parameter_of_the_same_name() {
+    let java = scanned_repo(&[
+        (
+            "src/p/Entity.java",
+            "package p;\n\npublic class Entity {\n}\n",
+        ),
+        (
+            "src/p/Store.java",
+            "package p;\n\npublic class Store {\n    public static void keep(Entity e) {\n    }\n\n    public static void keep(Object o) {\n    }\n}\n",
+        ),
+        (
+            "src/p/Box.java",
+            "package p;\n\npublic class Box<Entity> {\n    void put(p.Entity e) {\n        Store.keep(e);\n    }\n}\n",
+        ),
+    ]);
+    assert_excluded(
+        &report_of(&java, "keep", "src/p/Store.java", 1),
+        "src/p/Box.java",
+        line_of(&java, "src/p/Box.java", "Store.keep(e)"),
+        "arguments `(p.Entity)` bind only `keep(Entity)`",
+    );
+
+    let csharp = scanned_repo(&[(
+        "src/All.cs",
+        "namespace App\n{\n    public class Entity { }\n\n    public static class Store\n    {\n        public static void Keep(Entity e) { }\n        public static void Keep(object o) { }\n    }\n\n    public class Box<Entity>\n    {\n        public void Put(App.Entity item)\n        {\n            Store.Keep(item);\n        }\n    }\n}\n",
+    )]);
+    let path = "src/All.cs";
+    assert_excluded(
+        &report_of(&csharp, "Keep", path, 1),
+        path,
+        line_of(&csharp, path, "Store.Keep(item)"),
+        "arguments `(App.Entity)` bind only `Keep(Entity)`",
+    );
+}

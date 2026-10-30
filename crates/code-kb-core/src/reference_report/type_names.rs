@@ -11,18 +11,20 @@
 //! namespace that the code opens is known to hold it, and is otherwise known only by what the
 //! code opens. Two names name one type only when this proves it. C++ and Swift compare a
 //! qualified name with the project types and leave every other comparison of a shared simple
-//! name unknown.
+//! name unknown. In every language a type parameter of the code or of a declaration that holds
+//! it hides the types of its name, so such a name is unknown.
 
 use std::cell::{OnceCell, RefCell};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, params};
 
 use super::library_types::{
     DOTNET_KNOWN, IMPLICIT_USINGS, JAVA_KNOWN, JAVA_LANG, KOTLIN_BUILTINS, SCALA_BUILTINS,
 };
+use super::receiver_types::enclosing_declarations;
 use super::{MSBUILD_FILES_SQL, csharp_using_alias, csharp_using_namespace};
 use crate::queries::QueryError;
 
@@ -38,10 +40,40 @@ const VBNET_TYPES_NAMED_SQL: &str = "SELECT symbol_id, path, parent_symbol_id FR
      LIMIT 101";
 /// More types of one name than this leave every comparison of the name unknown.
 const MAX_TYPES: usize = 100;
-const PACKAGE_SQL: &str = "SELECT signature FROM symbols
+/// The package clauses of a file in source order: a Scala packaging block holds its types, so
+/// julie writes them as its children, and a clause holds none.
+const PACKAGE_SQL: &str = "SELECT signature FROM symbols n
      WHERE path = ?1 AND kind = 'namespace' AND parent_symbol_id IS NULL
        AND signature LIKE 'package %'
-     ORDER BY start_line LIMIT 1";
+       AND NOT EXISTS (SELECT 1 FROM symbols c WHERE c.parent_symbol_id = n.symbol_id)
+     ORDER BY start_line";
+const ANCESTORS_BY_RELATIONSHIP_SQL: &str = "SELECT DISTINCT base.name
+     FROM symbols child
+     JOIN relationships r ON r.from_symbol_id = child.symbol_id
+          AND r.kind IN ('extends', 'implements')
+     JOIN symbols base ON base.symbol_id = r.to_symbol_id
+     WHERE child.name = ?1";
+const ANCESTORS_BY_PENDING_SQL: &str = "SELECT DISTINCT pe.target_terminal_name
+     FROM symbols child
+     JOIN pending_relationships pe ON pe.from_symbol_id = child.symbol_id
+          AND pe.kind IN ('extends', 'implements')
+     WHERE child.name = ?1";
+/// How many levels of base types [`TypeNames::enclosing_types`] follows.
+const MAX_ANCESTOR_DEPTH: usize = 8;
+const TYPE_KINDS: [&str; 11] = [
+    "class",
+    "struct",
+    "record",
+    "interface",
+    "trait",
+    "protocol",
+    "enum",
+    "union",
+    "type",
+    "delegate",
+    "object",
+];
+const CALLABLE_KINDS: [&str; 5] = ["function", "method", "constructor", "property", "variable"];
 const PACKAGES_SQL: &str = "SELECT DISTINCT signature FROM symbols
      WHERE kind = 'namespace' AND language = ?1 AND signature LIKE 'package %'";
 const NAMESPACES_SQL: &str = "SELECT symbol_id, name, parent_symbol_id FROM symbols
@@ -57,7 +89,8 @@ const CHAIN_SQL: &str = "WITH RECURSIVE chain(symbol_id, depth) AS (
          FROM symbols s JOIN chain ON s.symbol_id = chain.symbol_id
          WHERE s.parent_symbol_id IS NOT NULL AND chain.depth < 32
      )
-     SELECT s.symbol_id, s.kind, s.name FROM chain JOIN symbols s ON s.symbol_id = chain.symbol_id
+     SELECT s.symbol_id, s.kind, s.name, COALESCE(s.signature, '')
+     FROM chain JOIN symbols s ON s.symbol_id = chain.symbol_id
      ORDER BY chain.depth";
 const C_TYPE_WORDS: [&str; 8] = [
     "const", "volatile", "unsigned", "signed", "struct", "class", "enum", "typename",
@@ -121,10 +154,14 @@ struct TypeRow {
     path: String,
     /// The C# or VB.NET namespace or the Java, Kotlin, or Scala package that holds the type.
     namespace: String,
-    /// Defined inside another type or a function, where a simple name reaches it through scopes
-    /// the index does not record (an inherited nested type).
+    /// Defined inside another type or a function.
     nested: bool,
     parent: Option<String>,
+    /// The types that hold a nested type, innermost first; empty for a type defined in a
+    /// function, which only code of that function reaches.
+    owners: Vec<String>,
+    /// A type of a VB.NET `Module`, which the namespace of the module holds as well.
+    promoted: bool,
 }
 
 type Types = Option<Rc<Vec<TypeRow>>>;
@@ -142,6 +179,10 @@ pub(super) struct TypeNames {
     declared: OnceCell<HashSet<String>>,
     /// The folder of the build project that holds each folder, with what it opens.
     projects: RefCell<HashMap<PathBuf, Rc<BuildProject>>>,
+    /// The type parameters that the declarations holding each symbol declare.
+    type_parameters: RefCell<HashMap<String, Rc<Vec<String>>>>,
+    /// The names of the types that hold each symbol, and of their base types.
+    enclosing_types: RefCell<HashMap<String, Rc<HashSet<String>>>>,
 }
 
 /// A `.csproj` or `.vbproj` and the namespaces it opens in each of its files.
@@ -163,6 +204,8 @@ impl TypeNames {
             msbuild_usings: OnceCell::new(),
             declared: OnceCell::new(),
             projects: RefCell::new(HashMap::new()),
+            type_parameters: RefCell::new(HashMap::new()),
+            enclosing_types: RefCell::new(HashMap::new()),
         }
     }
 
@@ -206,6 +249,13 @@ impl TypeNames {
             plain.to_string()
         };
         let names = type_words(&words);
+        for name in &names {
+            if self.is_simple_type_parameter(conn, argument, name, at)?
+                || self.is_simple_type_parameter(conn, parameter, name, declared_at)?
+            {
+                return Ok(Same::Unknown);
+            }
+        }
         if !self.scoped() {
             return self.same_unscoped(conn, &names, argument, at, parameter, declared_at);
         }
@@ -262,6 +312,53 @@ impl TypeNames {
             &self.resolve(conn, argument, name, at)?,
             &self.resolve(conn, parameter, name, declared_at)?,
         ))
+    }
+
+    /// Whether `written` names `name` without a qualifier and `name` is a type parameter at
+    /// `place`; a type parameter has no package or namespace, so `p.Entity` never names one.
+    fn is_simple_type_parameter(
+        &self,
+        conn: &Connection,
+        written: &str,
+        name: &str,
+        place: Place,
+    ) -> Result<bool, QueryError> {
+        if qualified_path(written, name).len() > 1 {
+            return Ok(false);
+        }
+        self.is_type_parameter(conn, name, place)
+    }
+
+    /// Whether `name` is a type parameter of the symbol of `place` or of a declaration that holds
+    /// it, which hides a type of that name and can stand for any type that fits its bound.
+    fn is_type_parameter(
+        &self,
+        conn: &Connection,
+        name: &str,
+        place: Place,
+    ) -> Result<bool, QueryError> {
+        let Some(scope) = place.scope else {
+            return Ok(false);
+        };
+        let cached = self.type_parameters.borrow().get(scope).cloned();
+        let declared = match cached {
+            Some(declared) => declared,
+            None => {
+                let declared: Vec<String> = enclosing_declarations(conn, scope)?
+                    .iter()
+                    .flat_map(|declaration| declaration.type_parameters(&self.root))
+                    .collect();
+                let declared = Rc::new(declared);
+                self.type_parameters
+                    .borrow_mut()
+                    .insert(scope.to_string(), declared.clone());
+                declared
+            }
+        };
+        let vbnet = self.language == "vbnet";
+        Ok(declared
+            .iter()
+            .any(|parameter| parameter == name || (vbnet && parameter.eq_ignore_ascii_case(name))))
     }
 
     fn is_keyword(&self, name: &str) -> bool {
@@ -368,30 +465,53 @@ impl TypeNames {
         parent: Option<String>,
     ) -> Result<TypeRow, QueryError> {
         let chain = symbol_chain(conn, id)?;
-        let nested = chain.iter().skip(1).any(|(_, kind, _)| kind != "namespace");
-        let mut namespaces: Vec<&str> = chain
-            .iter()
-            .rev()
-            .filter(|(_, kind, _)| kind == "namespace")
-            .map(|(_, _, name)| name.as_str())
-            .collect();
-        let package = if is_jvm(self.language) && namespaces.is_empty() {
-            package_of(conn, &path)?
+        let nested = chain.iter().skip(1).any(|link| link.kind != "namespace");
+        let clauses = if is_jvm(self.language) {
+            package_clauses(conn, &path)?
         } else {
-            None
+            Vec::new()
         };
-        if let Some(package) = &package {
-            namespaces.push(package);
-        }
+        let mut namespaces: Vec<&str> = clauses.iter().map(String::as_str).collect();
+        namespaces.extend(
+            chain
+                .iter()
+                .rev()
+                .filter(|link| link.kind == "namespace")
+                .map(|link| link.name.as_str()),
+        );
         let namespace = namespaces.join(".");
         let mut segments: Vec<&str> = namespaces;
         segments.extend(
             chain
                 .iter()
                 .rev()
-                .filter(|(_, kind, _)| kind != "namespace")
-                .map(|(_, _, name)| name.as_str()),
+                .filter(|link| link.kind != "namespace")
+                .map(|link| link.name.as_str()),
         );
+        let holders: Vec<&ChainLink> = chain
+            .iter()
+            .skip(1)
+            .filter(|link| link.kind != "namespace")
+            .collect();
+        let local = holders
+            .first()
+            .is_some_and(|holder| CALLABLE_KINDS.contains(&holder.kind.as_str()));
+        let owners = if local {
+            Vec::new()
+        } else {
+            holders
+                .iter()
+                .filter(|holder| !CALLABLE_KINDS.contains(&holder.kind.as_str()))
+                .map(|holder| self.fold(&holder.name))
+                .collect()
+        };
+        let promoted = self.language == "vbnet"
+            && holders.iter().any(|holder| {
+                holder
+                    .signature
+                    .split_whitespace()
+                    .any(|word| word.eq_ignore_ascii_case("module"))
+            });
         let identity = segments.join(".");
         let fold = |text: String| {
             if self.language == "vbnet" {
@@ -406,6 +526,8 @@ impl TypeNames {
             namespace: fold(namespace),
             nested,
             parent,
+            owners,
+            promoted,
         })
     }
 
@@ -458,19 +580,22 @@ impl TypeNames {
         }
         if let Some(scope) = place.scope {
             let chain = symbol_chain(conn, scope)?;
-            for (id, _, _) in &chain {
+            for link in &chain {
                 let enclosed: Vec<&TypeRow> = types
                     .iter()
-                    .filter(|row| row.nested && row.parent.as_deref() == Some(id.as_str()))
+                    .filter(|row| row.nested && row.parent.as_deref() == Some(link.id.as_str()))
                     .collect();
                 if !enclosed.is_empty() {
                     return Ok(one_of(enclosed.into_iter()));
                 }
             }
         }
-        if types.iter().any(|row| row.nested) {
-            return Ok(Named::Unknown);
+        for row in types.iter().filter(|row| row.nested) {
+            if self.nested_reachable(conn, row, place)? {
+                return Ok(Named::Unknown);
+            }
         }
+        let types: Vec<&TypeRow> = types.iter().filter(|row| !row.nested).collect();
         let generic = written_generic(written, name);
         match self.language {
             "java" | "kotlin" | "scala" => self.jvm_resolve(conn, name, place, &types),
@@ -480,6 +605,89 @@ impl TypeNames {
             }
             _ => Ok(Named::Unknown),
         }
+    }
+
+    /// Whether a simple name written at `place` can reach the nested type `row` by scopes the
+    /// enclosing chain does not show: a type that holds the code or one of its base types owns
+    /// it, an import of the file or of the build project names an owner (`import p.Graph.*`,
+    /// `using static App.Graph;`), or a VB.NET `Module` holds it.
+    fn nested_reachable(
+        &self,
+        conn: &Connection,
+        row: &TypeRow,
+        place: Place,
+    ) -> Result<bool, QueryError> {
+        if row.promoted {
+            return Ok(true);
+        }
+        if row.owners.is_empty() {
+            return Ok(false);
+        }
+        let enclosing = self.enclosing_types(conn, place)?;
+        if row.owners.iter().any(|owner| enclosing.contains(owner)) {
+            return Ok(true);
+        }
+        let mut opened: Vec<String> = file_imports(conn, place.path)?
+            .into_iter()
+            .map(|(signature, _)| signature)
+            .collect();
+        if matches!(self.language, "csharp" | "vbnet") {
+            opened.extend(self.build_project(place.path).opens.iter().cloned());
+        }
+        if self.language == "csharp" {
+            opened.extend(global_usings(conn)?);
+        }
+        Ok(opened.iter().any(|text| {
+            let text = self.fold(text);
+            row.owners.iter().any(|owner| names_word(&text, owner))
+        }))
+    }
+
+    /// The names of the types that hold the symbol of `place`, with the names of their base
+    /// types and of the bases of those, by name.
+    fn enclosing_types(
+        &self,
+        conn: &Connection,
+        place: Place,
+    ) -> Result<Rc<HashSet<String>>, QueryError> {
+        let Some(scope) = place.scope else {
+            return Ok(Rc::new(HashSet::new()));
+        };
+        if let Some(names) = self.enclosing_types.borrow().get(scope) {
+            return Ok(names.clone());
+        }
+        let mut names: HashSet<String> = HashSet::new();
+        let mut frontier: Vec<String> = symbol_chain(conn, scope)?
+            .into_iter()
+            .filter(|link| TYPE_KINDS.contains(&link.kind.as_str()) || link.kind == "module")
+            .map(|link| link.name)
+            .collect();
+        names.extend(frontier.iter().map(|name| self.fold(name)));
+        for _ in 0..MAX_ANCESTOR_DEPTH {
+            let mut next = Vec::new();
+            for name in &frontier {
+                for sql in [ANCESTORS_BY_RELATIONSHIP_SQL, ANCESTORS_BY_PENDING_SQL] {
+                    let bases: Vec<String> = conn
+                        .prepare(sql)?
+                        .query_map(params![name], |row| row.get(0))?
+                        .collect::<Result<_, _>>()?;
+                    for base in bases {
+                        if names.insert(self.fold(&base)) {
+                            next.push(base);
+                        }
+                    }
+                }
+            }
+            if next.is_empty() {
+                break;
+            }
+            frontier = next;
+        }
+        let names = Rc::new(names);
+        self.enclosing_types
+            .borrow_mut()
+            .insert(scope.to_string(), names.clone());
+        Ok(names)
     }
 
     fn fold(&self, text: &str) -> String {
@@ -511,18 +719,21 @@ impl TypeNames {
 
     /// A simple Java, Kotlin, or Scala name: a type of the file, or the type that an import of
     /// the name writes (both, when they differ, leave it unknown); else the one type of the
-    /// file's package, else the one type of a package that a star import names. Scala ranks a
-    /// star import above the package of another file in some versions and below it in others,
-    /// so a Scala name that both reach with different types is unknown. A name that reaches no
-    /// project type names a library type.
+    /// file's package, else the one type of a package that a star import names. Scala looks a
+    /// name up in each package that chained package clauses or packaging blocks open, innermost
+    /// first (`package a` then `package b` opens `a.b`, then `a`). Scala ranks a star import
+    /// above the package of another file in some versions and below it in others, so a Scala
+    /// name that both reach with different types is unknown, and a wildcard import inside a
+    /// body shadows the outer ones only where it stands, so with one a name that no package of
+    /// the file reaches is unknown. A name that reaches no project type names a library type.
     fn jvm_resolve(
         &self,
         conn: &Connection,
         name: &str,
         place: Place,
-        types: &[TypeRow],
+        types: &[&TypeRow],
     ) -> Result<Named, QueryError> {
-        let in_file = one_of(types.iter().filter(|row| row.path == place.path));
+        let in_file = one_of(types.iter().copied().filter(|row| row.path == place.path));
         let imported = match jvm_import(conn, place.path, name)? {
             JvmImport::None => None,
             JvmImport::Unknown => return Ok(Named::Unknown),
@@ -542,22 +753,34 @@ impl TypeNames {
             (named, Some(other)) if named == other => return Ok(named),
             _ => return Ok(Named::Unknown),
         }
-        let package = package_of(conn, place.path)?.unwrap_or_default();
+        let packages = self.packages(conn, place)?;
         let text = std::fs::read_to_string(self.root.join(place.path)).unwrap_or_default();
         let nested_comments = !place.path.ends_with(".java");
         let stars: BTreeSet<String> = super::sections::star_imports(&text, nested_comments)
             .into_iter()
             .collect();
-        let in_package: Vec<&TypeRow> = types
+        let in_package: Vec<&TypeRow> = packages
             .iter()
-            .filter(|row| row.namespace == package)
-            .collect();
+            .map(|package| -> Vec<&TypeRow> {
+                types
+                    .iter()
+                    .copied()
+                    .filter(|row| &row.namespace == package)
+                    .collect()
+            })
+            .find(|rows| !rows.is_empty())
+            .unwrap_or_default();
         let starred: Vec<&TypeRow> = types
             .iter()
+            .copied()
             .filter(|row| stars.contains(&row.namespace))
             .collect();
+        let scala = self.language == "scala";
+        if scala && in_package.is_empty() && nested_wildcard(conn, place.path)? {
+            return Ok(Named::Unknown);
+        }
         match (in_package.is_empty(), starred.is_empty()) {
-            (false, false) if self.language == "scala" => {
+            (false, false) if scala => {
                 let (local, imported) =
                     (one_of(in_package.into_iter()), one_of(starred.into_iter()));
                 return Ok(if local == imported {
@@ -607,19 +830,47 @@ impl TypeNames {
         })))
     }
 
-    /// A simple C# or VB.NET name (VB.NET in lower case): the one type of the innermost
-    /// namespace that holds the code and has one, else the one type of a namespace that a
-    /// `using` or `Imports` line of the file, a `global using`, or the build project opens. A
-    /// `using` alias of the name, a `using` inside a namespace block that opens a namespace with
-    /// such a type, and an MSBuild `<Using>` item leave it unknown. A name that reaches no
-    /// project type names a library type.
+    /// The packages whose members a simple JVM name at `place` reaches, innermost first: each
+    /// package clause and each Scala packaging block that holds the code adds one level, and a
+    /// dotted clause (`package a.b`) is one level. A file with no package is the empty package.
+    fn packages(&self, conn: &Connection, place: Place) -> Result<Vec<String>, QueryError> {
+        let mut groups = package_clauses(conn, place.path)?;
+        if let Some(scope) = place.scope {
+            groups.extend(
+                symbol_chain(conn, scope)?
+                    .into_iter()
+                    .rev()
+                    .filter(|link| link.kind == "namespace")
+                    .filter_map(|link| package_name(&link.signature).or(Some(link.name))),
+            );
+        }
+        let mut levels: Vec<String> = (1..=groups.len())
+            .rev()
+            .map(|count| groups[..count].join("."))
+            .collect();
+        if levels.is_empty() {
+            levels.push(String::new());
+        }
+        Ok(levels)
+    }
+
+    /// A simple C# or VB.NET name (VB.NET in lower case), looked up level by level. C#: each
+    /// namespace that holds the code, innermost first, with the `using` lines of its namespace
+    /// block, then the global namespace with the file's `using` lines, the `global using` lines,
+    /// and the build project's usings. VB.NET: each namespace that holds the code, then the
+    /// file's `Imports` lines, then the build project's imports. At each level a type of its
+    /// namespace comes first, then the one type of a namespace that it opens, then a library type
+    /// that one opened namespace is known to hold. A level that opens a library namespace can
+    /// hold the name, so a later level decides nothing, and a name that reaches no type is known
+    /// by what the one such level opens, and is unknown when two levels can hold it. A `using`
+    /// alias of the name and an MSBuild `<Using>` item leave it unknown.
     fn dotnet_resolve(
         &self,
         conn: &Connection,
         name: &str,
         generic: bool,
         place: Place,
-        types: &[TypeRow],
+        types: &[&TypeRow],
     ) -> Result<Named, QueryError> {
         let Some(scope) = place.scope else {
             return Ok(Named::Unknown);
@@ -630,115 +881,132 @@ impl TypeNames {
             return Ok(Named::Unknown);
         }
         let chain = symbol_chain(conn, scope)?;
-        let mut usings: Vec<(String, bool, bool)> = Vec::new();
+        let mut namespace_of: HashMap<&str, String> = HashMap::new();
+        let mut innermost = String::new();
+        for link in chain.iter().rev().filter(|link| link.kind == "namespace") {
+            let name = self.fold(&link.name);
+            innermost = if innermost.is_empty() {
+                name
+            } else {
+                format!("{innermost}.{name}")
+            };
+            namespace_of.insert(link.id.as_str(), innermost.clone());
+        }
+        let mut block_opens: HashMap<String, Vec<String>> = HashMap::new();
+        let mut file_opens: Vec<String> = Vec::new();
         for (signature, parent) in file_imports(conn, place.path)? {
-            let top = parent.is_none();
-            let applies = parent
-                .as_deref()
-                .is_none_or(|parent| chain.iter().any(|(id, _, _)| id == parent));
-            if vbnet {
+            let opened = if vbnet {
                 match vbnet_import(&signature) {
                     Some(VbImport::Alias(alias)) if alias == name => return Ok(Named::Unknown),
-                    Some(VbImport::Namespace(namespace)) => usings.push((namespace, top, applies)),
-                    _ => {}
+                    Some(VbImport::Namespace(namespace)) => namespace,
+                    _ => continue,
                 }
-                continue;
-            }
-            if csharp_using_alias(&signature).is_some_and(|(alias, _)| alias == name) {
-                return Ok(Named::Unknown);
-            }
-            if let Some(namespace) = csharp_using_namespace(&signature) {
-                usings.push((namespace.to_string(), top, applies));
-            } else if let Some(class) = csharp_using_static(&signature) {
-                usings.push((format!("static {class}"), top, applies));
+            } else {
+                if csharp_using_alias(&signature).is_some_and(|(alias, _)| alias == name) {
+                    return Ok(Named::Unknown);
+                }
+                if let Some(namespace) = csharp_using_namespace(&signature) {
+                    namespace.to_string()
+                } else if let Some(class) = csharp_using_static(&signature) {
+                    format!("static {class}")
+                } else {
+                    continue;
+                }
+            };
+            match parent {
+                None => file_opens.push(opened),
+                Some(parent) => {
+                    if let Some(level) = namespace_of.get(parent.as_str()) {
+                        block_opens.entry(level.clone()).or_default().push(opened);
+                    } else if chain.iter().any(|link| link.id == parent) {
+                        block_opens
+                            .entry(innermost.clone())
+                            .or_default()
+                            .push(opened);
+                    }
+                }
             }
         }
-        let globals: Vec<String> = if vbnet {
-            Vec::new()
-        } else {
-            conn.prepare(GLOBAL_USINGS_SQL)?
-                .query_map([], |row| row.get::<_, String>(0))?
-                .filter_map(|row| row.ok())
-                .filter_map(|signature| csharp_using_namespace(&signature).map(str::to_string))
-                .collect()
-        };
-        let opens_namespace = |namespace: &str, file_level: bool| {
-            usings
-                .iter()
-                .any(|(using, top, _)| *top == file_level && using == namespace)
-                || (file_level
-                    && (globals.iter().any(|global| global == namespace)
-                        || project.opens.iter().any(|open| open == namespace)))
-        };
-        if types
-            .iter()
-            .any(|row| opens_namespace(&row.namespace, false))
-        {
-            return Ok(Named::Unknown);
-        }
-        let enclosing: Vec<String> = chain
-            .iter()
-            .rev()
-            .filter(|(_, kind, _)| kind == "namespace")
-            .map(|(_, _, name)| self.fold(name))
-            .collect();
-        let mut levels = Vec::new();
-        let mut level = enclosing.join(".");
-        loop {
-            levels.push(level.clone());
-            if types.iter().any(|row| row.namespace == level) {
-                return Ok(one_of(types.iter().filter(|row| row.namespace == level)));
-            }
-            if level.is_empty() {
-                break;
-            }
-            level = level
+        let mut levels: Vec<(Option<String>, Vec<String>)> = Vec::new();
+        let mut level = innermost;
+        while !level.is_empty() {
+            let opens = block_opens.remove(&level).unwrap_or_default();
+            let outer = level
                 .rsplit_once('.')
                 .map_or(String::new(), |(outer, _)| outer.to_string());
+            levels.push((Some(level), opens));
+            level = outer;
         }
-        if !vbnet && !types.is_empty() && self.msbuild_usings(conn)? {
-            return Ok(Named::Unknown);
-        }
-        let opened = one_of(
-            types
-                .iter()
-                .filter(|row| opens_namespace(&row.namespace, true)),
-        );
-        if opened != Named::Unknown
-            || types
-                .iter()
-                .any(|row| opens_namespace(&row.namespace, true))
-        {
-            return Ok(opened);
-        }
-        let mut names: BTreeSet<String> = usings
-            .into_iter()
-            .filter(|(_, _, applies)| *applies)
-            .map(|(using, _, _)| using)
-            .collect();
-        names.extend(project.opens.iter().cloned());
-        names.extend(levels.into_iter().filter(|level| !level.is_empty()));
-        let known: BTreeSet<&str> = DOTNET_KNOWN
-            .iter()
-            .filter(|(namespace, arity, types)| {
-                arity.fits(generic)
-                    && names.contains(&self.fold(namespace))
-                    && types.iter().any(|known| self.fold(known) == name)
-            })
-            .map(|(namespace, _, _)| *namespace)
-            .collect();
-        match known.len() {
-            0 => {}
-            1 => {
-                let namespace = known.into_iter().next().unwrap_or_default();
-                return Ok(Named::Library(self.fold(&format!("{namespace}.{name}"))));
-            }
-            _ => return Ok(Named::Unknown),
+        if vbnet {
+            levels.push((Some(String::new()), Vec::new()));
+            levels.push((None, file_opens));
+            levels.push((None, project.opens.clone()));
+        } else {
+            file_opens.extend(global_usings(conn)?);
+            file_opens.extend(project.opens.iter().cloned());
+            levels.push((Some(String::new()), file_opens));
         }
         let declared = self.declared(conn)?;
-        names.retain(|namespace| !declared.contains(namespace));
+        let mut holders: Vec<BTreeSet<String>> = Vec::new();
+        for (own, opens) in &levels {
+            let decided = |named: Named| {
+                if holders.is_empty() {
+                    named
+                } else {
+                    Named::Unknown
+                }
+            };
+            if let Some(own) = own {
+                let declared_here: Vec<&TypeRow> = types
+                    .iter()
+                    .copied()
+                    .filter(|row| &row.namespace == own)
+                    .collect();
+                if !declared_here.is_empty() {
+                    return Ok(decided(one_of(declared_here.into_iter())));
+                }
+                if own.is_empty() && !vbnet && !types.is_empty() && self.msbuild_usings(conn)? {
+                    return Ok(Named::Unknown);
+                }
+            }
+            let opened: Vec<&TypeRow> = types
+                .iter()
+                .copied()
+                .filter(|row| opens.contains(&row.namespace))
+                .collect();
+            if !opened.is_empty() {
+                return Ok(decided(one_of(opened.into_iter())));
+            }
+            let mut reached: BTreeSet<String> = opens.iter().cloned().collect();
+            reached.extend(own.iter().filter(|own| !own.is_empty()).cloned());
+            let known: BTreeSet<&str> = DOTNET_KNOWN
+                .iter()
+                .filter(|(namespace, arity, types)| {
+                    arity.fits(generic)
+                        && reached.contains(&self.fold(namespace))
+                        && types.iter().any(|known| self.fold(known) == name)
+                })
+                .map(|(namespace, _, _)| *namespace)
+                .collect();
+            match known.len() {
+                0 => {}
+                1 => {
+                    let namespace = known.into_iter().next().unwrap_or_default();
+                    let full = self.fold(&format!("{namespace}.{name}"));
+                    return Ok(decided(Named::Library(full)));
+                }
+                _ => return Ok(Named::Unknown),
+            }
+            reached.retain(|namespace| !declared.contains(namespace));
+            if !reached.is_empty() {
+                holders.push(reached);
+            }
+        }
+        if holders.len() > 1 {
+            return Ok(Named::Unknown);
+        }
         Ok(Named::Opened(Rc::new(Opens {
-            names,
+            names: holders.pop().unwrap_or_default(),
             project: project.folder.clone(),
         })))
     }
@@ -928,14 +1196,58 @@ fn written_generic(written: &str, name: &str) -> bool {
     false
 }
 
-/// The chain of `id` and the symbols that hold it, innermost first: id, kind, name.
-fn symbol_chain(conn: &Connection, id: &str) -> Result<Vec<(String, String, String)>, QueryError> {
+/// A symbol of the chain that holds a place.
+struct ChainLink {
+    id: String,
+    kind: String,
+    name: String,
+    signature: String,
+}
+
+/// The chain of `id` and the symbols that hold it, innermost first.
+fn symbol_chain(conn: &Connection, id: &str) -> Result<Vec<ChainLink>, QueryError> {
     Ok(conn
         .prepare(CHAIN_SQL)?
         .query_map(params![id], |row| {
-            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            Ok(ChainLink {
+                id: row.get(0)?,
+                kind: row.get(1)?,
+                name: row.get(2)?,
+                signature: row.get(3)?,
+            })
         })?
         .collect::<Result<_, _>>()?)
+}
+
+/// The namespaces of every C# `global using` line of the project.
+fn global_usings(conn: &Connection) -> Result<Vec<String>, QueryError> {
+    let signatures: Vec<String> = conn
+        .prepare(GLOBAL_USINGS_SQL)?
+        .query_map([], |row| row.get(0))?
+        .collect::<Result<_, _>>()?;
+    Ok(signatures
+        .iter()
+        .filter_map(|signature| csharp_using_namespace(signature).map(str::to_string))
+        .collect())
+}
+
+/// Whether a Scala file has a wildcard import inside a body (`object S { import lib._ }`),
+/// which shadows the outer imports only in that body.
+fn nested_wildcard(conn: &Connection, path: &str) -> Result<bool, QueryError> {
+    Ok(file_imports(conn, path)?
+        .iter()
+        .any(|(signature, parent)| parent.is_some() && wildcard_import(signature)))
+}
+
+/// Whether a Scala import opens every member of what it names (`import a._`, `import a.*`,
+/// `import a.{B => C, _}`, `import a.given`).
+fn wildcard_import(signature: &str) -> bool {
+    let text = signature.trim().trim_end_matches(';').trim_end();
+    text.ends_with("._")
+        || text.ends_with(".*")
+        || text.ends_with(".given")
+        || (text.contains('{')
+            && (names_word(text, "_") || text.contains('*') || names_word(text, "given")))
 }
 
 /// The import rows of a file: the signature and the symbol (a namespace block) that holds it.
@@ -949,12 +1261,17 @@ fn file_imports(
         .collect::<Result<_, _>>()?)
 }
 
-fn package_of(conn: &Connection, path: &str) -> Result<Option<String>, QueryError> {
-    let signature: Option<String> = conn
+/// The names of the package clauses of a file in source order (`["a", "b"]` for Scala's
+/// `package a` then `package b`).
+fn package_clauses(conn: &Connection, path: &str) -> Result<Vec<String>, QueryError> {
+    let signatures: Vec<String> = conn
         .prepare(PACKAGE_SQL)?
-        .query_row(params![path], |row| row.get(0))
-        .optional()?;
-    Ok(signature.as_deref().and_then(package_name))
+        .query_map(params![path], |row| row.get(0))?
+        .collect::<Result<_, _>>()?;
+    Ok(signatures
+        .iter()
+        .filter_map(|signature| package_name(signature))
+        .collect())
 }
 
 fn package_name(signature: &str) -> Option<String> {
@@ -1119,7 +1436,7 @@ fn qualified_path<'w>(written: &'w str, name: &'w str) -> Vec<&'w str> {
 mod tests {
     use super::{
         VbImport, attribute, csharp_using_static, qualified_path, type_words, unqualified,
-        vbnet_import, written_generic,
+        vbnet_import, wildcard_import, written_generic,
     };
 
     #[test]
@@ -1166,6 +1483,16 @@ mod tests {
             Some("System.Math")
         );
         assert_eq!(csharp_using_static("using System;"), None);
+    }
+
+    #[test]
+    fn a_scala_wildcard_import_opens_every_member() {
+        assert!(wildcard_import("import lib._"));
+        assert!(wildcard_import("import lib.*"));
+        assert!(wildcard_import("import lib.{Widget => W, _}"));
+        assert!(wildcard_import("import lib.given"));
+        assert!(!wildcard_import("import lib.Widget"));
+        assert!(!wildcard_import("import lib.{Widget, Gadget}"));
     }
 
     #[test]

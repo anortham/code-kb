@@ -2,9 +2,11 @@
 //! `int`, a Kotlin `Int?` value as `Int`, and a Swift `Int!` value as `Int`, so the overload
 //! rules keep the overloads that take a nullable value for such an argument. The source shows
 //! that some arguments cannot be nullable: a literal, a C# `new` object, a Swift construction of a
-//! project struct or class that has no failable initializer, and a local, parameter, field, or
-//! property whose declared type has no nullable marker and is no type parameter.
+//! project struct or class that no failable initializer of its own, of a superclass, or of a
+//! protocol it conforms to can build, and a local, parameter, field, or property whose declared
+//! type has no nullable marker and is no type parameter.
 
+use std::collections::HashSet;
 use std::rc::Rc;
 
 use rusqlite::{Connection, params};
@@ -44,10 +46,29 @@ const SWIFT_CONSTRUCTED_SQL: &str = "SELECT
          WHERE name = ?1 AND language = 'swift' AND kind IN ('struct', 'class')),
        (SELECT COUNT(*) FROM symbols
          WHERE name = ?1 AND language = 'swift'
-           AND kind NOT IN ('struct', 'class', 'module', 'constructor', 'import')),
-       (SELECT COUNT(*) FROM symbols c JOIN symbols p ON p.symbol_id = c.parent_symbol_id
-         WHERE p.name = ?1 AND p.language = 'swift' AND c.kind = 'constructor'
-           AND (c.signature LIKE 'init?%' OR c.signature LIKE 'init!%'))";
+           AND kind NOT IN ('struct', 'class', 'module', 'constructor', 'import'))";
+const SWIFT_FAILABLE_SQL: &str = "SELECT COUNT(*) FROM symbols c
+     JOIN symbols p ON p.symbol_id = c.parent_symbol_id
+     WHERE p.name = ?1 AND p.language = 'swift' AND c.kind = 'constructor'
+       AND ((' ' || c.signature) LIKE '% init?%' OR (' ' || c.signature) LIKE '% init!%')";
+/// The declarations and extensions of a Swift type or protocol, whose heads name its bases.
+const SWIFT_DECLARATIONS_SQL: &str = "SELECT kind, COALESCE(signature, '') FROM symbols
+     WHERE name = ?1 AND language = 'swift'
+       AND kind IN ('struct', 'class', 'enum', 'interface', 'protocol', 'module')";
+const SWIFT_BASES_SQL: &str = "SELECT base.name FROM symbols child
+     JOIN relationships r ON r.from_symbol_id = child.symbol_id
+          AND r.kind IN ('extends', 'implements')
+     JOIN symbols base ON base.symbol_id = r.to_symbol_id
+     WHERE child.name = ?1 AND child.language = 'swift'
+     UNION
+     SELECT pe.target_terminal_name FROM symbols child
+     JOIN pending_relationships pe ON pe.from_symbol_id = child.symbol_id
+          AND pe.kind IN ('extends', 'implements')
+     WHERE child.name = ?1 AND child.language = 'swift'";
+/// How many levels of Swift superclasses and protocols are read for a failable initializer.
+const MAX_SWIFT_BASE_DEPTH: usize = 8;
+/// Constraints in a Swift inheritance clause that add no initializer.
+const SWIFT_PLAIN_CONSTRAINTS: [&str; 2] = ["AnyObject", "class"];
 const CSHARP_MODIFIERS: [&str; 19] = [
     "public",
     "private",
@@ -229,6 +250,94 @@ fn literal_end(chars: &[char], start: usize) -> Option<usize> {
     None
 }
 
+/// Whether a Swift construction `T(…)` can make an optional value: `T`, a superclass it inherits
+/// initializers from, or a protocol it conforms to (with a protocol extension) has a failable
+/// `init?` or `init!`, or a base that the inheritance clause or an extension names is not a
+/// project type, so its initializers are unknown.
+fn swift_may_fail(conn: &Connection, type_name: &str) -> Result<bool, QueryError> {
+    let mut seen: HashSet<String> = HashSet::from([type_name.to_string()]);
+    let mut frontier = vec![type_name.to_string()];
+    for _ in 0..MAX_SWIFT_BASE_DEPTH {
+        let mut next = Vec::new();
+        for name in &frontier {
+            let failable: i64 = conn
+                .prepare(SWIFT_FAILABLE_SQL)?
+                .query_row(params![name], |row| row.get(0))?;
+            if failable > 0 {
+                return Ok(true);
+            }
+            let declarations: Vec<(String, String)> = conn
+                .prepare(SWIFT_DECLARATIONS_SQL)?
+                .query_map(params![name], |row| Ok((row.get(0)?, row.get(1)?)))?
+                .collect::<Result<_, _>>()?;
+            if declarations.iter().all(|(kind, _)| kind == "module") {
+                return Ok(true);
+            }
+            let mut bases: Vec<String> = declarations
+                .iter()
+                .flat_map(|(_, signature)| swift_inherited(signature))
+                .collect();
+            bases.extend(
+                conn.prepare(SWIFT_BASES_SQL)?
+                    .query_map(params![name], |row| row.get::<_, String>(0))?
+                    .collect::<Result<Vec<_>, _>>()?,
+            );
+            for base in bases {
+                if !SWIFT_PLAIN_CONSTRAINTS.contains(&base.as_str()) && seen.insert(base.clone()) {
+                    next.push(base);
+                }
+            }
+        }
+        if next.is_empty() {
+            return Ok(false);
+        }
+        frontier = next;
+    }
+    Ok(true)
+}
+
+/// The types and protocols that the inheritance clause of a Swift declaration head names, by
+/// their last name (`Base` and `Parsable` of `class Sub<T: P>: Lib.Base, Parsable where …`).
+fn swift_inherited(signature: &str) -> Vec<String> {
+    let head = signature.split('{').next().unwrap_or_default();
+    let head = head.split(" where ").next().unwrap_or_default();
+    let mut depth = 0usize;
+    let mut clause = None;
+    for (at, character) in head.char_indices() {
+        match character {
+            '<' | '(' | '[' => depth += 1,
+            '>' | ')' | ']' => depth = depth.saturating_sub(1),
+            ':' if depth == 0 => {
+                clause = Some(&head[at + 1..]);
+                break;
+            }
+            _ => {}
+        }
+    }
+    let Some(clause) = clause else {
+        return Vec::new();
+    };
+    let mut names = Vec::new();
+    let mut depth = 0usize;
+    let mut current = String::new();
+    for character in clause.chars().chain([',']) {
+        match character {
+            '<' | '(' | '[' => depth += 1,
+            '>' | ')' | ']' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                let name = current.trim().rsplit('.').next().unwrap_or_default().trim();
+                if !name.is_empty() {
+                    names.push(name.to_string());
+                }
+                current.clear();
+            }
+            _ if depth == 0 => current.push(character),
+            _ => {}
+        }
+    }
+    names
+}
+
 /// Whether the argument text is a value that cannot be null.
 pub(super) fn plain_value(
     conn: &Connection,
@@ -259,12 +368,10 @@ pub(super) fn plain_value(
         && rest.ends_with(')')
         && closes_at_end(rest)
     {
-        let (types, others, failable): (i64, i64, i64) = conn
+        let (types, others): (i64, i64) = conn
             .prepare(SWIFT_CONSTRUCTED_SQL)?
-            .query_row(params![type_name], |row| {
-                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
-            })?;
-        return Ok(types > 0 && others == 0 && failable == 0);
+            .query_row(params![type_name], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        return Ok(types > 0 && others == 0 && !swift_may_fail(conn, type_name)?);
     }
     if !is_identifier(value) {
         return Ok(false);
@@ -421,7 +528,23 @@ fn declared_type(dialect: Dialect, signature: &str, name: &str) -> Option<String
 
 #[cfg(test)]
 mod tests {
-    use super::{Dialect, argument_texts, declared_type, is_literal, without_name};
+    use super::{
+        Dialect, argument_texts, declared_type, is_literal, swift_inherited, without_name,
+    };
+
+    #[test]
+    fn a_swift_inheritance_clause_names_each_base_by_its_last_name() {
+        assert_eq!(
+            swift_inherited("class Sub<T: P>: Lib.Base, Parsable where T: Q"),
+            ["Base", "Parsable"]
+        );
+        assert_eq!(
+            swift_inherited("extension Parsable where Self: Codable"),
+            Vec::<String>::new()
+        );
+        assert_eq!(swift_inherited("struct Box: Holder<Int>"), ["Holder"]);
+        assert!(swift_inherited("struct Pt").is_empty());
+    }
 
     #[test]
     fn the_arguments_of_a_call_are_its_top_level_texts() {
