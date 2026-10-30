@@ -2,9 +2,9 @@
 
 This guide details the end-to-end release process for `code-kb`. Any agent or maintainer can follow these reproducible steps to publish a new release.
 
-Current published release: [v2.11.0](https://github.com/anortham/code-kb/releases/tag/v2.11.0),
-bundling Julie 3.10.0. See the [release notes](release-notes/v2.11.0.md) and the
-[dogfood round](reviews/2026-10-30-v2.11.0-dogfood.md).
+Current published release: [v2.11.1](https://github.com/anortham/code-kb/releases/tag/v2.11.1),
+bundling Julie 3.10.0. See the [release notes](release-notes/v2.11.1.md) and the
+[dogfood round](reviews/2026-10-30-v2.11.1-dogfood.md).
 
 ---
 
