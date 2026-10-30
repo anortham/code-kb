@@ -7,9 +7,9 @@ use code_kb_core::workspace::NO_PROJECT_MARKER_REASON;
 use code_kb_core::{
     SymbolSelector, Workspace, WorkspaceError, codebase_outline_op, edit_check_op,
     ensure_fresh_file, ensure_fts_index_path, file_skeleton_op, find_references_for_symbol_ext,
-    format_context_slices, format_edit_check, format_fact_categories, format_search_results,
-    format_structural_facts, format_symbol_bodies, fts_search_symbols_explained,
-    get_context_slices_selected_op, get_symbol_bodies_selected_op,
+    fit_bodies_to_budget, fit_context_slices_to_budget, format_context_slices, format_edit_check,
+    format_fact_categories, format_search_results, format_structural_facts, format_symbol_bodies,
+    fts_search_symbols_explained, get_context_slices_selected_op, get_symbol_bodies_selected_op,
     list_structural_fact_categories_scoped, load_file_symbols, lookup_symbols_op, open_read_only,
     qualify_members, queries, reference_report, render_symbol_lookup, resolve_symbol_op,
     scan_workspace, select_reference_target,
@@ -673,6 +673,7 @@ fn main() -> anyhow::Result<ExitCode> {
                     _ => println!("{}", serde_json::Value::Array(rows)),
                 }
             } else {
+                let bodies = fit_bodies_to_budget(&conn, bodies)?;
                 print!("{}", format_symbol_bodies(&bodies));
             }
         }
@@ -693,6 +694,7 @@ fn main() -> anyhow::Result<ExitCode> {
                     _ => println!("{}", serde_json::to_string_pretty(&slices)?),
                 }
             } else {
+                let slices = fit_context_slices_to_budget(&conn, slices)?;
                 print!("{}", format_context_slices(&slices));
             }
         }

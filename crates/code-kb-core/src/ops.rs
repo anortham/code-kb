@@ -6,8 +6,10 @@ use thiserror::Error;
 use crate::db::{DbError, ensure_fts_index_path};
 use crate::edit_check::{self, BaseRequest, EditCheck, EditCheckError, EditLimits, PendingCheck};
 use crate::formatters::{
-    OutlineNode, add_path_to_outline, add_unsupported_to_outline, format_file_skeleton,
-    format_find_symbol_results, format_unindexed_file, render_outline_tree,
+    OUTLINE_NAMES_PER_FILE, OUTPUT_BUDGET_CHARS, OutlineNode, add_path_to_outline,
+    add_unsupported_to_outline, format_context_slices, format_file_skeleton,
+    format_find_symbol_results, format_member_skeleton, format_symbol_bodies,
+    format_unindexed_file, is_container_kind, render_outline_tree,
 };
 use crate::models::{
     BlastRadiusResult, CallersReportSites, CallingTest, ContextSlice, ImpactedSymbol, LabeledSite,
@@ -404,6 +406,116 @@ pub fn get_context_slices_selected_op(
     }
 }
 
+/// `bodies` fitted so that [`format_symbol_bodies`] prints at most [`OUTPUT_BUDGET_CHARS`]:
+/// the overloads share what the location comments leave (see [`fit_body_to_budget`]).
+pub fn fit_bodies_to_budget(
+    conn: &Connection,
+    bodies: Vec<(Symbol, String)>,
+) -> Result<Vec<(Symbol, String)>, OpError> {
+    let frames: Vec<(Symbol, String)> = bodies
+        .iter()
+        .map(|(symbol, _)| (symbol.clone(), String::new()))
+        .collect();
+    let share = body_share(format_symbol_bodies(&frames).len(), bodies.len());
+    bodies
+        .into_iter()
+        .map(|(symbol, body)| {
+            let body = fit_body_to_budget(conn, &symbol, body, share)?;
+            Ok((symbol, body))
+        })
+        .collect()
+}
+
+/// `slices` fitted so that [`format_context_slices`] prints at most about
+/// [`OUTPUT_BUDGET_CHARS`]: the target bodies share what the other sections leave.
+pub fn fit_context_slices_to_budget(
+    conn: &Connection,
+    slices: Vec<ContextSlice>,
+) -> Result<Vec<ContextSlice>, OpError> {
+    let frames: Vec<ContextSlice> = slices
+        .iter()
+        .map(|slice| ContextSlice {
+            target_body: String::new(),
+            ..slice.clone()
+        })
+        .collect();
+    let share = body_share(format_context_slices(&frames).len(), slices.len());
+    slices
+        .into_iter()
+        .map(|mut slice| {
+            let body = std::mem::take(&mut slice.target_body);
+            slice.target_body = fit_body_to_budget(conn, &slice.target_symbol, body, share)?;
+            Ok(slice)
+        })
+        .collect()
+}
+
+/// The characters each of `count` bodies may take when the rest of the answer takes `frame`.
+fn body_share(frame: usize, count: usize) -> usize {
+    OUTPUT_BUDGET_CHARS.saturating_sub(frame) / count.max(1)
+}
+
+/// A body longer than `budget` becomes the skeleton of its members when the symbol is a type or
+/// another container with shown members, else its first lines that fit. Each form says which
+/// lines to read for the rest and stays within `budget`. JSON answers keep the whole body.
+pub fn fit_body_to_budget(
+    conn: &Connection,
+    symbol: &Symbol,
+    body: String,
+    budget: usize,
+) -> Result<String, OpError> {
+    if body.len() <= budget {
+        return Ok(body);
+    }
+    let line_count = body.lines().count();
+    let last_line = symbol.start_line + line_count.saturating_sub(1);
+    if is_container_kind(&symbol.kind) {
+        let mut file_symbols = queries::load_file_symbols(conn, &symbol.path)?;
+        let inherited = queries::inherited_writes_among(
+            conn,
+            file_symbols.iter().map(|s| s.symbol_id.as_str()),
+        )?;
+        file_symbols.retain(|s| !inherited.contains(&s.symbol_id));
+        let note = format!(
+            "// `{}` has {line_count} lines, more than about 8K tokens, so its members follow with their bodies hidden. Call get_symbol_body on a member, or Read lines {}-{last_line}.\n",
+            symbol.name, symbol.start_line
+        );
+        if let Some(members) =
+            format_member_skeleton(symbol, &file_symbols, budget.saturating_sub(note.len()))
+            && note.len() + members.len() <= budget
+        {
+            return Ok(note + &members);
+        }
+    }
+    let cut_note = |first_line: usize| {
+        format!("// Cut to about 8K tokens: Read lines {first_line}-{last_line} for the rest.\n")
+    };
+    let room = budget.saturating_sub(cut_note(last_line).len() + 1);
+    let mut kept = 0;
+    let mut kept_lines = 0;
+    for line in body.split_inclusive('\n') {
+        if kept + line.len() > room {
+            break;
+        }
+        kept += line.len();
+        kept_lines += 1;
+    }
+    if kept_lines == 0 {
+        kept = body
+            .char_indices()
+            .map(|(index, _)| index)
+            .take_while(|index| *index <= room)
+            .last()
+            .unwrap_or(0);
+    }
+    let mut out = body[..kept].to_string();
+    if !out.is_empty() && !out.ends_with('\n') {
+        out.push('\n');
+    }
+    out.push_str(&cut_note(symbol.start_line + kept_lines));
+    Ok(out)
+}
+
 /// The current ids of the overloads a name selects, after their file is refreshed. Returns
 /// `ambiguity` for an id selector or when the refresh left none, and `TooManyOverloads` for more
 /// than `max`.
@@ -568,6 +680,27 @@ pub fn file_skeleton_op(
     ))
 }
 
+const OUTLINE_SHORTENED_NOTE: &str = "[Shortened to about 8K tokens: fewer names per file, or fewer levels. Pass a subfolder as the path for more.]\n";
+
+/// The lines of `tree` that fit `budget`, and one line that counts the others.
+fn cut_outline_lines(tree: &str, budget: usize) -> String {
+    let mut kept = String::new();
+    let mut lines = tree.lines();
+    for line in lines.by_ref() {
+        if kept.len() + line.len() + 1 > budget {
+            let more = 1 + lines.count();
+            kept.push_str(&format!(
+                "(+{more} more {}; pass a subfolder as the path to list them)\n",
+                if more == 1 { "line" } else { "lines" }
+            ));
+            break;
+        }
+        kept.push_str(line);
+        kept.push('\n');
+    }
+    kept
+}
+
 /// Generate a memory-bounded codebase outline pushed down into SQLite.
 pub fn codebase_outline_op(
     workspace: &Workspace,
@@ -627,9 +760,35 @@ pub fn codebase_outline_op(
         format!("{}/{}/", workspace.repo_name, norm_filter)
     };
 
-    let mut out = String::new();
-    out.push_str(&format!("{display_root}\n"));
-    render_outline_tree(&mut out, &root_node, "", 0, depth);
+    let render = |names_per_file, depth| {
+        let mut tree = String::new();
+        render_outline_tree(&mut tree, &root_node, "", 0, depth, names_per_file);
+        tree
+    };
+    let mut tree = render(OUTLINE_NAMES_PER_FILE, depth);
+    let budget = OUTPUT_BUDGET_CHARS.saturating_sub(display_root.len() + 400);
+    let shortened = tree.len() > budget;
+    for (names_per_file, depth) in [
+        (3, depth),
+        (2, depth),
+        (1, depth),
+        (0, depth),
+        (0, depth.min(1)),
+    ] {
+        if tree.len() <= budget {
+            break;
+        }
+        tree = render(names_per_file, depth);
+    }
+    if tree.len() > budget {
+        tree = cut_outline_lines(&tree, budget);
+    }
+
+    let mut out = format!("{display_root}\n");
+    if shortened {
+        out.push_str(OUTLINE_SHORTENED_NOTE);
+    }
+    out.push_str(&tree);
 
     if truncated {
         let msg = if path_filter.is_some() {
@@ -1629,7 +1788,9 @@ mod tests {
     use rusqlite::Connection;
 
     use super::{
-        FileReportLimits, codebase_outline_op, file_blast_radius_within, one_level_deeper,
+        FileReportLimits, OUTLINE_SHORTENED_NOTE, OUTPUT_BUDGET_CHARS, codebase_outline_op,
+        file_blast_radius_within, fit_bodies_to_budget, fit_body_to_budget, format_symbol_bodies,
+        one_level_deeper,
     };
     use crate::workspace::Workspace;
     use crate::{
@@ -2057,5 +2218,155 @@ mod tests {
 
         let scoped_outline = codebase_outline_op(&workspace, &conn, 2, Some("src")).unwrap();
         assert!(scoped_outline.contains("[Outline truncated: path matches over 1,000 files."));
+    }
+
+    fn long_function(id: &str, start_line: usize) -> (crate::models::Symbol, String) {
+        let symbol = crate::models::Symbol {
+            symbol_id: id.into(),
+            file_id: "f".into(),
+            path: "src/lib.rs".into(),
+            language: "rust".into(),
+            name: "parse".into(),
+            kind: "function".into(),
+            signature: Some("fn parse()".into()),
+            doc_comment: None,
+            visibility: None,
+            parent_symbol_id: None,
+            start_line,
+            start_column: 0,
+            end_line: start_line + 1001,
+            end_column: 1,
+            start_byte: 0,
+            end_byte: 0,
+            body_start_line: Some(start_line),
+            body_start_column: None,
+            body_end_line: Some(start_line + 1001),
+            body_end_column: None,
+            body_start_byte: None,
+            body_end_byte: None,
+            body_hash: None,
+            semantic_group: None,
+            is_test: false,
+            test_container: false,
+        };
+        let body: String = std::iter::once("fn parse() {\n".to_string())
+            .chain((0..1000).map(|i| format!("    step({i}); // keeps the parser moving\n")))
+            .chain(std::iter::once("}\n".to_string()))
+            .collect();
+        (symbol, body)
+    }
+
+    #[test]
+    fn overloads_share_one_budget_and_each_names_the_lines_it_cut() {
+        let conn = Connection::open_in_memory().unwrap();
+        let bodies = vec![long_function("a", 1), long_function("b", 2000)];
+
+        let fitted = fit_bodies_to_budget(&conn, bodies).unwrap();
+        let answer = format_symbol_bodies(&fitted);
+
+        assert!(answer.len() <= OUTPUT_BUDGET_CHARS, "{}", answer.len());
+        assert!(answer.contains("`parse` has 2 overloads"));
+        for (_, body) in &fitted {
+            let note = body.lines().last().unwrap();
+            assert!(
+                note.starts_with("// Cut to about 8K tokens: Read lines "),
+                "{note}"
+            );
+        }
+        assert!(
+            fitted[1].1.ends_with("-3001 for the rest.\n"),
+            "{}",
+            fitted[1].1
+        );
+    }
+
+    #[test]
+    fn a_cut_body_with_its_note_stays_within_the_budget() {
+        let conn = Connection::open_in_memory().unwrap();
+        let (symbol, body) = long_function("a", 1);
+
+        let fitted = fit_body_to_budget(&conn, &symbol, body, 1_000).unwrap();
+
+        assert!(fitted.len() <= 1_000, "{}", fitted.len());
+        assert!(fitted.starts_with("fn parse() {\n    step(0);"));
+        assert!(fitted.ends_with("-1002 for the rest.\n"), "{fitted}");
+    }
+
+    fn outline_of_wide_folder(files: usize) -> String {
+        let temp = crate::safe_tempdir();
+        let workspace = Workspace::new(temp.path().to_path_buf());
+        let conn = Connection::open(temp.path().join("index.db")).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE files (
+                file_id TEXT, path TEXT, language TEXT, content_hash TEXT,
+                content_bytes INTEGER, line_count INTEGER, indexed_at TEXT
+            );
+            CREATE TABLE symbols (
+                symbol_id TEXT, file_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
+                signature TEXT, doc_comment TEXT, visibility TEXT, parent_symbol_id TEXT,
+                start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
+                start_byte INTEGER, end_byte INTEGER, body_start_line INTEGER,
+                body_start_column INTEGER, body_end_line INTEGER, body_end_column INTEGER,
+                body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
+                semantic_group TEXT, is_test INTEGER, test_container INTEGER
+            );",
+        )
+        .unwrap();
+        let tx = conn.unchecked_transaction().unwrap();
+        for i in 0..files {
+            let path = format!("src/module_with_a_long_descriptive_name_{i:04}.py");
+            tx.execute(
+                "INSERT INTO files VALUES (?1, ?2, 'python', 'hash', 10, 60, 'now')",
+                rusqlite::params![format!("f{i}"), path],
+            )
+            .unwrap();
+            for j in 0..6 {
+                tx.execute(
+                    "INSERT INTO symbols VALUES (?1, ?2, ?3, 'python', ?4, 'function', NULL, NULL,
+                        NULL, NULL, ?5, 0, ?5, 1, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                        NULL, 0, 0)",
+                    rusqlite::params![
+                        format!("s{i}_{j}"),
+                        format!("f{i}"),
+                        path,
+                        format!("handle_a_long_named_request_{j}"),
+                        j * 10 + 1
+                    ],
+                )
+                .unwrap();
+            }
+        }
+        tx.commit().unwrap();
+        codebase_outline_op(&workspace, &conn, 2, Some("src")).unwrap()
+    }
+
+    #[test]
+    fn a_wide_folder_outline_names_fewer_definitions_per_file_to_fit_the_budget() {
+        let outline = outline_of_wide_folder(300);
+
+        assert!(outline.len() <= OUTPUT_BUDGET_CHARS, "{}", outline.len());
+        assert!(outline.contains(OUTLINE_SHORTENED_NOTE), "{outline}");
+        assert!(outline.contains(
+            "module_with_a_long_descriptive_name_0299.py [function handle_a_long_named_request_0"
+        ));
+        assert!(
+            !outline.contains("more lines; pass a subfolder"),
+            "{outline}"
+        );
+    }
+
+    #[test]
+    fn an_outline_that_counts_alone_cannot_fit_lists_the_lines_that_fit_and_counts_the_rest() {
+        let outline = outline_of_wide_folder(900);
+
+        assert!(outline.len() <= OUTPUT_BUDGET_CHARS, "{}", outline.len());
+        assert!(outline.contains(OUTLINE_SHORTENED_NOTE), "{outline}");
+        assert!(outline.contains("module_with_a_long_descriptive_name_0000.py [6 definitions]"));
+        let last = outline.lines().last().unwrap();
+        assert!(
+            last.starts_with("(+")
+                && last.ends_with("more lines; pass a subfolder as the path to list them)"),
+            "{last}"
+        );
     }
 }

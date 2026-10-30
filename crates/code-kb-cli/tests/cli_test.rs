@@ -3038,3 +3038,88 @@ fn test_cli_names_the_scan_remedy_when_an_unreadable_index_cannot_be_rebuilt() {
         "{stderr}"
     );
 }
+
+fn oversized_repo() -> tempfile::TempDir {
+    let repo = code_kb_core::safe_tempdir();
+    let root = repo.path();
+    let methods: String = (0..1500)
+        .map(|i| format!("    def method_{i}(self, value):\n        return value + {i}\n\n"))
+        .collect();
+    let statements: String = (0..3000)
+        .map(|i| format!("    total += {i}  # step {i} of the long loop body\n"))
+        .collect();
+    let records: Vec<String> = (0..3000)
+        .map(|i| format!("{{\"id\": {i}, \"tags\": {{\"name\": \"item{i}\", \"rank\": {i}}}}}"))
+        .collect();
+    for (path, source) in [
+        (
+            "pyproject.toml",
+            "[project]\nname = 'big'\nversion = '0.1.0'\n".to_string(),
+        ),
+        ("big.py", format!("class Big:\n{methods}")),
+        (
+            "long.py",
+            format!("def long_function():\n    total = 0\n{statements}    return total\n"),
+        ),
+        (
+            "data.json",
+            format!("{{\"records\": [\n{}\n]}}\n", records.join(",\n")),
+        ),
+    ] {
+        std::fs::write(root.join(path), source).unwrap();
+    }
+    repo
+}
+
+#[test]
+fn text_answers_for_oversized_files_and_symbols_stay_within_the_output_budget() {
+    let repo = oversized_repo();
+    let root = repo.path();
+    let budget = code_kb_core::OUTPUT_BUDGET_CHARS;
+
+    for file in ["big.py", "data.json"] {
+        let skeleton = run_refs(root, &["skeleton", file]);
+        assert!(skeleton.len() <= budget, "{file}: {}", skeleton.len());
+        assert!(skeleton.contains("// Cut to about 8K tokens"), "{skeleton}");
+        assert!(skeleton.contains(" more rows: L"), "{skeleton}");
+    }
+    let python = run_refs(root, &["skeleton", "big.py"]);
+    assert!(python.contains("class Big {"), "{python}");
+    assert!(python.contains("def method_0(self, value)"), "{python}");
+    assert!(!python.contains("def method_1499("), "{python}");
+
+    let class_body = run_refs(root, &["body", "Big"]);
+    assert!(class_body.len() <= budget, "{}", class_body.len());
+    assert!(
+        class_body.contains("`Big` has 4500 lines, more than about 8K tokens, so its members follow with their bodies hidden. Call get_symbol_body on a member, or Read lines 1-4500."),
+        "{class_body}"
+    );
+    assert!(
+        class_body.contains("def method_0(self, value)"),
+        "{class_body}"
+    );
+    assert!(!class_body.contains("return value + 0"), "{class_body}");
+
+    let class_context = run_refs(root, &["context", "Big"]);
+    assert!(class_context.len() <= budget, "{}", class_context.len());
+    assert!(
+        class_context.contains("its members follow"),
+        "{class_context}"
+    );
+
+    let function_body = run_refs(root, &["body", "long_function"]);
+    assert!(function_body.len() <= budget, "{}", function_body.len());
+    assert!(
+        function_body.contains("    total += 0  # step 0"),
+        "{function_body}"
+    );
+    let cut_line = function_body.lines().last().unwrap();
+    assert!(
+        cut_line.starts_with("// Cut to about 8K tokens: Read lines ")
+            && cut_line.ends_with("-3003 for the rest."),
+        "{cut_line}"
+    );
+
+    let json_body = run_refs(root, &["--json", "body", "long_function"]);
+    assert!(json_body.contains("step 2999 of the long loop body"));
+}

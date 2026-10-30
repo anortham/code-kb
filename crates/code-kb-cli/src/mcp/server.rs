@@ -8,11 +8,12 @@ use code_kb_core::workspace::{NO_PROJECT_MARKER_REASON, paths_equal};
 use code_kb_core::{
     Connection, MAX_CONTEXT_OVERLOADS, SymbolSelector, WatcherHandle, Workspace, WorkspaceError,
     create_index, edit_check_op, ensure_fts_index_path, ensure_index_matches_extractor,
-    file_sizes_for_paths, file_skeleton_op, find_references_for_symbol_ext, format_context_slices,
-    format_symbol_bodies, get_context_slices_selected_op, get_symbol_bodies_selected_op,
-    installed_extractor_version, is_project_root, is_unreadable_database, lookup_symbols_op,
-    open_global_telemetry_db, open_read_only, reconcile_offline_edits, record_tool_call,
-    record_tool_call_conn, reference_report, render_symbol_lookup, resolve_symbol_op, scan_remedy,
+    file_sizes_for_paths, file_skeleton_op, find_references_for_symbol_ext, fit_bodies_to_budget,
+    fit_context_slices_to_budget, format_context_slices, format_symbol_bodies,
+    get_context_slices_selected_op, get_symbol_bodies_selected_op, installed_extractor_version,
+    is_project_root, is_unreadable_database, lookup_symbols_op, open_global_telemetry_db,
+    open_read_only, reconcile_offline_edits, record_tool_call, record_tool_call_conn,
+    reference_report, render_symbol_lookup, resolve_symbol_op, scan_remedy,
     select_reference_target, start_watcher,
 };
 
@@ -1068,7 +1069,9 @@ impl McpServer {
                     &conn,
                     &selector,
                     file_path,
-                ) {
+                )
+                .and_then(|bodies| fit_bodies_to_budget(&conn, bodies))
+                {
                     Ok(bodies) => CallToolResult::text(format_symbol_bodies(&bodies))
                         .with_logical_result_count(bodies.len())
                         .with_baseline_paths(vec![bodies[0].0.path.clone()]),
@@ -1097,7 +1100,9 @@ impl McpServer {
                     &selector,
                     file_path,
                     include_external,
-                ) {
+                )
+                .and_then(|slices| fit_context_slices_to_budget(&conn, slices))
+                {
                     Ok(slices) => CallToolResult::text(format_context_slices(&slices))
                         .with_logical_result_count(slices.len())
                         .with_baseline_paths(vec![slices[0].target_symbol.path.clone()]),

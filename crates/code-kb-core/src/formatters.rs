@@ -34,17 +34,7 @@ pub fn format_file_skeleton(
         return out;
     }
 
-    // A Rust `impl` block in this file can belong to a type in another file; its methods are roots here.
-    let in_file: HashSet<&str> = symbols.iter().map(|s| s.symbol_id.as_str()).collect();
-    let mut children_map: HashMap<Option<String>, Vec<&Symbol>> = HashMap::new();
-    for s in symbols {
-        let parent = s
-            .parent_symbol_id
-            .clone()
-            .filter(|parent| in_file.contains(parent.as_str()));
-        children_map.entry(parent).or_default().push(s);
-    }
-
+    let children_map = children_in_file(symbols);
     let roots: Vec<&Symbol> = match children_map.get(&None) {
         Some(roots) => roots.clone(),
         None => symbols.iter().collect(),
@@ -53,15 +43,214 @@ pub fn format_file_skeleton(
         out.push_str(&hidden_rows_summary(&roots));
         return out;
     }
-    for root in roots {
-        render_symbol_skeleton(&mut out, root, None, &children_map, 0);
+    let budget = OUTPUT_BUDGET_CHARS.saturating_sub(out.len() + SKELETON_CUT_NOTE.len());
+    let (rows, cut) = render_rows_within(&roots, None, &children_map, 0, budget);
+    if cut {
+        out.push_str(SKELETON_CUT_NOTE);
     }
-
+    out.push_str(&rows);
     out
+}
+
+/// The most characters that a skeleton, a body, or a context answer prints: about 8K tokens,
+/// below the 10K tokens at which Claude Code warns about a large MCP answer.
+pub const OUTPUT_BUDGET_CHARS: usize = 32_000;
+
+const SKELETON_CUT_NOTE: &str = "// Cut to about 8K tokens: each `rows` comment gives the lines it hides. Read those lines, or call lookup_symbol with `Name.` to list the members of a type.\n\n";
+
+type ChildrenMap<'a> = HashMap<Option<String>, Vec<&'a Symbol>>;
+
+/// The rows of one file under their parents. A Rust `impl` block in this file can belong to a
+/// type in another file; its methods are roots here.
+fn children_in_file(symbols: &[Symbol]) -> ChildrenMap<'_> {
+    let in_file: HashSet<&str> = symbols.iter().map(|s| s.symbol_id.as_str()).collect();
+    let mut children_map: ChildrenMap = HashMap::new();
+    for s in symbols {
+        let parent = s
+            .parent_symbol_id
+            .clone()
+            .filter(|parent| in_file.contains(parent.as_str()));
+        children_map.entry(parent).or_default().push(s);
+    }
+    children_map
+}
+
+/// The rows a cut skeleton prints: the first `admitted` shown rows in breadth-first order, so
+/// the outer structure stays and the deepest rows go first. A row with no rank prints.
+#[derive(Clone, Copy)]
+struct RowCut<'a> {
+    rank: &'a HashMap<&'a str, usize>,
+    admitted: usize,
+}
+
+fn admits(cut: Option<RowCut>, sym: &Symbol) -> bool {
+    cut.is_none_or(|cut| {
+        cut.rank
+            .get(sym.symbol_id.as_str())
+            .is_none_or(|rank| *rank < cut.admitted)
+    })
+}
+
+/// The skeleton rows of `roots` within `budget` characters, and whether a cut left rows out.
+fn render_rows_within(
+    roots: &[&Symbol],
+    parent: Option<&Symbol>,
+    children_map: &ChildrenMap,
+    indent_level: usize,
+    budget: usize,
+) -> (String, bool) {
+    let render = |cut: Option<RowCut>| {
+        let mut out = String::new();
+        for root in roots {
+            render_symbol_skeleton(&mut out, root, parent, children_map, indent_level, cut);
+        }
+        push_fold(&mut out, roots, parent, children_map, cut, indent_level);
+        out
+    };
+    let full = render(None);
+    if full.len() <= budget {
+        return (full, false);
+    }
+    let order = breadth_first_rows(roots, parent, children_map);
+    let rank: HashMap<&str, usize> = order
+        .iter()
+        .enumerate()
+        .map(|(index, sym)| (sym.symbol_id.as_str(), index))
+        .collect();
+    let render_first = |admitted| {
+        render(Some(RowCut {
+            rank: &rank,
+            admitted,
+        }))
+    };
+    let (mut low, mut high) = (0, order.len());
+    while low < high {
+        let mid = (low + high).div_ceil(2);
+        if render_first(mid).len() <= budget {
+            low = mid;
+        } else {
+            high = mid - 1;
+        }
+    }
+    // Admitting the last hidden row of a group drops its fold comment, so a longer prefix can
+    // render shorter than one the search rejected.
+    let best = (low + 1..=(low + FOLD_LOOKAHEAD_ROWS).min(order.len()))
+        .rev()
+        .find(|admitted| render_first(*admitted).len() <= budget)
+        .unwrap_or(low);
+    (render_first(best), true)
+}
+
+const FOLD_LOOKAHEAD_ROWS: usize = 16;
+
+fn breadth_first_rows<'a>(
+    roots: &[&'a Symbol],
+    parent: Option<&'a Symbol>,
+    children_map: &ChildrenMap<'a>,
+) -> Vec<&'a Symbol> {
+    let mut order = Vec::new();
+    let mut queue: std::collections::VecDeque<(&Symbol, Option<&Symbol>)> =
+        roots.iter().map(|root| (*root, parent)).collect();
+    while let Some((sym, parent)) = queue.pop_front() {
+        if !is_skeleton_row_shown(sym, parent) {
+            continue;
+        }
+        order.push(sym);
+        if let Some(children) = children_map.get(&Some(sym.symbol_id.clone())) {
+            queue.extend(children.iter().map(|child| (*child, Some(sym))));
+        }
+    }
+    order
+}
+
+/// The first and last line of `sym` and of every row below it, which can lie outside its own
+/// span (a Rust method in another `impl` block of the file).
+fn subtree_lines(sym: &Symbol, children_map: &ChildrenMap) -> (usize, usize) {
+    let mut lines = (sym.start_line, sym.end_line);
+    let mut stack = vec![sym];
+    while let Some(row) = stack.pop() {
+        for child in children_map
+            .get(&Some(row.symbol_id.clone()))
+            .into_iter()
+            .flatten()
+        {
+            lines = (lines.0.min(child.start_line), lines.1.max(child.end_line));
+            stack.push(child);
+        }
+    }
+    lines
+}
+
+/// The lines of `rows` and of every row below them.
+fn rows_lines(rows: &[&Symbol], children_map: &ChildrenMap) -> Option<(usize, usize)> {
+    rows.iter()
+        .map(|row| subtree_lines(row, children_map))
+        .reduce(|a, b| (a.0.min(b.0), a.1.max(b.1)))
+}
+
+/// One comment for the shown `rows` that a cut leaves out, with the lines they and the rows
+/// below them span.
+fn push_fold(
+    out: &mut String,
+    rows: &[&Symbol],
+    parent: Option<&Symbol>,
+    children_map: &ChildrenMap,
+    cut: Option<RowCut>,
+    indent_level: usize,
+) {
+    let hidden: Vec<&Symbol> = rows
+        .iter()
+        .copied()
+        .filter(|row| is_skeleton_row_shown(row, parent) && !admits(cut, row))
+        .collect();
+    let Some((first, last)) = rows_lines(&hidden, children_map) else {
+        return;
+    };
+    let indent = "    ".repeat(indent_level);
+    let noun = if hidden.len() == 1 { "row" } else { "rows" };
+    out.push_str(&format!(
+        "{indent}/* {} more {noun}: L{first}-L{last} */\n",
+        hidden.len()
+    ));
+}
+
+/// The skeleton of `target` and of the rows below it in `file_symbols` within `budget`
+/// characters, or `None` when no row below it shows.
+pub fn format_member_skeleton(
+    target: &Symbol,
+    file_symbols: &[Symbol],
+    budget: usize,
+) -> Option<String> {
+    let children_map = children_in_file(file_symbols);
+    let has_shown_member = children_map
+        .get(&Some(target.symbol_id.clone()))
+        .is_some_and(|members| {
+            members
+                .iter()
+                .any(|member| is_skeleton_row_shown(member, Some(target)))
+        });
+    if !has_shown_member {
+        return None;
+    }
+    let parent = target.parent_symbol_id.as_deref().and_then(|parent| {
+        file_symbols
+            .iter()
+            .find(|symbol| symbol.symbol_id == parent)
+    });
+    Some(render_rows_within(&[target], parent, &children_map, 0, budget).0)
 }
 
 /// The answer for a file whose symbols are all hidden from the skeleton: the top-level rows
 /// grouped by kind, with the first three names of each group.
+/// `name` cut to 120 characters with `…`, so a generated name cannot flood a one-line summary.
+fn cut_name(name: &str) -> std::borrow::Cow<'_, str> {
+    const MAX_CHARS: usize = 120;
+    match name.char_indices().nth(MAX_CHARS) {
+        Some((end, _)) => format!("{}…", &name[..end]).into(),
+        None => name.into(),
+    }
+}
+
 fn hidden_rows_summary(roots: &[&Symbol]) -> String {
     const NAMES_PER_KIND: usize = 3;
     let mut groups: Vec<(&str, Vec<&Symbol>)> = Vec::new();
@@ -81,7 +270,7 @@ fn hidden_rows_summary(roots: &[&Symbol]) -> String {
             let mut names: Vec<String> = rows
                 .iter()
                 .take(NAMES_PER_KIND)
-                .map(|row| format!("`{}` L{}", row.name, row.start_line))
+                .map(|row| format!("`{}` L{}", cut_name(&row.name), row.start_line))
                 .collect();
             if rows.len() > NAMES_PER_KIND {
                 names.push(format!("+{} more", rows.len() - NAMES_PER_KIND));
@@ -106,7 +295,7 @@ pub fn format_unindexed_file(file_path: &str, reason: &str) -> String {
     format!("// File: {file_path}\n\n// {reason} Read the file.\n")
 }
 
-fn is_container_kind(kind: &str) -> bool {
+pub(crate) fn is_container_kind(kind: &str) -> bool {
     let hides_its_body = matches!(
         kind,
         "function" | "method" | "constructor" | "destructor" | "operator"
@@ -401,10 +590,11 @@ fn render_symbol_skeleton(
     out: &mut String,
     sym: &Symbol,
     parent: Option<&Symbol>,
-    children_map: &HashMap<Option<String>, Vec<&Symbol>>,
+    children_map: &ChildrenMap,
     indent_level: usize,
+    cut: Option<RowCut>,
 ) {
-    if !is_skeleton_row_shown(sym, parent) {
+    if !is_skeleton_row_shown(sym, parent) || !admits(cut, sym) {
         return;
     }
 
@@ -459,12 +649,33 @@ fn render_symbol_skeleton(
     {
         let raw_sig = sym.signature.as_deref().unwrap_or(&sym.name);
         let sig = container_signature(raw_sig, sym);
-        out.push_str(&format!("{indent}{sig} {{\n"));
-        if let Some(child_list) = children {
-            for child in child_list {
-                render_symbol_skeleton(out, child, Some(sym), children_map, indent_level + 1);
-            }
+        let child_list = children.map(Vec::as_slice).unwrap_or_default();
+        let shown: Vec<&Symbol> = child_list
+            .iter()
+            .copied()
+            .filter(|child| is_skeleton_row_shown(child, Some(sym)))
+            .collect();
+        if !shown.iter().any(|child| admits(cut, child)) {
+            let noun = if shown.len() == 1 { "row" } else { "rows" };
+            let (first, last) = subtree_lines(sym, children_map);
+            out.push_str(&format!(
+                "{indent}{sig} {{ /* {} {noun} hidden: L{first}-L{last} */ }}\n",
+                shown.len()
+            ));
+            return;
         }
+        out.push_str(&format!("{indent}{sig} {{\n"));
+        for child in child_list {
+            render_symbol_skeleton(out, child, Some(sym), children_map, indent_level + 1, cut);
+        }
+        push_fold(
+            out,
+            child_list,
+            Some(sym),
+            children_map,
+            cut,
+            indent_level + 1,
+        );
         out.push_str(&format!("{indent}}} // {span_str}\n\n"));
     } else {
         if let Some(count) = sym.hidden_body_line_count() {
@@ -499,33 +710,74 @@ fn render_symbol_skeleton(
             && let Some(child_list) = children
         {
             for child in child_list {
-                render_symbol_skeleton(out, child, Some(sym), children_map, indent_level);
+                render_symbol_skeleton(out, child, Some(sym), children_map, indent_level, cut);
             }
+            push_fold(out, child_list, Some(sym), children_map, cut, indent_level);
         } else if let Some(child_list) = children
             && child_list.iter().any(|child| {
                 child.start_line > sym.end_line || is_structural_inline_child(child, Some(sym))
             })
         {
-            for child in child_list
+            let after: Vec<&Symbol> = child_list
                 .iter()
+                .copied()
                 .filter(|child| child.start_line > sym.end_line)
-            {
-                render_symbol_skeleton(out, child, Some(sym), children_map, indent_level);
+                .collect();
+            for child in &after {
+                render_symbol_skeleton(out, child, Some(sym), children_map, indent_level, cut);
             }
-            for child in child_list
+            push_fold(out, &after, Some(sym), children_map, cut, indent_level);
+            let inline: Vec<&Symbol> = child_list
                 .iter()
+                .copied()
                 .filter(|child| is_structural_inline_child(child, Some(sym)))
-            {
-                render_symbol_skeleton(out, child, Some(sym), children_map, indent_level + 1);
+                .collect();
+            for child in &inline {
+                render_symbol_skeleton(out, child, Some(sym), children_map, indent_level + 1, cut);
             }
+            push_fold(out, &inline, Some(sym), children_map, cut, indent_level + 1);
         }
+    }
+}
+
+/// A file with definitions or tests in the outline: its first definitions as `kind name`, and
+/// its counts.
+#[derive(Default)]
+pub struct OutlineFile {
+    pub names: Vec<String>,
+    pub definitions: usize,
+    pub tests: usize,
+    pub fixtures: usize,
+}
+
+impl OutlineFile {
+    /// The bracketed list after the file name: up to `names_listed` names, then the counts.
+    fn tags(&self, names_listed: usize) -> String {
+        let mut tags: Vec<String> = self.names.iter().take(names_listed).cloned().collect();
+        match (tags.len(), self.definitions) {
+            (_, 0) => {}
+            (0, count) => tags.push(format!("{count} {}", plural(count, "definition"))),
+            (shown, count) if count > shown => tags.push(format!("+{} more", count - shown)),
+            _ => {}
+        }
+        if self.tests > 0 {
+            tags.push(format!("{} {}", self.tests, plural(self.tests, "test")));
+        }
+        if self.fixtures > 0 {
+            tags.push(format!(
+                "{} {}",
+                self.fixtures,
+                plural(self.fixtures, "fixture")
+            ));
+        }
+        format!(" [{}]", tags.join(", "))
     }
 }
 
 /// Node representing directory or file in codebase outline tree.
 #[derive(Default)]
 pub struct OutlineNode {
-    pub files: BTreeMap<String, Vec<String>>, // file_name -> list of top symbol names with kinds
+    pub files: BTreeMap<String, OutlineFile>,
     pub subdirs: BTreeMap<String, OutlineNode>,
     /// Files under this directory that lie below the depth limit.
     pub hidden_files: usize,
@@ -533,6 +785,21 @@ pub struct OutlineNode {
     pub plain_files: Vec<String>,
     /// Files under this directory that no extractor reads.
     pub unsupported_files: usize,
+}
+
+impl OutlineNode {
+    /// The indexed and the unsupported files in this folder and every folder below it.
+    fn files_below(&self) -> (usize, usize) {
+        self.subdirs.values().map(OutlineNode::files_below).fold(
+            (
+                self.files.len() + self.plain_files.len() + self.hidden_files,
+                self.unsupported_files,
+            ),
+            |(indexed, unsupported), (sub_indexed, sub_unsupported)| {
+                (indexed + sub_indexed, unsupported + sub_unsupported)
+            },
+        )
+    }
 }
 
 /// The path components of `file_path` below the outline's path filter, or `None` for a path
@@ -618,32 +885,25 @@ pub fn add_path_to_outline(
             if depth > max_depth {
                 curr.hidden_files += 1;
             } else {
-                let mut sym_tags: Vec<String> = symbols_by_file
+                let names: Vec<String> = symbols_by_file
                     .get(&normalized)
                     .into_iter()
                     .flatten()
                     .filter(|s| !s.is_test && !s.test_container)
-                    .take(5)
+                    .take(OUTLINE_NAMES_PER_FILE)
                     .map(|s| format!("{} {}", display_kind(s), s.name))
                     .collect();
                 let count = counts.get(&normalized).copied().unwrap_or_default();
-                if count.definitions > sym_tags.len() {
-                    sym_tags.push(format!("+{} more", count.definitions - sym_tags.len()));
-                }
-                if count.tests > 0 {
-                    sym_tags.push(format!("{} {}", count.tests, plural(count.tests, "test")));
-                }
-                if count.fixtures > 0 {
-                    sym_tags.push(format!(
-                        "{} {}",
-                        count.fixtures,
-                        plural(count.fixtures, "fixture")
-                    ));
-                }
-                if sym_tags.is_empty() {
+                let file = OutlineFile {
+                    definitions: count.definitions.max(names.len()),
+                    names,
+                    tests: count.tests,
+                    fixtures: count.fixtures,
+                };
+                if file.definitions + file.tests + file.fixtures == 0 {
                     curr.plain_files.push(comp.to_string());
                 } else {
-                    curr.files.insert(comp.to_string(), sym_tags);
+                    curr.files.insert(comp.to_string(), file);
                 }
             }
         } else if i < max_depth {
@@ -655,6 +915,9 @@ pub fn add_path_to_outline(
     }
 }
 
+/// The most definitions an outline names for one file before it counts the rest.
+pub const OUTLINE_NAMES_PER_FILE: usize = 5;
+
 /// The most files with definitions a subfolder lists; the folder the outline starts at lists all.
 const FILES_LISTED_PER_FOLDER: usize = 40;
 
@@ -664,6 +927,7 @@ pub fn render_outline_tree(
     prefix: &str,
     depth: usize,
     max_depth: usize,
+    names_per_file: usize,
 ) {
     if depth >= max_depth {
         return;
@@ -688,29 +952,28 @@ pub fn render_outline_tree(
         let branch = if is_last { "└── " } else { "├── " };
         let next_prefix = format!("{}{}", prefix, if is_last { "    " } else { "│   " });
 
-        let hidden = match (sub.hidden_files, sub.unsupported_files) {
+        let (hidden_files, unsupported_files) = if depth + 1 >= max_depth {
+            sub.files_below()
+        } else {
+            (sub.hidden_files, sub.unsupported_files)
+        };
+        let hidden = match (hidden_files, unsupported_files) {
             (0, 0) => String::new(),
             (0, m) => format!(" ({m} unsupported {})", plural(m, "file")),
             (n, 0) => format!(" ({n} indexed {})", plural(n, "file")),
             (n, m) => format!(" ({n} indexed {}, {m} unsupported)", plural(n, "file")),
         };
         out.push_str(&format!("{prefix}{branch}{name}/{hidden}\n"));
-        render_outline_tree(out, sub, &next_prefix, depth + 1, max_depth);
+        render_outline_tree(out, sub, &next_prefix, depth + 1, max_depth, names_per_file);
     }
 
     // Render files
-    for (file_name, syms) in node.files.iter().take(listed) {
+    for (file_name, file) in node.files.iter().take(listed) {
         index += 1;
         let is_last = index == total_items;
         let branch = if is_last { "└── " } else { "├── " };
-
-        let sym_suffix = if !syms.is_empty() {
-            format!(" [{}]", syms.join(", "))
-        } else {
-            String::new()
-        };
-
-        out.push_str(&format!("{prefix}{branch}{file_name}{sym_suffix}\n"));
+        let tags = file.tags(names_per_file);
+        out.push_str(&format!("{prefix}{branch}{file_name}{tags}\n"));
     }
 
     if more_files > 0 {
@@ -3897,7 +4160,7 @@ mod tests {
         add_path_to_outline(&mut root, "tests/test_basic.py", &symbols, &counts, 3, "");
 
         let mut out = String::new();
-        render_outline_tree(&mut out, &root, "", 0, 3);
+        render_outline_tree(&mut out, &root, "", 0, 3, OUTLINE_NAMES_PER_FILE);
 
         assert!(
             out.contains("test_basic.py [function helper, +2 more, 90 tests, 2 fixtures]"),
@@ -3919,10 +4182,18 @@ mod tests {
         }
 
         let mut out = String::new();
-        render_outline_tree(&mut out, &root, "", 0, 2);
+        render_outline_tree(&mut out, &root, "", 0, 2, OUTLINE_NAMES_PER_FILE);
 
         assert!(out.contains("└── flask/ (3 indexed files)"), "{out}");
         assert!(!out.contains("tests/ ("), "{out}");
+
+        let mut one_level = String::new();
+        render_outline_tree(&mut one_level, &root, "", 0, 1, 0);
+
+        assert_eq!(
+            one_level,
+            "├── src/ (3 indexed files)\n└── tests/ (1 indexed file)\n"
+        );
     }
 
     #[test]
@@ -4892,6 +5163,139 @@ mod tests {
             is_test: false,
             test_container: false,
         }
+    }
+
+    fn leaf(id: &str, parent: &str, signature: &str, line: usize) -> Symbol {
+        skeleton_row(
+            id,
+            Some(parent),
+            "field",
+            signature,
+            signature,
+            (line, line),
+            None,
+        )
+    }
+
+    #[test]
+    fn a_cut_keeps_a_longer_prefix_when_admitting_the_last_row_of_a_group_drops_its_fold() {
+        let r1 = skeleton_row("r1", None, "module", "r1", "mod r1", (1, 10), None);
+        let r2 = skeleton_row("r2", None, "module", "r2", "mod r2", (11, 200), None);
+        let mut rows = vec![
+            leaf("a", "r1", "a", 2),
+            leaf("b", "r1", "b", 3),
+            leaf("c", "r1", "c", 4),
+        ];
+        rows.extend((0..20).map(|i| {
+            leaf(
+                &format!("f{i}"),
+                "r2",
+                &format!("field_number_{i}: SomeLongType"),
+                12 + i,
+            )
+        }));
+        let mut syms = vec![r1, r2];
+        syms.extend(rows);
+        let children_map = children_in_file(&syms);
+        let roots: Vec<&Symbol> = children_map[&None].clone();
+        let expected = "mod r1 {\n    a; // L2-2\n    b; // L3-3\n    c; // L4-4\n} // L1-10\n\n\
+                        mod r2 { /* 20 rows hidden: L11-L200 */ }\n";
+
+        let (out, cut) = render_rows_within(&roots, None, &children_map, 0, expected.len());
+
+        assert!(cut);
+        assert_eq!(out, expected);
+    }
+
+    #[test]
+    fn a_collapsed_row_spans_the_lines_of_members_outside_its_own_declaration() {
+        let syms = vec![
+            skeleton_row("s", None, "struct", "S", "pub struct S", (1, 3), None),
+            leaf("x", "s", "pub x: u8", 2),
+            skeleton_row(
+                "m",
+                Some("s"),
+                "method",
+                "m",
+                "pub fn m(&self)",
+                (20, 30),
+                Some((21, 30)),
+            ),
+        ];
+        let children_map = children_in_file(&syms);
+
+        let (out, cut) = render_rows_within(&[&syms[0]], None, &children_map, 0, 50);
+
+        assert!(cut);
+        assert_eq!(out, "pub struct S { /* 2 rows hidden: L1-L30 */ }\n");
+    }
+
+    #[test]
+    fn the_summary_of_a_file_with_no_shown_row_cuts_a_long_name() {
+        let name = "x".repeat(33_000);
+        let syms = vec![script_row(
+            "javascript",
+            "variable",
+            &name,
+            "const x = 1",
+            1,
+        )];
+
+        let out = format_file_skeleton("gen.js", &syms, Some(1), 0);
+
+        assert!(out.len() < 1_000, "{}", out.len());
+        assert!(out.contains(&format!("`{}…` L1", "x".repeat(120))), "{out}");
+    }
+
+    #[test]
+    fn a_skeleton_over_the_budget_collapses_the_deepest_rows_and_folds_the_rest() {
+        let mut syms = vec![skeleton_row(
+            "root",
+            None,
+            "module",
+            "shapes",
+            "mod shapes",
+            (1, 9002),
+            None,
+        )];
+        for i in 0..3000 {
+            let start = 2 + i * 3;
+            syms.push(skeleton_row(
+                &format!("s{i}"),
+                Some("root"),
+                "struct",
+                &format!("Shape{i}"),
+                &format!("pub struct Shape{i}"),
+                (start, start + 2),
+                None,
+            ));
+            syms.push(skeleton_row(
+                &format!("f{i}"),
+                Some(&format!("s{i}")),
+                "field",
+                "sides",
+                "pub sides: u8",
+                (start + 1, start + 1),
+                None,
+            ));
+        }
+
+        let out = format_file_skeleton("src/shapes.rs", &syms, Some(9002), 0);
+
+        assert!(out.len() <= OUTPUT_BUDGET_CHARS, "{}", out.len());
+        assert!(out.contains(SKELETON_CUT_NOTE));
+        assert!(
+            out.contains("mod shapes {\n    pub struct Shape0 { /* 1 row hidden: L2-L4 */ }\n")
+        );
+        assert!(!out.contains("pub sides: u8"));
+        let fold = out
+            .lines()
+            .find(|line| line.contains(" more rows: L"))
+            .unwrap();
+        assert!(
+            fold.starts_with("    /* ") && fold.ends_with("-L9001 */"),
+            "{fold}"
+        );
     }
 
     #[test]

@@ -33,11 +33,11 @@ pub use edit_check::{
     record_session_base, write_session,
 };
 pub use formatters::{
-    STOP_SITES_LISTED, format_blast_radius, format_context_slice, format_context_slices,
-    format_edit_check, format_fact_categories, format_file_skeleton, format_find_symbol_results,
-    format_import_summary, format_no_facts, format_reference_report, format_references,
-    format_search_results, format_stop_reason, format_structural_facts, format_symbol_bodies,
-    format_symbol_body, no_facts_heading, stop_sites,
+    OUTPUT_BUDGET_CHARS, STOP_SITES_LISTED, format_blast_radius, format_context_slice,
+    format_context_slices, format_edit_check, format_fact_categories, format_file_skeleton,
+    format_find_symbol_results, format_import_summary, format_no_facts, format_reference_report,
+    format_references, format_search_results, format_stop_reason, format_structural_facts,
+    format_symbol_bodies, format_symbol_body, no_facts_heading, stop_sites,
 };
 pub use models::{
     BlastRadiusResult, CallersReportSites, CallingTest, ConstructionSite, ContextSlice, FileFact,
@@ -49,7 +49,8 @@ pub use models::{
 pub use ops::{
     MAX_CONTEXT_OVERLOADS, OpError, SymbolLookup, SymbolSelector, blast_radius_op,
     blast_radius_selected_op, codebase_outline_op, edit_check_op, edit_check_session_diff,
-    edit_check_session_op, edit_check_with, file_skeleton_op, get_context_slice_op,
+    edit_check_session_op, edit_check_with, file_skeleton_op, fit_bodies_to_budget,
+    fit_body_to_budget, fit_context_slices_to_budget, get_context_slice_op,
     get_context_slice_selected_op, get_context_slices_selected_op, get_symbol_bodies_selected_op,
     get_symbol_body_op, get_symbol_body_selected_op, lookup_symbols_op, render_symbol_lookup,
     resolve_symbol_op,

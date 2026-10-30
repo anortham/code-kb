@@ -212,6 +212,20 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   extractor, and a path the scan skips each get one line that says so.
 - Include only immediate callee signatures, related types, and test
   locations in `get_symbol_context`.
+- `OUTPUT_BUDGET_CHARS` in `formatters.rs` (32,000 characters, about 8K tokens, below the 10K tokens
+  at which Claude Code warns about a large MCP answer) bounds a file skeleton and the source in a
+  `get_symbol_body` or `get_symbol_context` text answer. A skeleton over it prints its rows in
+  breadth-first order until the next row would pass it: a container with no row left shows
+  `{ /* N rows hidden: Lx-Ly */ }`, the rows left out of a group fold into `/* N more rows: Lx-Ly */`,
+  and a line under the file header says so. A fold or a collapsed row names the lines of the rows
+  below it too, which can lie outside its own span (a Rust method in another `impl` block). The
+  bodies of one answer share what its location comments, overload header, and context sections
+  leave (`fit_bodies_to_budget`, `fit_context_slices_to_budget` in `ops.rs`). A body over its share
+  shows the skeleton of a container's members under a line that names the lines to read, or the
+  lines of other source that fit and `// Cut to about 8K tokens: Read lines A-B for the rest.` CLI
+  `--json` keeps the whole body. A folder outline over it names 3, 2, 1, then no definitions per file (`[N
+  definitions]`), then shows one level, and last lists the lines that fit and counts the others,
+  under `[Shortened to about 8K tokens: …]`.
 
 ### 4. Windows Compatibility
 - Windows is a first-class target. Every release ships a Windows binary.
