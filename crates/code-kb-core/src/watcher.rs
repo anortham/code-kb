@@ -29,10 +29,31 @@ const MAX_QUEUED_EVENTS_PER_BATCH: usize = 50;
 const WATCHER_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const REGISTRATION_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 const MAX_REGISTRATION_RETRY_INTERVAL: Duration = Duration::from_secs(30);
-/// Windows watches the root recursively, with one `ReadDirectoryChangesW` handle and buffer for
-/// the tree. Other platforms register each accepted folder with a nonrecursive watch.
-const RECURSIVE_ROOT_WATCH: bool = cfg!(windows);
+/// Windows and macOS watch the root recursively: one `ReadDirectoryChangesW` handle and buffer,
+/// or one FSEvents stream path, for the tree. FSEvents watches each stream path recursively
+/// anyway, and notify 9 refuses a stream with more paths than a twelfth of `RLIMIT_NOFILE`.
+/// Linux registers each accepted folder with a nonrecursive inotify watch.
+const RECURSIVE_ROOT_WATCH: bool = cfg!(any(windows, target_os = "macos"));
+/// notify 9 drops a `ReadDirectoryChangesW` watch after an unknown completion error and only
+/// logs it, so a recursive root watch is checked this often.
+const ROOT_WATCH_CHECK_INTERVAL: Duration = Duration::from_secs(1);
+/// A build under a recursive root watch can overflow the `ReadDirectoryChangesW` buffer again and
+/// again with events in ignored folders, so reconciles after lost events start at least this far
+/// apart, and at least as far apart as the last one took.
+const MIN_OVERFLOW_RECONCILE_GAP: Duration = Duration::from_secs(1);
 static RETIRED_WORKERS: Mutex<Vec<RetiredWorker>> = Mutex::new(Vec::new());
+#[cfg(test)]
+static RECURSIVE_ROOT_WATCH_ROOTS: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum RootWatchFault {
+    ReportError,
+    ReportRescan,
+    DropWatch,
+    FailWatch,
+}
+#[cfg(test)]
+static ROOT_WATCH_FAULTS: Mutex<Vec<(PathBuf, RootWatchFault)>> = Mutex::new(Vec::new());
 #[cfg(test)]
 static WATCH_CALLS: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
 #[cfg(test)]
@@ -60,12 +81,9 @@ const IGNORE_FILES: &[&str] = &[
     ".codekbignore",
 ];
 
-/// A recursive root watch would make `FileIdMap` hold an entry for every file of the tree,
-/// ignored folders included, so Windows keeps no file IDs.
-#[cfg(windows)]
+/// No file ID cache. inotify pairs renames by cookie, and a recursive root watch would make
+/// `FileIdMap` hold an entry for every file of the tree, ignored folders included.
 type WorkspaceCache = crate::debouncer::NoCache;
-#[cfg(not(windows))]
-type WorkspaceCache = crate::debouncer::RecommendedCache;
 type WorkspaceDebouncer = Debouncer<TracingWatcher, WorkspaceCache>;
 
 struct TracingWatcher(notify::RecommendedWatcher);
@@ -78,6 +96,8 @@ impl Watcher for TracingWatcher {
         notify::RecommendedWatcher::new(
             move |event: notify::Result<notify::Event>| {
                 trace!(?event, "Received native filesystem event");
+                #[cfg(test)]
+                let event = inject_native_fault(event);
                 event_handler.handle_event(event);
             },
             config,
@@ -89,17 +109,103 @@ impl Watcher for TracingWatcher {
         self.0.watch(path, recursive_mode)
     }
 
+    fn watch_with(&mut self, path: &Path, config: notify::WatchPathConfig) -> notify::Result<()> {
+        self.0.watch_with(path, config)
+    }
+
     fn unwatch(&mut self, path: &Path) -> notify::Result<()> {
         self.0.unwatch(path)
+    }
+
+    fn update_paths(&mut self, ops: Vec<notify::PathOp>) -> Result<(), notify::UpdatePathsError> {
+        self.0.update_paths(ops)
     }
 
     fn configure(&mut self, config: notify::Config) -> notify::Result<bool> {
         self.0.configure(config)
     }
 
+    fn watched_paths(&self) -> notify::Result<Vec<(PathBuf, RecursiveMode)>> {
+        self.0.watched_paths()
+    }
+
     fn kind() -> notify::WatcherKind {
         notify::RecommendedWatcher::kind()
     }
+}
+
+#[cfg(not(test))]
+fn watches_root_recursively(_root: &Path) -> bool {
+    RECURSIVE_ROOT_WATCH
+}
+
+#[cfg(test)]
+fn watches_root_recursively(root: &Path) -> bool {
+    RECURSIVE_ROOT_WATCH
+        || RECURSIVE_ROOT_WATCH_ROOTS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .any(|forced| forced == root)
+}
+
+#[cfg(test)]
+fn take_root_watch_fault(path: &Path, faults: &[RootWatchFault]) -> Option<RootWatchFault> {
+    let mut registered = ROOT_WATCH_FAULTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let index = registered
+        .iter()
+        .position(|(root, fault)| path.starts_with(root) && faults.contains(fault))?;
+    Some(registered.remove(index).1)
+}
+
+#[cfg(test)]
+fn has_root_watch_fault(path: &Path, fault: RootWatchFault) -> bool {
+    ROOT_WATCH_FAULTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .iter()
+        .any(|(root, registered)| root == path && *registered == fault)
+}
+
+/// Turns the next native event under a test root into the error or the pathless rescan event
+/// that notify 9 sends when `ReadDirectoryChangesW` cannot rearm or discards its changes.
+#[cfg(test)]
+fn inject_native_fault(event: notify::Result<notify::Event>) -> notify::Result<notify::Event> {
+    let Some(path) = event.as_ref().ok().and_then(|event| event.paths.first()) else {
+        return event;
+    };
+    match take_root_watch_fault(
+        path,
+        &[RootWatchFault::ReportError, RootWatchFault::ReportRescan],
+    ) {
+        Some(RootWatchFault::ReportError) => Err(notify::Error::io(std::io::Error::other(
+            "ReadDirectoryChangesW could not rearm",
+        ))
+        .add_path(path.clone())),
+        Some(_) => Ok(notify::Event::new(EventKind::Other).set_flag(notify::event::Flag::Rescan)),
+        None => event,
+    }
+}
+
+/// Whether the backend no longer lists the recursive watch of `root`. A backend that cannot list
+/// its watches counts as watching it.
+fn root_watch_was_dropped(debouncer: &WorkspaceDebouncer, root: &Path) -> bool {
+    let Ok(watched) = debouncer.watched_paths() else {
+        return false;
+    };
+    let root = RegistrationPath::new(root);
+    !watched
+        .iter()
+        .any(|(path, _)| path == &root.path || RegistrationPath::new(path) == root)
+}
+
+fn next_overflow_reconcile_at(started: Instant, finished: Instant) -> Instant {
+    finished
+        + finished
+            .duration_since(started)
+            .max(MIN_OVERFLOW_RECONCILE_GAP)
 }
 
 fn new_debouncer<F: crate::debouncer::DebounceEventHandler>(
@@ -112,7 +218,9 @@ fn new_debouncer<F: crate::debouncer::DebounceEventHandler>(
         tick_rate,
         event_handler,
         WorkspaceCache::new(),
-        notify::Config::default(),
+        // notify 9 also reports reads (inotify CLOSE_NOWRITE), which the index never uses and
+        // which would fill a batch and force a full reconcile.
+        notify::Config::default().with_event_kinds(notify::EventKindMask::CORE),
     )
 }
 
@@ -328,12 +436,13 @@ impl RegisteredDirectories {
         );
     }
 
-    #[cfg(all(test, not(windows)))]
+    #[cfg(all(test, not(any(windows, target_os = "macos"))))]
     fn len(&self) -> usize {
         self.paths.len()
     }
 
-    /// Forgets `path` and the folders below it and returns their paths.
+    /// Forgets `path` and the folders below it and returns their paths, deepest first, so that
+    /// unwatching them in order never leaves the debouncer a nested root to cache again.
     fn remove_tree(&mut self, path: &RegistrationPath) -> Vec<PathBuf> {
         let below = format!("{}/", path.identity.trim_end_matches('/'));
         let after_below = format!("{}0", path.identity.trim_end_matches('/'));
@@ -347,6 +456,7 @@ impl RegisteredDirectories {
             .collect::<Vec<_>>();
         identities
             .into_iter()
+            .rev()
             .filter_map(|identity| self.paths.remove(&identity))
             .map(|registered| registered.path)
             .collect()
@@ -419,6 +529,7 @@ fn watcher_worker(
     let overflow = Arc::new(AtomicBool::new(false));
     let callback_overflow = Arc::clone(&overflow);
     let callback_root = workspace.canonical_root.clone();
+    let recursive_root = watches_root_recursively(&workspace.canonical_root);
     let mut debouncer = match new_debouncer(
         Duration::from_millis(150),
         None,
@@ -429,7 +540,7 @@ fn watcher_worker(
                     callback_overflow.store(true, Ordering::Release);
                     return;
                 }
-                if RECURSIVE_ROOT_WATCH {
+                if recursive_root {
                     retain_watched_events(&mut events, &callback_root);
                 }
                 if events.is_empty() {
@@ -490,6 +601,8 @@ fn watcher_worker(
 
     let mut registration_retry_delay = REGISTRATION_RETRY_INTERVAL;
     let mut registration_retry_at = None;
+    let mut root_watch_checked_at = Instant::now();
+    let mut overflow_reconcile_ready_at = None;
     while !shutdown.load(Ordering::Acquire) {
         let registration_is_unhealthy = has_registration_failure(&failures);
         if !registration_is_unhealthy {
@@ -532,8 +645,35 @@ fn watcher_worker(
                 }
             }
         }
-        if overflow.swap(false, Ordering::AcqRel) {
+        #[cfg(test)]
+        if take_root_watch_fault(&root, &[RootWatchFault::DropWatch]).is_some() {
+            let _ = debouncer.unwatch(&root);
+        }
+        if recursive_root
+            && !registration_is_unhealthy
+            && root_watch_checked_at.elapsed() >= ROOT_WATCH_CHECK_INTERVAL
+        {
+            root_watch_checked_at = Instant::now();
+            if root_watch_was_dropped(&debouncer, &root) {
+                let failure = format!(
+                    "The file watcher dropped its watch of '{}' without an error; changes since then were missed",
+                    root.display()
+                );
+                warn!("{failure}");
+                record_failure(&failures, failure);
+                overflow.store(true, Ordering::Release);
+            }
+        }
+        if overflow.load(Ordering::Acquire) {
+            if overflow_reconcile_ready_at.is_some_and(|ready_at| Instant::now() < ready_at) {
+                match event_receiver.recv_timeout(WATCHER_POLL_INTERVAL) {
+                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                    Ok(_) | Err(mpsc::RecvTimeoutError::Timeout) => continue,
+                }
+            }
+            overflow.store(false, Ordering::Release);
             debug!("Watcher event queue overflowed; reconciling workspace");
+            let started = Instant::now();
             registrations.watch_again = true;
             reconcile_workspace(
                 &mut debouncer,
@@ -543,6 +683,7 @@ fn watcher_worker(
                 &failures,
                 &shutdown,
             );
+            overflow_reconcile_ready_at = Some(next_overflow_reconcile_at(started, Instant::now()));
             continue;
         }
 
@@ -639,7 +780,7 @@ fn watch_workspace_root(
     debouncer: &mut WorkspaceDebouncer,
     root: &Path,
 ) -> Result<(), notify::Error> {
-    let mode = if RECURSIVE_ROOT_WATCH {
+    let mode = if watches_root_recursively(root) {
         RecursiveMode::Recursive
     } else {
         RecursiveMode::NonRecursive
@@ -653,10 +794,18 @@ fn watch_directory(
     mode: RecursiveMode,
 ) -> Result<(), notify::Error> {
     #[cfg(test)]
-    WATCH_CALLS
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .push(path.to_path_buf());
+    {
+        WATCH_CALLS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(path.to_path_buf());
+        if has_root_watch_fault(path, RootWatchFault::FailWatch) {
+            return Err(notify::Error::io(std::io::Error::other(
+                "ReadDirectoryChangesW could not start",
+            ))
+            .add_path(path.to_path_buf()));
+        }
+    }
     debouncer.watch(path, mode)
 }
 
@@ -762,13 +911,16 @@ fn synchronize_registrations(
 ) -> Result<(), WatcherError> {
     let root = &workspace.canonical_root;
     let root_registration = RegistrationPath::new(root);
+    let recursive_root = watches_root_recursively(root);
     let mut directory_race_retries = 0;
     'registration: loop {
         registrations.generation = registrations.generation.wrapping_add(1).max(1);
         let generation = registrations.generation;
         match registrations.paths.get_mut(&root_registration.identity) {
-            Some(registered) => registered.generation = generation,
-            None => {
+            Some(registered) if !(recursive_root && registrations.watch_again) => {
+                registered.generation = generation;
+            }
+            _ => {
                 watch_workspace_root(debouncer, root)?;
                 registrations.insert(
                     root_registration.clone(),
@@ -777,7 +929,8 @@ fn synchronize_registrations(
                 );
             }
         }
-        if RECURSIVE_ROOT_WATCH {
+        if recursive_root {
+            registrations.watch_again = false;
             return Ok(());
         }
 
@@ -874,6 +1027,7 @@ fn synchronize_registrations(
         let stale = registrations
             .paths
             .iter()
+            .rev()
             .filter(|(identity, registered)| {
                 **identity != root_registration.identity && registered.generation != generation
             })
@@ -1426,7 +1580,6 @@ mod tests {
         assert!(handle.pending_failure().is_none());
     }
 
-    #[cfg(not(windows))]
     fn watch_calls_under(root: &Path) -> Vec<PathBuf> {
         WATCH_CALLS
             .lock()
@@ -1447,7 +1600,7 @@ mod tests {
         (workspace, db_path, watcher)
     }
 
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     #[test]
     fn removing_a_subtree_watches_no_surviving_directory_again() {
         let _guard = ROOT_WATCH_FAULT_TEST_LOCK
@@ -1486,7 +1639,7 @@ mod tests {
         assert!(watcher.pending_failure().is_none());
     }
 
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     #[test]
     fn a_folder_made_again_at_a_registered_path_is_watched_again() {
         let _guard = ROOT_WATCH_FAULT_TEST_LOCK
@@ -1527,7 +1680,7 @@ mod tests {
         wait_for_event(&receiver, |event| event.paths == [new_file.clone()]);
     }
 
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     #[test]
     fn a_folder_made_again_while_events_were_lost_is_watched_again() {
         let _guard = ROOT_WATCH_FAULT_TEST_LOCK
@@ -1570,10 +1723,48 @@ mod tests {
         assert!(watcher.pending_failure().is_none());
     }
 
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "macos")))]
+    #[test]
+    fn reading_more_files_than_a_batch_holds_watches_nothing_again() {
+        let _guard = ROOT_WATCH_FAULT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let temp_dir = crate::safe_tempdir();
+        let root = canonical_temp(&temp_dir).join("project");
+        let sources = root.join("src");
+        std::fs::create_dir_all(&sources).unwrap();
+        let file_count = MAX_QUEUED_EVENTS_PER_BATCH + 10;
+        for index in 0..file_count {
+            std::fs::write(
+                sources.join(format!("read_{index:02}.rs")),
+                format!("pub fn read_storm_{index:02}() {{}}\n"),
+            )
+            .unwrap();
+        }
+        let (workspace, db_path, watcher) = indexed_watcher(&root, "read_storm.db");
+        let root = workspace.canonical_root.clone();
+        let mut settled = watch_calls_under(&root).len();
+        wait_until("startup watches to settle", || {
+            thread::sleep(Duration::from_millis(500));
+            let now = watch_calls_under(&root).len();
+            std::mem::replace(&mut settled, now) == now
+        });
+
+        for index in 0..file_count {
+            std::fs::read_to_string(root.join(format!("src/read_{index:02}.rs"))).unwrap();
+        }
+        thread::sleep(Duration::from_millis(1_000));
+        std::fs::write(root.join("src/after.rs"), "pub fn after_read_storm() {}\n").unwrap();
+        wait_for_indexed_symbol(&db_path, "after_read_storm", true);
+
+        assert_eq!(watch_calls_under(&root)[settled..], Vec::<PathBuf>::new());
+        assert!(watcher.pending_failure().is_none());
+    }
+
+    #[cfg(not(any(windows, target_os = "macos")))]
     struct LostEventsReset;
 
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     impl Drop for LostEventsReset {
         fn drop(&mut self) {
             for hook in [&REUSED_FILE_ID_ROOT, &LOST_EVENTS_ROOT] {
@@ -1584,7 +1775,7 @@ mod tests {
         }
     }
 
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     fn wait_for_event(
         receiver: &mpsc::Receiver<Vec<DebouncedEvent>>,
         mut matches: impl FnMut(&DebouncedEvent) -> bool,
@@ -1600,7 +1791,7 @@ mod tests {
         panic!("the expected filesystem event did not arrive");
     }
 
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     #[test]
     fn a_removal_event_forgets_the_folder_and_the_folders_below_it() {
         let _guard = ROOT_WATCH_FAULT_TEST_LOCK
@@ -1815,7 +2006,199 @@ mod tests {
         assert_eq!(paths, expected);
     }
 
-    #[cfg(not(windows))]
+    struct RecursiveRootReset(PathBuf);
+
+    impl Drop for RecursiveRootReset {
+        fn drop(&mut self) {
+            RECURSIVE_ROOT_WATCH_ROOTS
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .retain(|root| root != &self.0);
+            ROOT_WATCH_FAULTS
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .retain(|(root, _)| root != &self.0);
+        }
+    }
+
+    fn recursive_root_watcher(
+        temp_dir: &tempfile::TempDir,
+        db_name: &str,
+    ) -> (PathBuf, PathBuf, WatcherHandle, RecursiveRootReset) {
+        let root = canonical_temp(temp_dir).join("project");
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("src/seed.rs"), "pub fn recursive_seed() {}\n").unwrap();
+        let root = Workspace::new(root).canonical_root;
+        RECURSIVE_ROOT_WATCH_ROOTS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(root.clone());
+        let reset = RecursiveRootReset(root.clone());
+        let (_workspace, db_path, watcher) = indexed_watcher(&root, db_name);
+        wait_for_indexed_symbol(&db_path, "recursive_seed", true);
+        (root, db_path, watcher, reset)
+    }
+
+    fn add_root_watch_fault(root: &Path, fault: RootWatchFault) {
+        ROOT_WATCH_FAULTS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push((root.to_path_buf(), fault));
+    }
+
+    fn root_watch_calls(root: &Path) -> usize {
+        watch_calls_under(root)
+            .iter()
+            .filter(|path| path.as_path() == root)
+            .count()
+    }
+
+    fn pending_failure_text(watcher: &WatcherHandle) -> String {
+        watcher
+            .pending_failure()
+            .map(|(_, failure)| failure)
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn a_watcher_error_watches_the_recursive_root_again_and_reconciles() {
+        let _guard = ROOT_WATCH_FAULT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let temp_dir = crate::safe_tempdir();
+        let (root, db_path, watcher, _reset) =
+            recursive_root_watcher(&temp_dir, "recursive_error.db");
+        let root_watches = root_watch_calls(&root);
+        add_root_watch_fault(&root, RootWatchFault::ReportError);
+
+        std::fs::write(root.join("src/lost.rs"), "pub fn lost_to_the_error() {}\n").unwrap();
+
+        wait_for_indexed_symbol(&db_path, "lost_to_the_error", true);
+        assert!(root_watch_calls(&root) > root_watches);
+        assert!(
+            pending_failure_text(&watcher).contains("could not rearm"),
+            "{:?}",
+            watcher.pending_failure()
+        );
+        std::fs::write(root.join("src/after.rs"), "pub fn after_the_error() {}\n").unwrap();
+        wait_for_indexed_symbol(&db_path, "after_the_error", true);
+    }
+
+    #[test]
+    fn a_rescan_event_watches_the_recursive_root_again_and_reconciles() {
+        let _guard = ROOT_WATCH_FAULT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let temp_dir = crate::safe_tempdir();
+        let (root, db_path, watcher, _reset) =
+            recursive_root_watcher(&temp_dir, "recursive_rescan.db");
+        let root_watches = root_watch_calls(&root);
+        add_root_watch_fault(&root, RootWatchFault::ReportRescan);
+
+        std::fs::write(root.join("src/lost.rs"), "pub fn lost_to_the_rescan() {}\n").unwrap();
+
+        wait_for_indexed_symbol(&db_path, "lost_to_the_rescan", true);
+        assert!(root_watch_calls(&root) > root_watches);
+        assert!(watcher.pending_failure().is_none());
+    }
+
+    #[test]
+    fn a_rescan_soon_after_a_reconcile_still_reconciles_after_the_gap() {
+        let _guard = ROOT_WATCH_FAULT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let temp_dir = crate::safe_tempdir();
+        let (root, db_path, watcher, _reset) =
+            recursive_root_watcher(&temp_dir, "recursive_rescan_gap.db");
+        add_root_watch_fault(&root, RootWatchFault::ReportRescan);
+        std::fs::write(root.join("src/first.rs"), "pub fn first_lost_change() {}\n").unwrap();
+        wait_for_indexed_symbol(&db_path, "first_lost_change", true);
+
+        add_root_watch_fault(&root, RootWatchFault::ReportRescan);
+        std::fs::write(
+            root.join("src/second.rs"),
+            "pub fn second_lost_change() {}\n",
+        )
+        .unwrap();
+
+        wait_for_indexed_symbol(&db_path, "second_lost_change", true);
+        assert!(watcher.pending_failure().is_none());
+    }
+
+    #[test]
+    fn reconciles_after_lost_events_start_at_least_the_gap_apart() {
+        let started = Instant::now();
+
+        assert_eq!(
+            next_overflow_reconcile_at(started, started + Duration::from_millis(40)),
+            started + Duration::from_millis(40) + MIN_OVERFLOW_RECONCILE_GAP
+        );
+        assert_eq!(
+            next_overflow_reconcile_at(started, started + Duration::from_secs(3)),
+            started + Duration::from_secs(6)
+        );
+    }
+
+    #[test]
+    fn a_recursive_root_watch_the_backend_dropped_is_found_and_watched_again() {
+        let _guard = ROOT_WATCH_FAULT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let temp_dir = crate::safe_tempdir();
+        let (root, db_path, watcher, _reset) =
+            recursive_root_watcher(&temp_dir, "recursive_dropped.db");
+        let root_watches = root_watch_calls(&root);
+        add_root_watch_fault(&root, RootWatchFault::DropWatch);
+
+        wait_until("the dropped root watch is reported", || {
+            pending_failure_text(&watcher).contains("dropped its watch")
+        });
+        wait_until("the root is watched again", || {
+            root_watch_calls(&root) > root_watches
+        });
+        thread::sleep(Duration::from_millis(500));
+        std::fs::write(root.join("src/after.rs"), "pub fn after_the_drop() {}\n").unwrap();
+
+        wait_for_indexed_symbol(&db_path, "after_the_drop", true);
+    }
+
+    #[test]
+    fn a_recursive_root_that_cannot_be_watched_again_stays_unhealthy_until_it_can() {
+        let _guard = ROOT_WATCH_FAULT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let temp_dir = crate::safe_tempdir();
+        let (root, db_path, watcher, _reset) =
+            recursive_root_watcher(&temp_dir, "recursive_unhealthy.db");
+        add_root_watch_fault(&root, RootWatchFault::FailWatch);
+        add_root_watch_fault(&root, RootWatchFault::ReportError);
+
+        std::fs::write(
+            root.join("src/lost.rs"),
+            "pub fn lost_while_unwatched() {}\n",
+        )
+        .unwrap();
+        wait_until("the failed root watch is reported", || {
+            pending_failure_text(&watcher).contains("could not start")
+        });
+        let (generation, _) = watcher.pending_failure().unwrap();
+        assert!(!watcher.clear_failure_if_unchanged(generation));
+
+        ROOT_WATCH_FAULTS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retain(|(_, fault)| *fault != RootWatchFault::FailWatch);
+        wait_until("the root watch recovers", || {
+            !pending_failure_text(&watcher).contains("could not start")
+        });
+        let (generation, _) = watcher.pending_failure().unwrap();
+        assert!(watcher.clear_failure_if_unchanged(generation));
+        wait_for_indexed_symbol(&db_path, "lost_while_unwatched", true);
+        std::fs::write(root.join("src/after.rs"), "pub fn after_recovery() {}\n").unwrap();
+        wait_for_indexed_symbol(&db_path, "after_recovery", true);
+    }
+
+    #[cfg(not(any(windows, target_os = "macos")))]
     #[test]
     fn registration_skips_a_directory_the_walk_may_not_read() {
         let _guard = ROOT_WATCH_FAULT_TEST_LOCK
@@ -1853,7 +2236,7 @@ mod tests {
         )));
     }
 
-    #[cfg(unix)]
+    #[cfg(all(unix, not(target_os = "macos")))]
     #[test]
     fn registration_skips_a_directory_without_read_permission() {
         use std::os::unix::fs::PermissionsExt;
@@ -1898,7 +2281,7 @@ mod tests {
         )));
     }
 
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     #[test]
     fn registration_rewalks_when_a_discovered_directory_disappears() {
         let _guard = ROOT_WATCH_FAULT_TEST_LOCK
@@ -1951,7 +2334,7 @@ mod tests {
         }
     }
 
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     fn registered_watcher(root: PathBuf) -> (Workspace, WorkspaceDebouncer, RegisteredDirectories) {
         let workspace = Workspace::new(root);
         let mut debouncer = new_debouncer(
@@ -1971,10 +2354,10 @@ mod tests {
         (workspace, debouncer, registrations)
     }
 
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     struct WalkerFaultReset;
 
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     impl Drop for WalkerFaultReset {
         fn drop(&mut self) {
             REGISTRATION_WALKER_FAULTS
@@ -1987,7 +2370,7 @@ mod tests {
         }
     }
 
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     #[test]
     fn registration_rewalks_after_a_registered_walker_entry_disappears() {
         let _guard = ROOT_WATCH_FAULT_TEST_LOCK
@@ -2029,7 +2412,7 @@ mod tests {
         assert_eq!(registrations.len(), 1);
     }
 
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     #[test]
     fn registration_walker_errors_outside_the_missing_registered_directory_race_stay_errors() {
         let _guard = ROOT_WATCH_FAULT_TEST_LOCK
@@ -2125,7 +2508,7 @@ mod tests {
         ));
     }
 
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     #[test]
     fn registration_walker_race_shares_the_single_retry_with_watch_failures() {
         let _guard = ROOT_WATCH_FAULT_TEST_LOCK
@@ -2171,7 +2554,6 @@ mod tests {
         assert_eq!(registrations.generation, 3);
     }
 
-    #[cfg(not(windows))]
     fn wait_for_indexed_symbol(db_path: &Path, name: &str, expected: bool) {
         wait_until(
             &format!("symbol {name} reaches indexed state {expected}"),
@@ -2186,7 +2568,6 @@ mod tests {
         );
     }
 
-    #[cfg(not(windows))]
     fn wait_until(description: &str, mut predicate: impl FnMut() -> bool) {
         for _ in 0..100 {
             if predicate() {

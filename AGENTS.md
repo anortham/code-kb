@@ -139,15 +139,28 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   after each tool call on Linux glibc. It is the only unsafe code; the workspace lint is `unsafe_code = "deny"`.
   Measure a live `serve` process before and after any change that could raise it.
 - File watches cover only directories accepted by the scan's ignore rules. Prune excluded
-  trees before registering nonrecursive watches. Windows is the exception: one recursive root
-  watch (one `ReadDirectoryChangesW` handle and buffer, and no file ID cache), and the debouncer
-  callback drops each event whose folder the ignore rules exclude before it counts the batch.
+  trees before registering nonrecursive watches. Windows and macOS are the exception: one
+  recursive root watch (one `ReadDirectoryChangesW` handle and buffer, or one FSEvents stream
+  path), and the debouncer callback drops each event whose folder the ignore rules exclude
+  before it counts the batch. FSEvents watches each stream path recursively anyway, and notify 9
+  refuses a stream with more paths than a twelfth of `RLIMIT_NOFILE`. No platform keeps a file
+  ID cache. The watcher asks notify for `EventKindMask::CORE`, so a file read (inotify `OPEN`,
+  `CLOSE_NOWRITE`) is no event and never fills a batch. notify is pinned to `=9.0.0-rc.7`;
+  `crates/code-kb-core/src/debouncer/README.md` names the upstream source of the debouncer copy
+  and its changes.
   One worker owns registration and index updates; its callback queue is bounded, and retained
   registration state contains directory paths and their file IDs only. A removal or a move
   away of a folder forgets its registration and the ones below it, and a registered path
-  whose file ID changed is watched again. After lost events (a queue overflow or a rescan), the
-  next registration pass watches every registered folder again, because ext4 and XFS often give
-  a folder made again the inode number of the old one. So a folder deleted and made again is watched.
+  whose file ID changed is watched again. After lost events (a queue overflow, a rescan, or a
+  watcher error), the next registration pass watches every registered folder again, or the
+  recursive root again, because ext4 and XFS often give a folder made again the inode number of
+  the old one, and notify drops a `ReadDirectoryChangesW` watch that it cannot rearm. So a folder
+  deleted and made again is watched. A watcher error is also a failure that the next tool call
+  reconciles. notify drops a `ReadDirectoryChangesW` watch after an unknown completion error with
+  no event, so the worker checks each second that the backend still lists a recursive root watch;
+  a missing watch is a failure, and the root is watched again. Reconciles after lost events
+  start at least 1 s apart, and at least as far apart as the last one took, because a build in
+  an ignored folder can overflow the `ReadDirectoryChangesW` buffer again and again.
   A removal does not register the other folders again. Reconcile after installing startup
   watches, directory moves, and changes to
   `.gitignore`, `.ignore`, `.julieignore`, `.code-kb-ignore`, or `.codekbignore`.

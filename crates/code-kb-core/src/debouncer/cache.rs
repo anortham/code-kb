@@ -2,6 +2,7 @@ use file_id::FileId;
 use notify::RecursiveMode;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use walkdir::WalkDir;
 
 /// The interface of a file ID cache.
 ///
@@ -15,21 +16,44 @@ pub trait FileIdCache {
     /// Add a new path to the cache or update its value.
     ///
     /// This will be called if a new file or directory is created or if an existing file is overridden.
-    fn add_path(&mut self, path: &Path, recursive_mode: RecursiveMode);
+    ///
+    /// The default implementation walks `path` and calls `add_single_path` for each entry. With
+    /// [`RecursiveMode::NonRecursive`], the walk stops at the direct children of `path`.
+    fn add_path(&mut self, path: &Path, recursive_mode: RecursiveMode) {
+        let max_depth = match recursive_mode {
+            RecursiveMode::Recursive => usize::MAX,
+            RecursiveMode::NonRecursive => 1,
+        };
+        for entry in WalkDir::new(path)
+            .follow_links(true)
+            .max_depth(max_depth)
+            .into_iter()
+            .flatten()
+        {
+            self.add_single_path(entry.path());
+        }
+    }
+
+    /// Add `path` to the cache without the entries below it.
+    ///
+    /// This will be called for an entry inside a non-recursive watch, and by `add_path` for each
+    /// entry it walks. The watch does not report changes below an entry of a non-recursive watch,
+    /// so the cache does not need their IDs.
+    fn add_single_path(&mut self, path: &Path);
 
     /// Remove a path from the cache.
     ///
     /// This will be called if a file or directory is deleted.
     fn remove_path(&mut self, path: &Path);
 
-    /// Re-scan all `root_paths`.
+    /// Re-scan all `roots`.
     ///
     /// This will be called if the notification back-end has dropped events.
-    /// The root paths are passed as argument, so the implementer doesn't have to store them.
+    /// The roots are passed as argument, so the implementer doesn't have to store them.
     ///
-    /// The default implementation calls `add_path` for each root path.
-    fn rescan(&mut self, root_paths: &BTreeMap<PathBuf, RecursiveMode>) {
-        for (path, recursive_mode) in root_paths {
+    /// The default implementation calls `add_path` for each root.
+    fn rescan(&mut self, roots: &BTreeMap<PathBuf, RecursiveMode>) {
+        for (path, recursive_mode) in roots {
             self.add_path(path, *recursive_mode);
         }
     }
@@ -43,6 +67,7 @@ pub struct NoCache;
 
 impl NoCache {
     /// Construct an empty cache.
+    #[must_use]
     pub fn new() -> Self {
         Default::default()
     }
@@ -54,6 +79,8 @@ impl FileIdCache for NoCache {
     }
 
     fn add_path(&mut self, _path: &Path, _recursive_mode: RecursiveMode) {}
+
+    fn add_single_path(&mut self, _path: &Path) {}
 
     fn remove_path(&mut self, _path: &Path) {}
 }

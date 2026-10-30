@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, VecDeque},
     path::{Path, PathBuf},
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use file_id::FileId;
@@ -13,7 +13,7 @@ use notify::{
     },
 };
 
-use super::{DebounceDataInner, DebouncedEvent, FileIdCache, Queue};
+use super::{DebounceDataInner, DebouncedEvent, FileIdCache, Queue, time::Instant};
 
 pub(crate) use schema::TestCase;
 
@@ -301,6 +301,12 @@ impl FileIdCache for TestCache {
             {
                 self.paths.insert(file_path.clone(), *file_id);
             }
+        }
+    }
+
+    fn add_single_path(&mut self, path: &Path) {
+        if let Some(file_id) = self.file_system.get(path) {
+            self.paths.insert(path.to_path_buf(), *file_id);
         }
     }
 

@@ -1,8 +1,5 @@
-//! A debouncer for [notify], copied from `notify-debouncer-full` 0.7.0 with one fix.
-//!
-//! The copy carries the removal fix that crates.io does not publish yet. See `README.md` in this
-//! folder for the source, the patch, and when to return to the published crate. The original
-//! license files are in this folder.
+//! A debouncer for [notify], copied from `notify-debouncer-full` with the changes that
+//! `README.md` in this folder lists.
 //!
 //! * Only emits a single `Rename` event if the rename `From` and `To` events can be matched
 //! * Merges multiple `Rename` events
@@ -11,6 +8,9 @@
 //! * Emits only one `Remove` event when deleting a directory (inotify)
 //! * Doesn't emit duplicate create events
 //! * Doesn't emit `Modify` events after a `Create` event
+//!
+//! Notify's known problems, including changes to watched paths, also apply to debounced events.
+//! The original license files are in this folder.
 
 mod cache;
 mod time;
@@ -26,13 +26,13 @@ use std::{
     collections::{BTreeMap, BinaryHeap, HashMap, VecDeque},
     path::{Path, PathBuf},
     sync::{
-        Arc, Mutex,
+        Arc, Condvar, Mutex,
         atomic::{AtomicBool, Ordering},
     },
-    time::{Duration, Instant},
+    time::Duration,
 };
 
-use time::now;
+use time::{Instant, now};
 
 pub use cache::{FileIdCache, NoCache, RecommendedCache};
 
@@ -45,7 +45,8 @@ pub use notify_types::debouncer_full::DebouncedEvent;
 
 use file_id::FileId;
 use notify::{
-    Error, ErrorKind, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher, WatcherKind,
+    Error, ErrorKind, Event, EventKind, PathOp, RecommendedWatcher, RecursiveMode,
+    UpdatePathsError, Watcher, WatcherKind,
     event::{ModifyKind, RemoveKind, RenameMode},
 };
 
@@ -93,7 +94,13 @@ impl DebounceEventHandler for std::sync::mpsc::Sender<DebounceEventResult> {
 /// Comes with either a vec of events or vec of errors.
 pub type DebounceEventResult = Result<Vec<DebouncedEvent>, Vec<Error>>;
 
-type DebounceData<T> = Arc<Mutex<DebounceDataInner<T>>>;
+type DebounceData<T> = Arc<SharedDebounceData<T>>;
+
+#[derive(Debug)]
+struct SharedDebounceData<T> {
+    inner: Mutex<DebounceDataInner<T>>,
+    changed: Condvar,
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct Queue {
@@ -127,6 +134,8 @@ impl Queue {
 #[derive(Debug)]
 pub(crate) struct DebounceDataInner<T> {
     queues: HashMap<PathBuf, Queue>,
+    /// Registered watch roots by path. `PathBuf` orders by components, so the roots below a
+    /// path follow it directly in the map.
     roots: BTreeMap<PathBuf, RecursiveMode>,
     cache: T,
     rename_event: Option<(DebouncedEvent, Option<FileId>)>,
@@ -138,7 +147,7 @@ pub(crate) struct DebounceDataInner<T> {
 impl<T: FileIdCache> DebounceDataInner<T> {
     pub(crate) fn new(cache: T, timeout: Duration) -> Self {
         Self {
-            queues: HashMap::new(),
+            queues: HashMap::default(),
             roots: BTreeMap::new(),
             cache,
             rename_event: None,
@@ -152,7 +161,6 @@ impl<T: FileIdCache> DebounceDataInner<T> {
     pub fn debounced_events(&mut self) -> Vec<DebouncedEvent> {
         let now = now();
         let mut events_expired = Vec::with_capacity(self.queues.len());
-        let mut queues_remaining = HashMap::with_capacity(self.queues.len());
 
         if let Some(event) = self.rescan_event.take() {
             if now.saturating_duration_since(event.time) >= self.timeout {
@@ -163,39 +171,34 @@ impl<T: FileIdCache> DebounceDataInner<T> {
             }
         }
 
-        // drain the entire queue, then process the expired events and re-add the rest
-        // TODO: perfect fit for drain_filter https://github.com/rust-lang/rust/issues/59618
-        for (path, mut queue) in self.queues.drain() {
-            let mut kind_index = HashMap::new();
+        // Visit each queue in place and remove only the ones that become empty.
+        self.queues
+            .extract_if(|_, queue| {
+                let mut kind_index: HashMap<EventKind, usize> = HashMap::default();
+                let mut queue_expired = Vec::new();
 
-            while let Some(event) = queue.events.pop_front() {
-                // remove previous event of the same kind
-                if let Some(idx) = kind_index.get(&event.kind).copied() {
-                    events_expired.remove(idx);
-
-                    kind_index.values_mut().for_each(|i| {
-                        if *i > idx {
-                            *i -= 1
+                while let Some(event) = queue.events.pop_front() {
+                    // remove previous event of the same kind
+                    if now.saturating_duration_since(event.time) >= self.timeout {
+                        if let Some(idx) = kind_index.insert(event.kind, queue_expired.len()) {
+                            queue_expired[idx] = None;
                         }
-                    })
+
+                        queue_expired.push(Some(event));
+                    } else {
+                        if let Some(&idx) = kind_index.get(&event.kind) {
+                            queue_expired[idx] = None;
+                        }
+                        queue.events.push_front(event);
+                        break;
+                    }
                 }
 
-                if now.saturating_duration_since(event.time) >= self.timeout {
-                    kind_index.insert(event.kind, events_expired.len());
+                events_expired.extend(queue_expired.into_iter().flatten());
 
-                    events_expired.push(event);
-                } else {
-                    queue.events.push_front(event);
-                    break;
-                }
-            }
-
-            if !queue.events.is_empty() {
-                queues_remaining.insert(path, queue);
-            }
-        }
-
-        self.queues = queues_remaining;
+                queue.events.is_empty()
+            })
+            .for_each(drop);
 
         sort_events(events_expired)
     }
@@ -208,7 +211,6 @@ impl<T: FileIdCache> DebounceDataInner<T> {
     /// Add an error entry to re-send later on
     pub fn add_error(&mut self, error: Error) {
         tracing::trace!("raw error: {error:?}");
-
         self.errors.push(error);
     }
 
@@ -232,9 +234,7 @@ impl<T: FileIdCache> DebounceDataInner<T> {
 
         match &event.kind {
             EventKind::Create(_) => {
-                let recursive_mode = self.recursive_mode(path);
-
-                self.cache.add_path(path, recursive_mode);
+                self.add_event_path(path);
 
                 self.push_event(event, now());
             }
@@ -269,13 +269,33 @@ impl<T: FileIdCache> DebounceDataInner<T> {
             }
             _ => {
                 if self.cache.cached_file_id(path).is_none() {
-                    let recursive_mode = self.recursive_mode(path);
-
-                    self.cache.add_path(path, recursive_mode);
+                    self.add_event_path(path);
                 }
 
                 self.push_event(event, now());
             }
+        }
+    }
+
+    /// Adds the path of an event to the cache. A non-recursive root covers itself and its direct
+    /// children, but not the entries below a child, so a child is added without them.
+    fn add_event_path(&mut self, path: &Path) {
+        match self.recursive_mode(path) {
+            RecursiveMode::NonRecursive if !self.roots.contains_key(path) => {
+                self.cache.add_single_path(path)
+            }
+            recursive_mode => self.cache.add_path(path, recursive_mode),
+        }
+    }
+
+    fn recursive_mode(&self, path: &Path) -> RecursiveMode {
+        if path
+            .ancestors()
+            .any(|ancestor| self.roots.get(ancestor) == Some(&RecursiveMode::Recursive))
+        {
+            RecursiveMode::Recursive
+        } else {
+            RecursiveMode::NonRecursive
         }
     }
 
@@ -287,30 +307,19 @@ impl<T: FileIdCache> DebounceDataInner<T> {
         self.roots.insert(path, recursive_mode);
     }
 
-    /// Removes `path` and every root below it. `PathBuf` orders by components, so the roots
-    /// below `path` follow it directly in the map.
+    /// Removes the root `path`. Unwatching a path removes only that watch, so the roots below it
+    /// stay; the cache drops the IDs below `path`, so each of those roots is cached again.
     fn remove_root(&mut self, path: &Path) {
-        let covered = self
-            .roots
-            .range::<Path, _>((std::ops::Bound::Included(path), std::ops::Bound::Unbounded))
-            .map(|(root, _)| root)
-            .take_while(|root| root.starts_with(path))
-            .cloned()
-            .collect::<Vec<_>>();
-        for root in covered {
-            self.roots.remove(&root);
-        }
+        self.roots.remove(path);
         self.cache.remove_path(path);
-    }
-
-    fn recursive_mode(&mut self, path: &Path) -> RecursiveMode {
-        if path
-            .ancestors()
-            .any(|ancestor| self.roots.get(ancestor) == Some(&RecursiveMode::Recursive))
-        {
-            RecursiveMode::Recursive
-        } else {
-            RecursiveMode::NonRecursive
+        let nested = self
+            .roots
+            .range::<Path, _>((std::ops::Bound::Excluded(path), std::ops::Bound::Unbounded))
+            .take_while(|(root, _)| root.starts_with(path))
+            .map(|(root, recursive_mode)| (root.clone(), *recursive_mode))
+            .collect::<Vec<_>>();
+        for (root, recursive_mode) in nested {
+            self.cache.add_path(&root, recursive_mode);
         }
     }
 
@@ -328,9 +337,7 @@ impl<T: FileIdCache> DebounceDataInner<T> {
     }
 
     fn handle_rename_to(&mut self, event: Event) {
-        let recursive_mode = self.recursive_mode(&event.paths[0]);
-
-        self.cache.add_path(&event.paths[0], recursive_mode);
+        self.add_event_path(&event.paths[0]);
 
         let trackers_match = self
             .rename_event
@@ -521,7 +528,9 @@ impl<T: Watcher, C: FileIdCache> Debouncer<T, C> {
     }
 
     fn set_stop(&self) {
+        let _lock = self.data.inner.lock().unwrap();
         self.stop.store(true, Ordering::Relaxed);
+        self.data.changed.notify_all();
     }
 
     #[deprecated = "`Debouncer` provides all methods from `Watcher` itself now. Remove `.watcher()` and use those methods directly."]
@@ -532,13 +541,14 @@ impl<T: Watcher, C: FileIdCache> Debouncer<T, C> {
 
     fn add_root(&mut self, path: impl Into<PathBuf>, recursive_mode: RecursiveMode) {
         self.data
+            .inner
             .lock()
             .unwrap()
             .add_root(path.into(), recursive_mode);
     }
 
     fn remove_root(&mut self, path: impl AsRef<Path>) {
-        self.data.lock().unwrap().remove_root(path.as_ref());
+        self.data.inner.lock().unwrap().remove_root(path.as_ref());
     }
 
     pub fn watch(
@@ -552,7 +562,7 @@ impl<T: Watcher, C: FileIdCache> Debouncer<T, C> {
     }
 
     /// Stops watching `path`. When the backend has already dropped the watch, or the path is
-    /// gone, the roots under `path` are forgotten too and the backend error is returned.
+    /// gone, a root at `path` is forgotten too and the backend error is returned.
     pub fn unwatch(&mut self, path: impl AsRef<Path>) -> notify::Result<()> {
         let path = path.as_ref();
         match self.watcher.unwatch(path) {
@@ -561,7 +571,9 @@ impl<T: Watcher, C: FileIdCache> Debouncer<T, C> {
                 Ok(())
             }
             Err(error) => {
-                if matches!(error.kind, ErrorKind::WatchNotFound) || !path.exists() {
+                let watch_is_gone =
+                    matches!(error.kind, ErrorKind::WatchNotFound) || !path.exists();
+                if watch_is_gone && self.data.inner.lock().unwrap().roots.contains_key(path) {
                     self.remove_root(path);
                 }
                 Err(error)
@@ -569,10 +581,85 @@ impl<T: Watcher, C: FileIdCache> Debouncer<T, C> {
         }
     }
 
+    pub fn watched_paths(&self) -> notify::Result<Vec<(PathBuf, RecursiveMode)>> {
+        self.watcher.watched_paths()
+    }
+
+    /// Add/remove paths to watch in batch.
+    ///
+    /// For some [`Watcher`] implementations this method provides better performance than multiple
+    /// calls to [`Watcher::watch`] and [`Watcher::unwatch`] if you want to add/remove many paths at once.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`UpdatePathsError`] if any operation fails. Operations are applied sequentially.
+    /// When an error occurs, processing stops: operations before `origin` have been applied,
+    /// `origin` is the operation that failed (if known), and `remaining` are the operations that
+    /// were not attempted. `remaining` does not include `origin`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use notify::{Watcher, RecursiveMode, PathOp};
+    /// # use code_kb_core::debouncer::{RecommendedCache, new_debouncer_opt};
+    /// # use std::path::{Path, PathBuf};
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let mut debouncer = new_debouncer_opt::<_, notify::NullWatcher, _>(
+    /// #     std::time::Duration::from_secs(1),
+    /// #     None,
+    /// #     |e| {},
+    /// #     RecommendedCache::new(),
+    /// #     Default::default()
+    /// # )?;
+    /// debouncer.update_paths([
+    ///     PathOp::watch_recursive("path/to/file"),
+    ///     PathOp::unwatch("path/to/file2"),
+    /// ])?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn update_paths<Op: Into<PathOp>>(
+        &mut self,
+        ops: impl IntoIterator<Item = Op>,
+    ) -> std::result::Result<(), UpdatePathsError> {
+        let mut paths = Vec::new();
+        let ops: Vec<_> = ops
+            .into_iter()
+            .map(Into::into)
+            .inspect(|op| {
+                paths.push((
+                    op.as_path().to_path_buf(),
+                    match op {
+                        PathOp::Watch(_, config) => Some(config.recursive_mode()),
+                        PathOp::Unwatch(_) => None,
+                    },
+                ));
+            })
+            .collect();
+
+        let res = self.watcher.update_paths(ops);
+        let updated_len = match res.as_ref() {
+            Ok(()) => paths.len(),
+            Err(e) => {
+                let failed = usize::from(e.origin.is_some());
+                paths.len().saturating_sub(e.remaining.len() + failed)
+            }
+        };
+        let updated_paths = &paths[..updated_len];
+        for (path, watch_mode) in updated_paths {
+            match watch_mode {
+                Some(recursive_mode) => self.add_root(path, *recursive_mode),
+                None => self.remove_root(path),
+            }
+        }
+        res
+    }
+
     pub fn configure(&mut self, option: notify::Config) -> notify::Result<bool> {
         self.watcher.configure(option)
     }
 
+    #[must_use]
     pub fn kind() -> WatcherKind
     where
         Self: Sized,
@@ -599,7 +686,10 @@ pub fn new_debouncer_opt<F: DebounceEventHandler, T: Watcher, C: FileIdCache + S
     file_id_cache: C,
     config: notify::Config,
 ) -> Result<Debouncer<T, C>, Error> {
-    let data = Arc::new(Mutex::new(DebounceDataInner::new(file_id_cache, timeout)));
+    let data = Arc::new(SharedDebounceData {
+        inner: Mutex::new(DebounceDataInner::new(file_id_cache, timeout)),
+        changed: Condvar::new(),
+    });
     let stop = Arc::new(AtomicBool::new(false));
 
     let tick_div = 4;
@@ -620,22 +710,45 @@ pub fn new_debouncer_opt<F: DebounceEventHandler, T: Watcher, C: FileIdCache + S
     };
 
     let data_c = data.clone();
+    let watcher = T::new(
+        move |e: Result<Event, Error>| {
+            let mut lock = data_c.inner.lock().unwrap();
+            match e {
+                Ok(e) => lock.add_event(e),
+                // can't have multiple TX, so we need to pipe that through our debouncer
+                Err(e) => lock.add_error(e),
+            }
+            data_c.changed.notify_all();
+        },
+        config,
+    )?;
+
+    let data_c = data.clone();
     let stop_c = stop.clone();
     let thread = std::thread::Builder::new()
         .name("notify-rs debouncer loop".to_string())
         .spawn(move || {
             loop {
+                let mut lock = data_c.inner.lock().unwrap();
+                while lock.queues.is_empty()
+                    && lock.errors.is_empty()
+                    && lock.rescan_event.is_none()
+                    && !stop_c.load(Ordering::Acquire)
+                {
+                    lock = data_c.changed.wait(lock).unwrap();
+                }
                 if stop_c.load(Ordering::Acquire) {
                     break;
                 }
+                drop(lock);
                 std::thread::sleep(tick);
-                let send_data;
-                let errors;
-                {
-                    let mut lock = data_c.lock().unwrap();
-                    send_data = lock.debounced_events();
-                    errors = lock.errors();
+                if stop_c.load(Ordering::Acquire) {
+                    break;
                 }
+                lock = data_c.inner.lock().unwrap();
+                let send_data = lock.debounced_events();
+                let errors = lock.errors();
+                drop(lock);
                 if !send_data.is_empty() {
                     event_handler.handle_event(Ok(send_data));
                 }
@@ -644,20 +757,6 @@ pub fn new_debouncer_opt<F: DebounceEventHandler, T: Watcher, C: FileIdCache + S
                 }
             }
         })?;
-
-    let data_c = data.clone();
-    let watcher = T::new(
-        move |e: Result<Event, Error>| {
-            let mut lock = data_c.lock().unwrap();
-
-            match e {
-                Ok(e) => lock.add_event(e),
-                // can't have multiple TX, so we need to pipe that through our debouncer
-                Err(e) => lock.add_error(e),
-            }
-        },
-        config,
-    )?;
 
     let guard = Debouncer {
         watcher,
@@ -692,25 +791,35 @@ fn sort_events(events: Vec<DebouncedEvent>) -> Vec<DebouncedEvent> {
     let mut sorted = Vec::with_capacity(events.len());
 
     // group events by path
-    let mut events_by_path: HashMap<_, VecDeque<_>> =
-        events.into_iter().fold(HashMap::new(), |mut acc, event| {
-            acc.entry(event.paths.last().cloned().unwrap_or_default())
-                .or_default()
-                .push_back(event);
-            acc
-        });
+    let mut groups = Vec::<(PathBuf, VecDeque<DebouncedEvent>)>::new();
+    let mut group_indexes: HashMap<PathBuf, usize> = HashMap::default();
+    group_indexes.reserve(events.len());
+    groups.reserve(events.len());
+
+    for event in events {
+        let path = event.paths.last().cloned().unwrap_or_default();
+
+        if let Some(&index) = group_indexes.get(&path) {
+            groups[index].1.push_back(event);
+        } else {
+            group_indexes.insert(path.clone(), groups.len());
+            groups.push((path, [event].into()));
+        }
+    }
+
+    // Keep path order as the tie-breaker for identical timestamps.
+    groups.sort_unstable_by(|(left_path, _), (right_path, _)| left_path.cmp(right_path));
 
     // push events for different paths in chronological order and keep the order of events with the same path
 
-    let mut min_time_heap = events_by_path
+    let mut min_time_heap = groups
         .iter()
-        .map(|(path, events)| Reverse((events[0].time, path.clone())))
+        .enumerate()
+        .map(|(index, (_, events))| Reverse((events[0].time, index)))
         .collect::<BinaryHeap<_>>();
 
-    while let Some(Reverse((min_time, path))) = min_time_heap.pop() {
-        // unwrap is safe because only paths from `events_by_path` are added to `min_time_heap`
-        // and they are never removed from `events_by_path`.
-        let events = events_by_path.get_mut(&path).unwrap();
+    while let Some(Reverse((min_time, index))) = min_time_heap.pop() {
+        let events = &mut groups[index].1;
 
         let mut push_next = false;
 
@@ -722,7 +831,7 @@ fn sort_events(events: Vec<DebouncedEvent>) -> Vec<DebouncedEvent> {
         }
 
         if push_next && let Some(event) = events.front() {
-            min_time_heap.push(Reverse((event.time, path)));
+            min_time_heap.push(Reverse((event.time, index)));
         }
     }
 
@@ -731,7 +840,11 @@ fn sort_events(events: Vec<DebouncedEvent>) -> Vec<DebouncedEvent> {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, path::Path};
+    use std::{
+        fs,
+        path::{Path, PathBuf},
+        time::Duration,
+    };
 
     use super::*;
 
@@ -741,9 +854,121 @@ mod tests {
     use testing::TestCase;
     use time::MockTime;
 
+    #[derive(Debug)]
+    struct FailingWatcher {
+        fail_path: PathBuf,
+    }
+
+    impl Watcher for FailingWatcher {
+        fn new<F: notify::EventHandler>(
+            _event_handler: F,
+            _config: notify::Config,
+        ) -> notify::Result<Self> {
+            Ok(Self {
+                fail_path: PathBuf::from("bad"),
+            })
+        }
+
+        fn watch(&mut self, path: &Path, _recursive_mode: RecursiveMode) -> notify::Result<()> {
+            if path == self.fail_path {
+                Err(Error::path_not_found())
+            } else {
+                Ok(())
+            }
+        }
+
+        fn unwatch(&mut self, path: &Path) -> notify::Result<()> {
+            if path == self.fail_path {
+                Err(Error::path_not_found())
+            } else {
+                Ok(())
+            }
+        }
+
+        fn kind() -> WatcherKind {
+            WatcherKind::NullWatcher
+        }
+    }
+
+    #[derive(Debug)]
+    struct UnconstructibleWatcher;
+
+    impl Watcher for UnconstructibleWatcher {
+        fn new<F: notify::EventHandler>(
+            _event_handler: F,
+            _config: notify::Config,
+        ) -> notify::Result<Self> {
+            Err(Error::generic("watcher construction failed"))
+        }
+
+        fn watch(&mut self, _path: &Path, _recursive_mode: RecursiveMode) -> notify::Result<()> {
+            unreachable!()
+        }
+
+        fn unwatch(&mut self, _path: &Path) -> notify::Result<()> {
+            unreachable!()
+        }
+
+        fn kind() -> WatcherKind {
+            WatcherKind::NullWatcher
+        }
+    }
+
+    #[derive(Debug, Default)]
+    struct TrackingWatcher {
+        watched: Vec<(PathBuf, RecursiveMode)>,
+    }
+
+    fn tracking_debouncer<C: FileIdCache + Send + 'static>(
+        cache: C,
+    ) -> Result<Debouncer<TrackingWatcher, C>, Error> {
+        new_debouncer_opt(
+            Duration::from_millis(20),
+            Some(Duration::from_millis(5)),
+            |_| {},
+            cache,
+            notify::Config::default(),
+        )
+    }
+
+    impl Watcher for TrackingWatcher {
+        fn new<F: notify::EventHandler>(
+            _event_handler: F,
+            _config: notify::Config,
+        ) -> notify::Result<Self> {
+            Ok(Self::default())
+        }
+
+        fn watch(&mut self, path: &Path, recursive_mode: RecursiveMode) -> notify::Result<()> {
+            self.watched.push((path.to_path_buf(), recursive_mode));
+            Ok(())
+        }
+
+        fn unwatch(&mut self, path: &Path) -> notify::Result<()> {
+            let original_len = self.watched.len();
+            self.watched
+                .retain(|(watched_path, _)| watched_path != path);
+
+            if self.watched.len() == original_len {
+                Err(Error::watch_not_found())
+            } else {
+                Ok(())
+            }
+        }
+
+        fn kind() -> WatcherKind {
+            WatcherKind::NullWatcher
+        }
+
+        fn watched_paths(&self) -> notify::Result<Vec<(PathBuf, RecursiveMode)>> {
+            Ok(self.watched.clone())
+        }
+    }
+
     #[rstest]
     fn state(
         #[values(
+            "add_create_and_remove_event",
             "add_create_event",
             "add_create_event_after_remove_event",
             "add_create_dir_event_twice",
@@ -879,6 +1104,57 @@ mod tests {
         }
     }
 
+    #[test]
+    fn recursive_mode_uses_recursive_root_for_overlapping_watches() {
+        let state = DebounceDataInner {
+            queues: HashMap::default(),
+            roots: BTreeMap::from([
+                (PathBuf::from("root"), RecursiveMode::NonRecursive),
+                (PathBuf::from("root/nested"), RecursiveMode::Recursive),
+            ]),
+            cache: NoCache,
+            rename_event: None,
+            rescan_event: None,
+            errors: Vec::new(),
+            timeout: Duration::from_millis(50),
+        };
+
+        assert_eq!(
+            state.recursive_mode(Path::new("root/nested/child")),
+            RecursiveMode::Recursive
+        );
+        assert_eq!(
+            state.recursive_mode(Path::new("root/other")),
+            RecursiveMode::NonRecursive
+        );
+    }
+
+    #[test]
+    fn sort_events_ties_by_path() {
+        let time = now();
+        let events = vec![
+            DebouncedEvent::new(
+                Event::new(EventKind::Any).add_path(PathBuf::from("/watch/b")),
+                time,
+            ),
+            DebouncedEvent::new(
+                Event::new(EventKind::Any).add_path(PathBuf::from("/watch/a")),
+                time,
+            ),
+        ];
+
+        let sorted = sort_events(events);
+        let paths = sorted
+            .into_iter()
+            .map(|event| event.paths[0].clone())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            paths,
+            vec![PathBuf::from("/watch/a"), PathBuf::from("/watch/b")]
+        );
+    }
+
     fn root_paths<T>(state: &DebounceDataInner<T>) -> Vec<PathBuf> {
         state.roots.keys().cloned().collect()
     }
@@ -886,7 +1162,7 @@ mod tests {
     #[test]
     fn root_bookkeeping_stays_fast_for_many_directories() {
         let mut state = DebounceDataInner::new(NoCache, Duration::from_millis(50));
-        let started = Instant::now();
+        let started = std::time::Instant::now();
 
         for index in 0..40_000 {
             state.add_root(
@@ -900,9 +1176,11 @@ mod tests {
                 RecursiveMode::NonRecursive,
             );
         }
-        state.remove_root(Path::new("/project/dir7"));
+        for index in (0..40_000).rev().step_by(2) {
+            state.remove_root(Path::new(&format!("/project/dir{index}")));
+        }
 
-        assert_eq!(state.roots.len(), 39_999);
+        assert_eq!(state.roots.len(), 20_000);
         assert!(
             started.elapsed() < Duration::from_secs(5),
             "root bookkeeping took {:?}",
@@ -911,7 +1189,7 @@ mod tests {
     }
 
     #[test]
-    fn removing_a_root_removes_its_descendants_and_keeps_name_prefix_siblings() {
+    fn removing_a_root_keeps_its_nested_roots_and_name_prefix_siblings() {
         let mut state = DebounceDataInner::new(NoCache, Duration::from_millis(50));
         for path in ["/w", "/w/b", "/w/b/c", "/w/bc", "/w/b-c"] {
             state.add_root(PathBuf::from(path), RecursiveMode::NonRecursive);
@@ -923,6 +1201,7 @@ mod tests {
             root_paths(&state),
             vec![
                 PathBuf::from("/w"),
+                PathBuf::from("/w/b/c"),
                 PathBuf::from("/w/b-c"),
                 PathBuf::from("/w/bc")
             ]
@@ -978,7 +1257,7 @@ mod tests {
     }
 
     #[test]
-    fn unwatch_of_a_watch_the_backend_already_dropped_forgets_the_root() {
+    fn unwatch_of_a_watch_the_backend_already_dropped_forgets_only_that_root() {
         let mut debouncer = new_debouncer_opt::<_, LostWatchWatcher, NoCache>(
             Duration::from_millis(50),
             None,
@@ -997,7 +1276,34 @@ mod tests {
         let error = debouncer.unwatch("/w/gone").unwrap_err();
 
         assert!(matches!(error.kind, ErrorKind::WatchNotFound));
-        assert!(debouncer.data.lock().unwrap().roots.is_empty());
+        let roots = root_paths(&debouncer.data.inner.lock().unwrap());
+        assert_eq!(roots, vec![PathBuf::from("/w/gone/child")]);
+    }
+
+    #[test]
+    fn the_debouncer_thread_reports_an_error_that_arrives_while_it_waits() {
+        let (tx, rx) = std::sync::mpsc::channel::<DebounceEventResult>();
+        let debouncer = new_debouncer_opt::<_, TrackingWatcher, NoCache>(
+            Duration::from_millis(20),
+            Some(Duration::from_millis(5)),
+            tx,
+            NoCache::new(),
+            notify::Config::default(),
+        )
+        .unwrap();
+        std::thread::sleep(Duration::from_millis(50));
+
+        {
+            let mut data = debouncer.data.inner.lock().unwrap();
+            data.add_error(Error::generic("rearm failed"));
+            debouncer.data.changed.notify_all();
+        }
+
+        let errors = rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("the parked debouncer thread did not wake")
+            .expect_err("an error result");
+        assert_eq!(errors.len(), 1);
     }
 
     #[test]
@@ -1035,5 +1341,403 @@ mod tests {
         }
 
         panic!("did not receive expected event");
+    }
+
+    /// Regression test: on macOS, FSEvents reports file deletions as a burst
+    /// of `Create(File)` + `Modify(Data)` + `Remove(File)`.  The debouncer
+    /// must not suppress the `Remove` event, even though a prior `Create`
+    /// for the same path exists in the queue.
+    ///
+    /// Without the fix, `push_remove_event` would see `was_created() == true`
+    /// and cancel the entire queue, swallowing the removal.
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn remove_event_not_swallowed_after_create() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempdir()?;
+        let dir_path = dir.path().canonicalize()?;
+
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut debouncer = new_debouncer(Duration::from_millis(10), None, tx)?;
+        debouncer.watch(&dir_path, RecursiveMode::NonRecursive)?;
+
+        // Create a file and wait for the debouncer to deliver the Create event.
+        let file_path = dir_path.join("ephemeral.txt");
+        fs::write(&file_path, b"will be deleted")?;
+
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut got_create = false;
+        while Instant::now() < deadline {
+            match rx.recv_timeout(Duration::from_millis(100)) {
+                Ok(Ok(events)) => {
+                    if events.iter().any(|e| {
+                        matches!(e.event.kind, EventKind::Create(_))
+                            && e.event.paths.contains(&file_path)
+                    }) {
+                        got_create = true;
+                        break;
+                    }
+                }
+                Ok(Err(_)) => {}
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+                Err(_) => break,
+            }
+        }
+        assert!(got_create, "expected Create event for ephemeral.txt");
+
+        // Drain any remaining events from the creation.
+        std::thread::sleep(Duration::from_millis(200));
+        while rx.try_recv().is_ok() {}
+
+        // Delete the file.
+        fs::remove_file(&file_path)?;
+
+        // The debouncer MUST deliver an event for this path (Remove, or at
+        // minimum any event whose path matches so the consumer can stat it).
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut got_removal = false;
+        while Instant::now() < deadline {
+            match rx.recv_timeout(Duration::from_millis(100)) {
+                Ok(Ok(events)) => {
+                    if events.iter().any(|e| e.event.paths.contains(&file_path)) {
+                        got_removal = true;
+                        break;
+                    }
+                }
+                Ok(Err(_)) => {}
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+                Err(_) => break,
+            }
+        }
+        assert!(
+            got_removal,
+            "expected Remove (or any) event for deleted ephemeral.txt, got none within 5s"
+        );
+
+        Ok(())
+    }
+
+    /// Unit-level reproducer for the same bug: feed a Create + Remove
+    /// sequence into `DebounceDataInner` directly, with the queue already
+    /// flushed between them (simulating the debounce tick).  The Remove
+    /// must not be swallowed.
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn push_remove_after_flushed_create() {
+        use crate::debouncer::NoCache;
+        use notify::event::{CreateKind, RemoveKind};
+        use std::path::PathBuf;
+
+        let mut state = DebounceDataInner::new(NoCache, Duration::from_millis(50));
+
+        let time = Instant::now();
+        MockTime::set_time(time);
+
+        let path = PathBuf::from("/tmp/test_file.txt");
+
+        // Simulate: file created → Create event added
+        state.add_event(Event {
+            kind: EventKind::Create(CreateKind::File),
+            paths: vec![path.clone()],
+            ..Default::default()
+        });
+
+        // Simulate: debounce tick flushes the Create
+        MockTime::advance(Duration::from_millis(100));
+        let flushed = state.debounced_events();
+        assert_eq!(flushed.len(), 1);
+        assert!(matches!(flushed[0].event.kind, EventKind::Create(_)));
+
+        // Simulate: FSEvents sends Create + Remove for the deletion
+        // (this is what macOS does)
+        state.add_event(Event {
+            kind: EventKind::Create(CreateKind::File),
+            paths: vec![path.clone()],
+            ..Default::default()
+        });
+        state.add_event(Event {
+            kind: EventKind::Remove(RemoveKind::File),
+            paths: vec![path.clone()],
+            ..Default::default()
+        });
+
+        // Flush again — we MUST get the Remove event
+        MockTime::advance(Duration::from_millis(100));
+        let flushed = state.debounced_events();
+        assert!(
+            flushed
+                .iter()
+                .any(|e| matches!(e.event.kind, EventKind::Remove(_))),
+            "expected Remove event after flushed Create, got: {flushed:?}"
+        );
+    }
+
+    #[test]
+    fn update_paths() -> Result<(), Box<dyn std::error::Error>> {
+        let dir1 = tempdir()?;
+        let dir2 = tempdir()?;
+
+        // set up the watcher
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut debouncer = new_debouncer(Duration::from_millis(10), None, tx)?;
+        debouncer.update_paths([
+            PathOp::watch_recursive(dir1.path()),
+            PathOp::watch_recursive(dir2.path()),
+        ])?;
+
+        // create a new file
+        let file_path1 = dir1.path().join("file.txt");
+        let file_path2 = dir2.path().join("file.txt");
+        fs::write(&file_path1, b"Lorem ipsum1")?;
+        fs::write(&file_path2, b"Lorem ipsum1")?;
+
+        println!("waiting for events at {file_path1:?} and {file_path2:?}");
+
+        // wait for up to 10 seconds for the create event, ignore all other events
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut received = (false, false);
+        while deadline > Instant::now() {
+            let events = rx
+                .recv_timeout(deadline - Instant::now())
+                .expect("did not receive expected event")
+                .expect("received an error");
+
+            for event in events {
+                println!("event {event:?}");
+                if event.event.paths == vec![file_path1.clone()]
+                    || event.event.paths == vec![file_path1.canonicalize()?]
+                {
+                    received.0 = true;
+                }
+
+                if event.event.paths == vec![file_path2.clone()]
+                    || event.event.paths == vec![file_path2.canonicalize()?]
+                {
+                    received.1 = true;
+                }
+
+                if received == (true, true) {
+                    return Ok(());
+                }
+            }
+        }
+
+        panic!("did not receive expected event");
+    }
+
+    #[test]
+    fn watcher_construction_error_releases_event_handler() {
+        let (tx, rx) = std::sync::mpsc::channel::<DebounceEventResult>();
+
+        let result = new_debouncer_opt::<_, UnconstructibleWatcher, NoCache>(
+            Duration::from_millis(20),
+            Some(Duration::from_millis(5)),
+            tx,
+            NoCache::new(),
+            notify::Config::default(),
+        );
+        assert!(result.is_err());
+
+        assert!(matches!(
+            rx.recv_timeout(Duration::from_secs(5)),
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected)
+        ));
+    }
+
+    #[test]
+    fn update_paths_error_does_not_add_failed_root() -> Result<(), Box<dyn std::error::Error>> {
+        let mut debouncer = new_debouncer_opt::<_, FailingWatcher, NoCache>(
+            Duration::from_millis(20),
+            Some(Duration::from_millis(5)),
+            |_| {},
+            NoCache::new(),
+            notify::Config::default(),
+        )?;
+
+        let err = debouncer
+            .update_paths([
+                PathOp::watch_recursive("ok1"),
+                PathOp::watch_recursive("bad"),
+                PathOp::watch_recursive("ok2"),
+            ])
+            .unwrap_err();
+        assert!(err.origin.is_some());
+        assert_eq!(err.remaining.len(), 1);
+
+        let roots: Vec<_> = debouncer
+            .data
+            .inner
+            .lock()
+            .unwrap()
+            .roots
+            .iter()
+            .map(|(path, recursive_mode)| (path.clone(), *recursive_mode))
+            .collect();
+        assert_eq!(
+            roots,
+            vec![(PathBuf::from("ok1"), RecursiveMode::Recursive)]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn watched_paths_with_watch_update_paths_and_unwatch() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let mut debouncer = new_debouncer_opt::<_, TrackingWatcher, NoCache>(
+            Duration::from_millis(20),
+            Some(Duration::from_millis(5)),
+            |_| {},
+            NoCache::new(),
+            notify::Config::default(),
+        )?;
+
+        let path1 = PathBuf::from("one");
+        let path2 = PathBuf::from("two");
+        let path3 = PathBuf::from("three");
+
+        assert!(debouncer.watched_paths()?.is_empty());
+
+        debouncer.watch(&path1, RecursiveMode::Recursive)?;
+        assert_eq!(
+            debouncer.watched_paths()?,
+            vec![(path1.clone(), RecursiveMode::Recursive)]
+        );
+
+        debouncer.update_paths([
+            PathOp::unwatch(&path1),
+            PathOp::watch_non_recursive(path2.clone()),
+            PathOp::watch_recursive(path3.clone()),
+        ])?;
+        assert_eq!(
+            debouncer.watched_paths()?,
+            vec![
+                (path2.clone(), RecursiveMode::NonRecursive),
+                (path3.clone(), RecursiveMode::Recursive),
+            ]
+        );
+
+        debouncer.unwatch(&path2)?;
+        assert_eq!(
+            debouncer.watched_paths()?,
+            vec![(path3, RecursiveMode::Recursive)]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(not(target_family = "wasm"))]
+    fn child_of_a_non_recursive_root_is_cached_without_its_entries()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut debouncer = tracking_debouncer(FileIdMap::new())?;
+
+        let tmpdir = tempdir()?;
+        debouncer.watch(tmpdir.path(), RecursiveMode::NonRecursive)?;
+        let child = tmpdir.path().join("child");
+        let grandchild = child.join("file.txt");
+        fs::create_dir(&child)?;
+        fs::write(&grandchild, b"content")?;
+
+        // Copy out what the assertions need and release the lock first: a panic while the
+        // guard is held poisons the mutex, and the debouncer's drop then panics too.
+        let (child_cached, grandchild_cached) = {
+            let mut data = debouncer.data.inner.lock().unwrap();
+            data.add_event(
+                Event::new(EventKind::Create(notify::event::CreateKind::Folder))
+                    .add_path(child.clone()),
+            );
+            (
+                data.cache.cached_file_id(&child).is_some(),
+                data.cache.cached_file_id(&grandchild).is_some(),
+            )
+        };
+        assert!(child_cached);
+        assert!(
+            !grandchild_cached,
+            "the non-recursive root does not watch the entries below its children"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(not(target_family = "wasm"))]
+    fn unwatch_parent_preserves_nested_root() -> Result<(), Box<dyn std::error::Error>> {
+        let mut debouncer = new_debouncer_opt::<_, TrackingWatcher, FileIdMap>(
+            Duration::from_millis(20),
+            Some(Duration::from_millis(5)),
+            |_| {},
+            FileIdMap::new(),
+            notify::Config::default(),
+        )?;
+
+        let tmpdir = tempdir()?;
+        let nested = tmpdir.path().join("nested");
+        fs::create_dir(&nested)?;
+        let nested_file = nested.join("file.txt");
+        fs::write(&nested_file, b"content")?;
+
+        debouncer.watch(tmpdir.path(), RecursiveMode::Recursive)?;
+        debouncer.watch(&nested, RecursiveMode::Recursive)?;
+        debouncer.unwatch(tmpdir.path())?;
+
+        // Copy out what the assertions need and release the lock first: a panic while the
+        // guard is held poisons the mutex, and the debouncer's drop then panics too.
+        let (roots, nested_file_cached) = {
+            let data = debouncer.data.inner.lock().unwrap();
+            let roots = data.roots.keys().cloned().collect::<Vec<_>>();
+            let cached = data.cache.cached_file_id(&nested_file).is_some();
+            (roots, cached)
+        };
+
+        assert_eq!(
+            roots,
+            vec![nested.clone()],
+            "unwatching a parent must not drop roots nested under it"
+        );
+        assert!(
+            nested_file_cached,
+            "removing the parent must rebuild cache coverage for the surviving nested root"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(not(target_family = "wasm"))]
+    fn unwatch_not_found_preserves_nested_roots() -> Result<(), Box<dyn std::error::Error>> {
+        let mut debouncer = new_debouncer_opt::<_, TrackingWatcher, FileIdMap>(
+            Duration::from_millis(20),
+            Some(Duration::from_millis(5)),
+            |_| {},
+            FileIdMap::new(),
+            notify::Config::default(),
+        )?;
+
+        let tmpdir = tempdir()?;
+        let nested = tmpdir.path().join("nested");
+        fs::create_dir(&nested)?;
+        let nested_file = nested.join("file.txt");
+        fs::write(&nested_file, b"content")?;
+
+        debouncer.watch(&nested, RecursiveMode::Recursive)?;
+
+        // The parent was never watched: the backend reports WatchNotFound and changes
+        // nothing, so the error propagates and the nested root's bookkeeping and cached
+        // IDs must stay untouched.
+        let result = debouncer.unwatch(tmpdir.path());
+        assert!(matches!(&result, Err(error) if matches!(error.kind, ErrorKind::WatchNotFound)));
+
+        let (roots, nested_file_cached) = {
+            let data = debouncer.data.inner.lock().unwrap();
+            let roots = data.roots.keys().cloned().collect::<Vec<_>>();
+            let cached = data.cache.cached_file_id(&nested_file).is_some();
+            (roots, cached)
+        };
+
+        assert_eq!(roots, vec![nested.clone()]);
+        assert!(nested_file_cached);
+
+        Ok(())
     }
 }
