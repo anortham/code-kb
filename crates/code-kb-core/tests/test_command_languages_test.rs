@@ -125,6 +125,269 @@ fn a_targeted_gradle_command_takes_the_windows_wrapper_only_on_windows() {
     assert_commands(&target, &[("checksTarget", expected)]);
 }
 
+const JAVA_LIB: &str = "package x;\n\npublic class Foo {\n    public static int target() {\n        return 1;\n    }\n}\n";
+
+fn java_test(class: &str) -> String {
+    format!(
+        "package x;\n\nimport org.junit.Test;\n\npublic class {class} {{\n    @Test\n    public void checksTarget() {{\n        Foo.target();\n    }}\n}}\n"
+    )
+}
+
+const WRAPPER: &str = "./gradlew";
+
+#[test]
+fn java_kotlin_and_scala_tests_in_gradle_subprojects_run_only_their_project_task() {
+    let repo = scanned_repo(&[
+        ("gradlew", "#!/bin/sh\n"),
+        (
+            "settings.gradle.kts",
+            "rootProject.name = \"demo-root\"\n\ninclude(\":lib\")\n\ninclude(\":kotlin-tests\")\n\ninclude(\":kotlin-tests:codegen-only\")\n\ninclude(\":scala\")\n",
+        ),
+        ("build.gradle.kts", "plugins { java }\n"),
+        ("lib/build.gradle.kts", "plugins { java }\n"),
+        ("lib/src/main/java/x/Foo.java", JAVA_LIB),
+        ("lib/src/test/java/x/FooTest.java", &java_test("FooTest")),
+        (
+            "kotlin-tests/build.gradle.kts",
+            "plugins { kotlin(\"jvm\") }\n",
+        ),
+        (
+            "kotlin-tests/src/main/kotlin/demo/Lib.kt",
+            &KOTLIN_LIB.replace("target", "kotlinTarget"),
+        ),
+        (
+            "kotlin-tests/src/test/kotlin/demo/LibTest.kt",
+            &KOTLIN_TEST.replace("target", "kotlinTarget"),
+        ),
+        (
+            "kotlin-tests/codegen-only/build.gradle.kts",
+            "plugins { kotlin(\"jvm\") }\n",
+        ),
+        (
+            "kotlin-tests/codegen-only/src/test/kotlin/demo/CodegenTest.kt",
+            "package demo\n\nimport org.junit.jupiter.api.Test\n\nclass CodegenTest {\n    @Test fun usesTarget() { kotlinTarget() }\n}\n",
+        ),
+        ("scala/build.gradle", "plugins { id 'scala' }\n"),
+        ("scala/src/main/scala/demo/Lib.scala", SCALA_LIB),
+        ("scala/src/test/scala/demo/LibSuite.scala", SCALA_TEST),
+    ]);
+    let tool = WRAPPER;
+
+    assert_commands(
+        &report(&repo, "target", "lib/src/main/java/x/Foo.java"),
+        &[(
+            "checksTarget",
+            &format!("{tool} :lib:test --tests 'FooTest.checksTarget'"),
+        )],
+    );
+    assert_commands(
+        &report(
+            &repo,
+            "kotlinTarget",
+            "kotlin-tests/src/main/kotlin/demo/Lib.kt",
+        ),
+        &[
+            (
+                "usesTarget",
+                &format!("{tool} :kotlin-tests:codegen-only:test --tests 'CodegenTest.usesTarget'"),
+            ),
+            (
+                "addsTwo",
+                &format!("{tool} :kotlin-tests:test --tests 'LibTest.addsTwo'"),
+            ),
+            (
+                "adds two numbers",
+                &format!("{tool} :kotlin-tests:test --tests 'LibTest.adds two numbers'"),
+            ),
+            (
+                "innerCase",
+                &format!("{tool} :kotlin-tests:test --tests 'LibTest$Inner.innerCase'"),
+            ),
+        ],
+    );
+    assert_commands(
+        &report(&repo, "target", "scala/src/main/scala/demo/Lib.scala"),
+        &[
+            (
+                "addsTwo",
+                &format!("{tool} :scala:test --tests 'LibJUnitTest.addsTwo'"),
+            ),
+            ("adds two", "-"),
+        ],
+    );
+}
+
+#[test]
+fn a_groovy_settings_file_moves_a_project_and_names_the_root_project_task() {
+    let repo = scanned_repo(&[
+        ("gradlew", "#!/bin/sh\n"),
+        (
+            "settings.gradle",
+            "rootProject.name = 'demo'\ninclude 'app',\n    ':core'\nproject(':core').projectDir = new File(settingsDir, 'libs/core')\n",
+        ),
+        ("build.gradle", "plugins { id 'java' }\n"),
+        ("src/main/java/x/Foo.java", JAVA_LIB),
+        ("src/test/java/x/RootTest.java", &java_test("RootTest")),
+        ("libs/core/build.gradle", "plugins { id 'java' }\n"),
+        (
+            "libs/core/src/test/java/x/CoreTest.java",
+            &java_test("CoreTest"),
+        ),
+    ]);
+    let tool = WRAPPER;
+
+    assert_commands(
+        &report(&repo, "target", "src/main/java/x/Foo.java"),
+        &[
+            (
+                "checksTarget",
+                &format!("{tool} :core:test --tests 'CoreTest.checksTarget'"),
+            ),
+            (
+                "checksTarget",
+                &format!("{tool} :test --tests 'RootTest.checksTarget'"),
+            ),
+        ],
+    );
+}
+
+#[test]
+fn a_gradle_project_that_a_condition_includes_has_no_command_and_a_single_project_keeps_its_form() {
+    let conditional = scanned_repo(&[
+        ("gradlew", "#!/bin/sh\n"),
+        (
+            "settings.gradle.kts",
+            "if (JavaVersion.current().isJava11Compatible) {\n    include(\":records\")\n}\n",
+        ),
+        ("records/build.gradle.kts", "plugins { java }\n"),
+        ("records/src/main/java/x/Foo.java", JAVA_LIB),
+        (
+            "records/src/test/java/x/FooTest.java",
+            &java_test("FooTest"),
+        ),
+    ]);
+    let single = scanned_repo(&[
+        ("gradlew", "#!/bin/sh\n"),
+        ("settings.gradle", "rootProject.name = 'solo'\n"),
+        ("build.gradle", "plugins { id 'java' }\n"),
+        ("src/main/java/x/Foo.java", JAVA_LIB),
+        ("src/test/java/x/FooTest.java", &java_test("FooTest")),
+    ]);
+
+    let braceless = scanned_repo(&[
+        ("gradlew", "#!/bin/sh\n"),
+        (
+            "settings.gradle.kts",
+            "if (System.getenv(\"CI\") != null)\n    include(\":extra\")\n",
+        ),
+        ("extra/build.gradle.kts", "plugins { java }\n"),
+        ("extra/src/main/java/x/Foo.java", JAVA_LIB),
+        ("extra/src/test/java/x/FooTest.java", &java_test("FooTest")),
+    ]);
+
+    assert_commands(
+        &report(&conditional, "target", "records/src/main/java/x/Foo.java"),
+        &[("checksTarget", "-")],
+    );
+    assert_commands(
+        &report(&braceless, "target", "extra/src/main/java/x/Foo.java"),
+        &[("checksTarget", "-")],
+    );
+    assert_commands(
+        &report(&single, "target", "src/main/java/x/Foo.java"),
+        &[(
+            "checksTarget",
+            &format!("{WRAPPER} test --tests 'FooTest.checksTarget'"),
+        )],
+    );
+}
+
+#[test]
+fn a_buildsrc_test_beside_a_multi_project_settings_file_runs_in_its_own_build() {
+    let repo = scanned_repo(&[
+        ("gradlew", "#!/bin/sh\n"),
+        ("settings.gradle.kts", "include(\":a\")\n"),
+        ("build.gradle.kts", "plugins { java }\n"),
+        ("buildSrc/build.gradle.kts", "plugins { java }\n"),
+        ("buildSrc/src/main/java/x/Foo.java", JAVA_LIB),
+        (
+            "buildSrc/src/test/java/x/BuildSrcTest.java",
+            &java_test("BuildSrcTest"),
+        ),
+        ("a/build.gradle.kts", "plugins { java }\n"),
+        (
+            "a/src/main/java/y/Bar.java",
+            &JAVA_LIB
+                .replace("package x;", "package y;")
+                .replace("Foo", "Bar"),
+        ),
+        (
+            "a/src/test/java/y/BarTest.java",
+            &java_test("BarTest")
+                .replace("package x;", "package y;")
+                .replace("Foo.", "Bar."),
+        ),
+    ]);
+
+    assert_commands(
+        &report(&repo, "target", "buildSrc/src/main/java/x/Foo.java"),
+        &[(
+            "checksTarget",
+            "cd buildSrc && ../gradlew test --tests 'BuildSrcTest.checksTarget'",
+        )],
+    );
+    assert_commands(
+        &report(&repo, "target", "a/src/main/java/y/Bar.java"),
+        &[(
+            "checksTarget",
+            &format!("{WRAPPER} :a:test --tests 'BarTest.checksTarget'"),
+        )],
+    );
+}
+
+#[test]
+fn a_project_that_a_sibling_settings_file_includes_flat_runs_from_that_folder() {
+    let repo = scanned_repo(&[
+        ("gradlew", "#!/bin/sh\n"),
+        ("build/settings.gradle", "includeFlat 'x', 'y'\n"),
+        (
+            "x/build.gradle.kts",
+            "plugins { java }\ndependencies { implementation(project(\":y\")) }\n",
+        ),
+        ("x/src/main/java/x/Foo.java", JAVA_LIB),
+        ("x/src/test/java/x/FooTest.java", &java_test("FooTest")),
+        ("y/build.gradle.kts", "plugins { java }\n"),
+        ("solo/build.gradle.kts", "plugins { java }\n"),
+        (
+            "solo/src/main/java/s/Solo.java",
+            &JAVA_LIB
+                .replace("package x;", "package s;")
+                .replace("Foo", "Solo"),
+        ),
+        (
+            "solo/src/test/java/s/SoloTest.java",
+            &java_test("SoloTest")
+                .replace("package x;", "package s;")
+                .replace("Foo.", "Solo."),
+        ),
+    ]);
+
+    assert_commands(
+        &report(&repo, "target", "x/src/main/java/x/Foo.java"),
+        &[(
+            "checksTarget",
+            "cd build && ../gradlew :x:test --tests 'FooTest.checksTarget'",
+        )],
+    );
+    assert_commands(
+        &report(&repo, "target", "solo/src/main/java/s/Solo.java"),
+        &[(
+            "checksTarget",
+            "cd solo && ../gradlew test --tests 'SoloTest.checksTarget'",
+        )],
+    );
+}
+
 const SCALA_LIB: &str = "package demo\n\nobject Lib {\n  def target(): Int = 1\n}\n";
 const SCALA_TEST: &str = "package demo\n\nimport org.junit.Test\nimport org.scalatest.funsuite.AnyFunSuite\n\nclass LibJUnitTest {\n  @Test def addsTwo(): Unit = { Lib.target() }\n}\n\nclass LibSuite extends AnyFunSuite {\n  test(\"adds two\") { Lib.target() }\n}\n";
 

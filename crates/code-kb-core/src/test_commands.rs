@@ -1,5 +1,8 @@
 //! The shell command that runs one test, from the marker files of the project.
 
+mod gradle;
+
+use gradle::GradleSettings;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -157,6 +160,9 @@ impl TestFamily {
         }
     }
 
+    /// The broader command of the package in `folder`: `Some(None)` when the folder bounds the
+    /// search but configures no command. `gradle` is the Gradle command of the folder, `None`
+    /// when Gradle cannot name its project with certainty.
     fn scoped_command(self, folder: &Folder, gradle: Option<&str>) -> Option<Option<String>> {
         match self {
             Self::Rust => folder.cargo.as_ref().map(|cargo| {
@@ -177,12 +183,10 @@ impl TestFamily {
                 if folder.jvm_build_ambiguous {
                     Some(None)
                 } else {
-                    folder.build.map(|build| {
-                        Some(match build {
-                            Build::Maven => "mvn test".to_string(),
-                            Build::Gradle => gradle.unwrap_or("gradle test").to_string(),
-                            Build::Sbt => "sbt test".to_string(),
-                        })
+                    folder.build.map(|build| match build {
+                        Build::Maven => Some("mvn test".to_string()),
+                        Build::Gradle => gradle.map(str::to_string),
+                        Build::Sbt => Some("sbt test".to_string()),
                     })
                 }
             }
@@ -202,6 +206,13 @@ impl TestFamily {
             }
         }
     }
+}
+
+/// The folder Gradle runs from, its program as seen from there, and the test task to run.
+struct GradleRun {
+    dir: String,
+    tool: String,
+    task: String,
 }
 
 #[derive(Clone)]
@@ -224,6 +235,7 @@ struct Folder {
     jvm_build_ambiguous: bool,
     gradlew: bool,
     gradlew_bat: bool,
+    gradle_settings: Option<GradleSettings>,
     pytest_config: bool,
     python_project_marker: bool,
     dotnet_project_marker: bool,
@@ -383,6 +395,13 @@ impl Folder {
                 > 1,
             gradlew: has("gradlew"),
             gradlew_bat: has("gradlew.bat"),
+            gradle_settings: match (text("settings.gradle"), text("settings.gradle.kts")) {
+                (Some(settings), None) | (None, Some(settings)) => {
+                    Some(GradleSettings::parse(&settings))
+                }
+                (Some(_), Some(_)) => Some(GradleSettings::unreadable()),
+                (None, None) => None,
+            },
             pytest_config,
             python_project_marker,
             dotnet_project_marker,
@@ -1183,17 +1202,23 @@ impl CommandFinder {
 
     fn nearest_broader_command(
         &mut self,
-        directory: &str,
+        folder: &str,
         family: TestFamily,
     ) -> Option<(String, String)> {
-        let mut directory = directory;
+        let mut directory = folder;
         loop {
-            let gradle = matches!(family, TestFamily::Jvm)
-                .then(|| self.gradle_command(directory))
-                .flatten();
-            if let Some(command) = family.scoped_command(self.folder(directory), gradle.as_deref())
+            let gradle = (matches!(family, TestFamily::Jvm)
+                && matches!(self.folder(directory).build, Some(Build::Gradle)))
+            .then(|| self.gradle_run(directory, folder))
+            .flatten();
+            let gradle_command = gradle
+                .as_ref()
+                .map(|run| format!("{} {}", run.tool, run.task));
+            if let Some(command) =
+                family.scoped_command(self.folder(directory), gradle_command.as_deref())
             {
-                return command.map(|command| (directory.to_string(), command));
+                let run_dir = gradle.map_or_else(|| directory.to_string(), |run| run.dir);
+                return command.map(|command| (run_dir, command));
             }
             if directory.is_empty() {
                 return None;
@@ -1202,12 +1227,89 @@ impl CommandFinder {
         }
     }
 
-    /// The broader Gradle command for a Gradle build in `dir`, or `None` when `dir` has none.
+    /// The Gradle command for the whole build in `dir`, or `None` when `dir` has none.
     fn gradle_command(&mut self, dir: &str) -> Option<String> {
         if !matches!(self.folder(dir).build, Some(Build::Gradle)) {
             return None;
         }
         Some(format!("{} test", self.gradle_tool(dir)))
+    }
+
+    /// How Gradle runs only the tests of the project whose build file is in `build_dir`, for a
+    /// test in `folder`. Without a settings file for `build_dir` (`gradle_settings_dir`) that is a
+    /// single-project build run from `build_dir`. With one, Gradle runs from the settings folder
+    /// with the project's own task (`:a:test`), because a plain `test` in a project folder also
+    /// runs the test task of every project below it, where a `--tests` filter matches nothing and
+    /// fails. `None` when the settings file cannot name the project with certainty.
+    fn gradle_run(&mut self, build_dir: &str, folder: &str) -> Option<GradleRun> {
+        let Some(settings_dir) = self.gradle_settings_dir(build_dir)? else {
+            return Some(GradleRun {
+                tool: self.gradle_tool(build_dir),
+                dir: build_dir.to_string(),
+                task: "test".to_string(),
+            });
+        };
+        let task = self
+            .folder(&settings_dir)
+            .gradle_settings
+            .as_ref()?
+            .test_task(&settings_dir, build_dir, folder)?;
+        Some(GradleRun {
+            tool: self.gradle_tool(&settings_dir),
+            dir: settings_dir,
+            task,
+        })
+    }
+
+    /// The folder of the settings file that defines the build of the build file in `build_dir`.
+    /// Gradle takes the nearest settings file at or above the folder it runs from, but does not
+    /// look above a folder named `buildSrc`, which is a build of its own. With no settings file
+    /// there, a sibling folder whose settings file places a project in `build_dir`
+    /// (`includeFlat`) defines it, because Gradle run from `build_dir` would build it alone,
+    /// without the projects it can depend on. `Some(None)` when no settings file defines it, and
+    /// `None` when two sibling folders do.
+    fn gradle_settings_dir(&mut self, build_dir: &str) -> Option<Option<String>> {
+        let has_settings = |folder: &Folder| folder.gradle_settings.is_some().then_some(());
+        let own_build = build_dir.rsplit('/').next() == Some("buildSrc");
+        if own_build {
+            return Some(has_settings(self.folder(build_dir)).map(|()| build_dir.to_string()));
+        }
+        if let Some((settings_dir, ())) = self.nearest(build_dir, has_settings) {
+            return Some(Some(settings_dir));
+        }
+        if build_dir.is_empty() {
+            return Some(None);
+        }
+        let parent = parent_dir(build_dir);
+        let Ok(entries) = fs::read_dir(self.root.join(parent)) else {
+            return Some(None);
+        };
+        let mut siblings: Vec<String> = entries
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+            .filter_map(|entry| entry.file_name().to_str().map(str::to_string))
+            .filter(|name| !name.starts_with('.'))
+            .map(|name| {
+                if parent.is_empty() {
+                    name
+                } else {
+                    format!("{parent}/{name}")
+                }
+            })
+            .filter(|sibling| sibling != build_dir)
+            .collect();
+        siblings.sort();
+        let mut defining = siblings.into_iter().filter(|sibling| {
+            self.folder(sibling)
+                .gradle_settings
+                .as_ref()
+                .is_some_and(|settings| settings.names_dir(sibling, build_dir))
+        });
+        let settings_dir = defining.next();
+        if defining.next().is_some() {
+            return None;
+        }
+        Some(settings_dir)
     }
 
     /// The Gradle program for the build in `dir` on this platform.
@@ -1396,7 +1498,8 @@ impl CommandFinder {
     /// file that names MUnit when `build.sbt` names it, else ScalaTest's `-z` filter when
     /// `build.sbt` names ScalaTest. Gradle selects a Kotest label of a file that imports Kotest by
     /// its test path; otherwise Maven and Gradle select JUnit methods only, so a Kotlin or Scala
-    /// test label (a `function` in a class) has no command there.
+    /// test label (a `function` in a class) has no command there. Gradle runs the task of the
+    /// test's own project (`gradle_run`).
     fn jvm(&mut self, test: &TestSpec) -> Option<String> {
         if test.classes.is_empty() {
             return None;
@@ -1420,7 +1523,7 @@ impl CommandFinder {
             && self.mentions(test.path, "munit");
         let command = match build {
             Build::Gradle if kotest => {
-                let tool = self.gradle_tool(&dir);
+                let run = self.gradle_run(&dir, parent_dir(test.path))?;
                 let path = test
                     .groups
                     .iter()
@@ -1432,7 +1535,15 @@ impl CommandFinder {
                     Some(package) => format!("{package}.{class}.{path}"),
                     None => format!("{class}.{path}"),
                 };
-                format!("{tool} test --tests {}", single_quoted(&filter))
+                return Some(in_folder(
+                    &run.dir,
+                    format!(
+                        "{} {} --tests {}",
+                        run.tool,
+                        run.task,
+                        single_quoted(&filter)
+                    ),
+                ));
             }
             Build::Maven | Build::Gradle if label => return None,
             Build::Maven => format!(
@@ -1441,9 +1552,12 @@ impl CommandFinder {
                 shell_word(test.name)
             ),
             Build::Gradle => {
-                let tool = self.gradle_tool(&dir);
+                let run = self.gradle_run(&dir, parent_dir(test.path))?;
                 let filter = single_quoted(&format!("{class}.{}", test.name));
-                format!("{tool} test --tests {filter}")
+                return Some(in_folder(
+                    &run.dir,
+                    format!("{} {} --tests {filter}", run.tool, run.task),
+                ));
             }
             Build::Sbt => {
                 let mut task = format!("testOnly *{class}");
@@ -3077,6 +3191,11 @@ mod tests {
         let root_wrapper = project(&[
             ("gradlew", ""),
             ("gradlew.bat", ""),
+            ("settings.gradle", "include 'app'\n"),
+            ("app/build.gradle", ""),
+        ]);
+        let not_included = project(&[
+            ("gradlew", ""),
             ("settings.gradle", ""),
             ("app/build.gradle", ""),
         ]);
@@ -3094,13 +3213,13 @@ mod tests {
         let bare = project(&[("app/build.gradle", "")]);
         let (root, deep, local) = if cfg!(windows) {
             (
-                "cd app && ..\\gradlew.bat test",
+                "gradlew.bat :app:test",
                 "cd a/b && ..\\..\\gradlew.bat test",
                 "cd app && gradlew.bat test",
             )
         } else {
             (
-                "cd app && ../gradlew test",
+                "./gradlew :app:test",
                 "cd a/b && ../../gradlew test",
                 "cd app && ./gradlew test",
             )
@@ -3124,6 +3243,10 @@ mod tests {
         assert_eq!(
             broader(&bare, "app/src/test/java/FooTest.java").as_deref(),
             Some("cd app && gradle test")
+        );
+        assert_eq!(
+            broader(&not_included, "app/src/test/java/FooTest.java"),
+            None
         );
     }
 
@@ -3999,6 +4122,231 @@ mod tests {
         ] {
             assert_eq!(gradle_tool(windows, dir, gradlew, gradlew_bat), expected);
         }
+    }
+
+    #[test]
+    fn a_gradle_test_in_a_multi_project_build_runs_only_its_project_task_from_the_settings_folder()
+    {
+        let build = project(&[
+            ("gradlew", ""),
+            (
+                "settings.gradle.kts",
+                "include(\":lib\")\ninclude(\":lib:extra\")\n",
+            ),
+            ("build.gradle.kts", ""),
+            ("lib/build.gradle.kts", ""),
+            ("lib/extra/build.gradle.kts", ""),
+        ]);
+        let in_lib = Spec {
+            classes: &["LibTest"],
+            ..spec("kotlin", "method", "lib/src/test/kotlin/LibTest.kt", "adds")
+        };
+        let in_extra = Spec {
+            path: "lib/extra/src/test/kotlin/ExtraTest.kt",
+            classes: &["ExtraTest"],
+            ..in_lib
+        };
+        let in_root = Spec {
+            path: "src/test/kotlin/RootTest.kt",
+            classes: &["RootTest"],
+            ..in_lib
+        };
+        let tool = "./gradlew";
+        let mut finder = CommandFinder::new(build.path());
+
+        assert_eq!(
+            in_lib.run(&build),
+            Some(format!("{tool} :lib:test --tests 'LibTest.adds'"))
+        );
+        assert_eq!(
+            in_extra.run(&build),
+            Some(format!("{tool} :lib:extra:test --tests 'ExtraTest.adds'"))
+        );
+        assert_eq!(
+            in_root.run(&build),
+            Some(format!("{tool} :test --tests 'RootTest.adds'"))
+        );
+        assert_eq!(
+            finder.broader_test_command(Some("lib/src/test/kotlin/LibTest.kt")),
+            Some(format!("{tool} :lib:test"))
+        );
+        assert_eq!(
+            finder.broader_test_command(None),
+            Some(format!("{tool} test"))
+        );
+    }
+
+    #[test]
+    fn a_gradle_project_the_settings_cannot_name_has_no_command() {
+        let dynamic = project(&[
+            (
+                "settings.gradle",
+                "file('libs').eachDir { include \":libs:${it.name}\" }\n",
+            ),
+            ("libs/a/build.gradle", ""),
+        ]);
+        let unlisted = project(&[
+            ("settings.gradle", "include 'app'\n"),
+            ("tools/build.gradle", ""),
+        ]);
+        let both_settings = project(&[
+            ("settings.gradle", "include 'app'\n"),
+            ("settings.gradle.kts", "include(\"app\")\n"),
+            ("app/build.gradle", ""),
+        ]);
+        let test = |path| Spec {
+            classes: &["FooTest"],
+            ..spec("java", "method", path, "checks")
+        };
+
+        assert_eq!(
+            test("libs/a/src/test/java/FooTest.java").run(&dynamic),
+            None
+        );
+        assert_eq!(
+            test("tools/src/test/java/FooTest.java").run(&unlisted),
+            None
+        );
+        assert_eq!(
+            test("app/src/test/java/FooTest.java").run(&both_settings),
+            None
+        );
+        assert_eq!(
+            CommandFinder::new(unlisted.path())
+                .broader_test_command(Some("tools/src/test/java/FooTest.java")),
+            None
+        );
+    }
+
+    #[test]
+    fn a_gradle_buildsrc_folder_is_its_own_build_beside_a_multi_project_settings_file() {
+        let build = project(&[
+            ("gradlew", ""),
+            ("settings.gradle.kts", "include(\":a\")\n"),
+            ("a/build.gradle.kts", ""),
+            ("buildSrc/build.gradle.kts", ""),
+            ("buildSrc/sub/build.gradle.kts", ""),
+        ]);
+        let with_settings = project(&[
+            ("gradlew", ""),
+            ("settings.gradle.kts", "include(\":a\")\n"),
+            ("buildSrc/settings.gradle.kts", "include(\":plugins\")\n"),
+            ("buildSrc/build.gradle.kts", ""),
+            ("buildSrc/plugins/build.gradle.kts", ""),
+        ]);
+        let test = |path| Spec {
+            classes: &["LibTest"],
+            ..spec("java", "method", path, "computes")
+        };
+        let (tool, up) = ("./gradlew", "../gradlew");
+
+        assert_eq!(
+            test("buildSrc/src/test/java/p/LibTest.java").run(&build),
+            Some(format!(
+                "cd buildSrc && {up} test --tests 'LibTest.computes'"
+            ))
+        );
+        assert_eq!(
+            CommandFinder::new(build.path())
+                .broader_test_command(Some("buildSrc/src/test/java/p/LibTest.java")),
+            Some(format!("cd buildSrc && {up} test"))
+        );
+        assert_eq!(
+            test("buildSrc/sub/src/test/java/p/LibTest.java").run(&build),
+            None
+        );
+        assert_eq!(
+            test("a/src/test/java/p/LibTest.java").run(&build),
+            Some(format!("{tool} :a:test --tests 'LibTest.computes'"))
+        );
+        assert_eq!(
+            test("buildSrc/plugins/src/test/java/p/LibTest.java").run(&with_settings),
+            Some(format!(
+                "cd buildSrc && {up} :plugins:test --tests 'LibTest.computes'"
+            ))
+        );
+    }
+
+    #[test]
+    fn a_gradle_project_that_a_sibling_settings_file_includes_flat_runs_from_that_folder() {
+        let flat = project(&[
+            ("gradlew", ""),
+            ("build/settings.gradle", "includeFlat 'x', 'y'\n"),
+            ("x/build.gradle.kts", ""),
+            ("y/build.gradle.kts", ""),
+            ("solo/build.gradle.kts", ""),
+        ]);
+        let two_masters = project(&[
+            ("one/settings.gradle", "includeFlat 'x'\n"),
+            ("two/settings.gradle", "includeFlat 'x'\n"),
+            ("x/build.gradle", ""),
+        ]);
+        let conditional = project(&[
+            (
+                "build/settings.gradle",
+                "if (System.getenv('CI'))\n    includeFlat 'x'\n",
+            ),
+            ("x/build.gradle", ""),
+        ]);
+        let test = |path| Spec {
+            classes: &["LibTest"],
+            ..spec("java", "method", path, "computes")
+        };
+        let up = "../gradlew";
+
+        assert_eq!(
+            test("x/src/test/java/p/LibTest.java").run(&flat),
+            Some(format!(
+                "cd build && {up} :x:test --tests 'LibTest.computes'"
+            ))
+        );
+        assert_eq!(
+            CommandFinder::new(flat.path())
+                .broader_test_command(Some("y/src/test/java/p/LibTest.java")),
+            Some(format!("cd build && {up} :y:test"))
+        );
+        assert_eq!(
+            test("solo/src/test/java/p/LibTest.java").run(&flat),
+            Some(format!("cd solo && {up} test --tests 'LibTest.computes'"))
+        );
+        assert_eq!(
+            test("x/src/test/java/p/LibTest.java").run(&two_masters),
+            None
+        );
+        assert_eq!(
+            test("x/src/test/java/p/LibTest.java").run(&conditional),
+            None
+        );
+    }
+
+    #[test]
+    fn a_kotest_label_in_a_gradle_subproject_runs_its_project_task() {
+        let build = project(&[
+            ("gradlew", ""),
+            ("settings.gradle", "include ':spec'\n"),
+            ("spec/build.gradle.kts", ""),
+            (
+                "spec/src/test/kotlin/CalcSpec.kt",
+                "package calc\n\nimport io.kotest.core.spec.style.StringSpec\n",
+            ),
+        ]);
+        let label = Spec {
+            classes: &["CalcSpec"],
+            ..spec(
+                "kotlin",
+                "function",
+                "spec/src/test/kotlin/CalcSpec.kt",
+                "adds two",
+            )
+        };
+        let tool = "./gradlew";
+
+        assert_eq!(
+            label.run(&build),
+            Some(format!(
+                "{tool} :spec:test --tests 'calc.CalcSpec.adds two'"
+            ))
+        );
     }
 
     #[test]

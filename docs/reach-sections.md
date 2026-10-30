@@ -356,11 +356,41 @@ reads it as a glob, so a path with `( ) [ ] + $` or `{ } * ? !` could run 0 test
 `--runTestsByPath` and running the file itself avoid that. Java, Kotlin, and Scala are
 `mvn test -Dtest=Class#name` under a `pom.xml`, `./gradlew test --tests 'Class.name'` under
 a Gradle build, and `sbt 'testOnly *Class'` under a `build.sbt`. Each runs from the folder of
-the nearest build file (`cd dir && …`). The Gradle program is the one the broader command
-uses: the nearest `gradlew` at or above that folder, named by its path from it (`./gradlew`,
-`../gradlew`); on Windows the nearest `gradlew.bat` first (`gradlew.bat`, `..\gradlew.bat`);
-and `gradle` when no wrapper fits the platform, so a project with only `gradlew.bat` gets
-`gradle` on Unix. `Class` is the enclosing classes joined with `$`, outermost first
+the nearest build file (`cd dir && …`), except a Gradle build with a settings file. A plain
+`test` run from a Gradle project folder also runs the test task of every project below it, where
+the `--tests` filter matches nothing and Gradle fails with `No tests found for given includes`.
+So when a `settings.gradle` or `settings.gradle.kts` defines the build of the build file, the
+command runs from the settings folder with the task of the one project that holds the test:
+`./gradlew :app:core:test --tests 'Class.name'`, `:test` for the root project of a build that
+includes others, and plain `test` for a build that includes none. The settings file of a build
+file is the one Gradle finds from its folder: the nearest at or above it, except that a
+`buildSrc` folder is a build of its own, so Gradle does not look above it (`cd buildSrc &&
+../gradlew test --tests 'Class.name'` beside a root settings file). With no settings file at or
+above the build file, a settings file in a sibling folder that places a project in the build
+file's folder, such as `includeFlat 'x'` in `build/settings.gradle`, defines it: `cd build &&
+../gradlew :x:test --tests 'Class.name'`, since Gradle run from `x` builds it alone, without the
+projects it can depend on. Two such sibling folders give no command. `GradleSettings`
+(`test_commands/gradle.rs`) reads the project paths in source order from the literal
+`include` and `includeFlat` entries in either language (`include ':a', 'b:c'`,
+`include(":a", ":b")`, over several lines; `a:b` also includes `a`), and from a literal
+`project(":a").projectDir = file("d")`, `File(settingsDir, "d")`, `new File(rootDir, "d")`, or
+`settingsDir.resolve("d")`. The test has no command when the settings file cannot name its
+project with certainty: the build file's folder is no included project, an `if`, an `else`, or a
+loop includes or moves it (with braces, on the same line, or as the next line of a condition
+without braces), another `projectDir`, project `name`, or `buildFileName` change or an `apply
+from` is present, both settings files exist, or an included project with no build file of its
+own holds the test. A later include of a project, or of a project below it, never makes its
+folder certain: after `if (ci) { project(':a').projectDir = file('elsewhere') }` and `include
+':a:b'`, neither `a`, `elsewhere`, nor `a/b` gets a command. A build with no settings file keeps
+the form above. The Gradle
+program is the one the broader command uses: the nearest `gradlew` at or above the folder the
+command runs from, named by its path from it (`./gradlew`, `../gradlew`); on Windows the
+nearest `gradlew.bat` first (`gradlew.bat`, `..\gradlew.bat`); and `gradle` when no wrapper
+fits the platform, so a project with only `gradlew.bat` gets `gradle` on Unix. The broader
+command of a Gradle test file runs the same project task without `--tests` (`./gradlew
+:app:test`), and it is none when the targeted command would be none; the broader command
+with no target file runs `test` from the root. julie has no Groovy extractor, so no Groovy test
+file gets a command. `Class` is the enclosing classes joined with `$`, outermost first
 (`Outer$Inner`), and the quoting stops the shell from reading the `$`. Maven and Gradle select
 a JUnit method, so a Kotlin or Scala test that julie records as a `function` in a class (a
 ScalaTest `test("label")` or a Kotest label) has no command there, except a Kotest label under
