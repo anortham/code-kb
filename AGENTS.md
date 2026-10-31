@@ -619,6 +619,8 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   `for (const e of list) { … }`), the site reads the binding and is excluded with the basis
   `line N binds the name as a callback parameter, loop variable, or catch parameter`; an
   expression body (`(e) => e()`) and a loop body without braces keep the rule above.
+  julie 3.11.0 writes a catch parameter as a `write` identifier; that row is the binding
+  itself and is excluded with the same basis.
   A JavaScript or TypeScript object shorthand (`{ name }`) can read a local parameter or
   variable and write a member at the same token. In supported return, initializer, and
   constructor expressions, a selected field, property, or interface method stays unresolved
@@ -805,7 +807,7 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   content-aware workspace scan that only re-extracts changed files.
 
 ### 7. Pinned Extractor & Bundled Distribution
-- `code-kb` pins the exact extractor version in `scripts/julie-pins.json` (currently `3.10.0`).
+- `code-kb` pins the exact extractor version in `scripts/julie-pins.json` (currently `3.11.0`).
 - Build guard: `crates/code-kb-cli/build.rs` verifies that `julie-extract` is restored and matches the pinned version. A missing or mismatched extractor fails the build immediately (bypassable for offline packaging via `CODE_KB_ALLOW_MISSING_JULIE_EXTRACT=1`).
 - Single-download distribution: Release archives ship `code-kb` and matching `julie-extract` pre-packaged side-by-side. Users download one archive and receive both binaries ready to execute.
 - Runtime discovery: `code-kb` checks `JULIE_EXTRACT_BIN`, next to its own executable (`current_exe().parent()`), `.tools/julie-extract` in that directory or any directory above it, the same two places for the file a symlinked executable points to (`~/.code-kb/bin/code-kb` → `target/release/code-kb`), and `PATH`. The current directory is never searched, so another repository's vendored extractor is never run. The first candidate whose version matches the pin wins; otherwise the first candidate found is used with a warning.

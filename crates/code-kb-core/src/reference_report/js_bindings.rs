@@ -58,7 +58,8 @@ impl Accounting<'_> {
 
     /// The line above a bare row, inside its caller, that binds the row's name as a callback
     /// parameter, loop variable, or catch parameter whose `{ … }` body holds the row, so the row
-    /// reads that binding.
+    /// reads that binding. A row on the bound name itself is that binding (julie 3.11.0 writes a
+    /// catch parameter as a `write` identifier), so its own line is returned.
     pub(super) fn js_enclosing_binding_line(
         &self,
         row: &NameRow,
@@ -68,6 +69,14 @@ impl Accounting<'_> {
             return Ok(None);
         }
         let site = (row.site_line, row.site_column.unwrap_or(usize::MAX));
+        if row.site_column.is_some()
+            && self
+                .js_binding_sites(&row.path, name)
+                .iter()
+                .any(|binding| binding.at == site)
+        {
+            return Ok(Some(row.site_line));
+        }
         self.nearest_binding(row, name, |binding| {
             binding.body_end.is_some_and(|end| site < end)
         })

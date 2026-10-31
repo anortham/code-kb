@@ -4,7 +4,7 @@
 language conformance test reads the installed `julie-extract languages --json`
 report at runtime, then checks that both the fixture directory set and
 `evals/languages/fixtures.json` match it. The current pinned report is Julie
-3.10.0 with 42 language IDs.
+3.11.0 with 42 language IDs.
 
 Fixture sources live under `evals/languages/tests/<language>/` so they are
 excluded from this repository's default searches. Paths in the table and
