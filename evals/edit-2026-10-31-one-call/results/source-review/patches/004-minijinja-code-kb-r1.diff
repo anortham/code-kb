@@ -1,0 +1,145 @@
+--- a/minijinja-cli/src/command.rs
++++ b/minijinja-cli/src/command.rs
+@@ -243,11 +243,15 @@
+             .help("Reconfigures autoescape behavior")
+             .long_help("\
+                 Reconfigures autoescape behavior.  The default is 'auto' which means that \
+-                the file extension sets the auto escaping mode.\n\n\
++                the template file extension sets the auto escaping mode.  A single trailing \
++                .j2, .jinja, or .jinja2 suffix is ignored, so report.html.jinja2 uses HTML \
++                escaping and report.JSON.JINJA uses JSON escaping.  Suffix matching is \
++                ASCII case-insensitive.\n\n\
+                 \
+                 html means that variables are escaped to HTML5 and XML rules.  json means \
+                 that output is safe for both JSON and YAML rules (eg: strings are formatted \
+-                as JSON strings etc.).  none disables escaping entirely.\n\n\
++                as JSON strings etc.).  none disables escaping entirely.  These explicit \
++                modes override file extension detection.\n\n\
+                 \
+                 [env var: MINIJINJA_AUTOESCAPE]"),
+         Opt::new(Arg::Strict)
+--- a/minijinja-cli/src/config.rs
++++ b/minijinja-cli/src/config.rs
+@@ -240,11 +240,18 @@
+             "none" => AutoEscape::None,
+             "html" => AutoEscape::Html,
+             "json" => AutoEscape::Json,
+-            "auto" => match name.rsplit('.').next() {
+-                Some("htm" | "html" | "xml" | "xhtml") => AutoEscape::Html,
+-                Some("json" | "json5" | "yml" | "yaml") => AutoEscape::Json,
+-                _ => AutoEscape::None,
+-            },
++            "auto" => {
++                let mut suffixes = name.rsplit('.');
++                let mut suffix = suffixes.next().unwrap_or("").to_ascii_lowercase();
++                if matches!(suffix.as_str(), "j2" | "jinja" | "jinja2") {
++                    suffix = suffixes.next().unwrap_or("").to_ascii_lowercase();
++                }
++                match suffix.as_str() {
++                    "htm" | "html" | "xml" | "xhtml" => AutoEscape::Html,
++                    "json" | "json5" | "yml" | "yaml" => AutoEscape::Json,
++                    _ => AutoEscape::None,
++                }
++            }
+             _ => unreachable!(),
+         });
+         env.set_undefined_behavior(if self.strict {
+--- a/minijinja-cli/tests/test_autoescape.rs
++++ b/minijinja-cli/tests/test_autoescape.rs
+@@ -0,0 +1,96 @@
++use std::fs;
++use std::process::Command;
++
++use insta_cmd::get_cargo_bin;
++
++const RAW: &str = "<tag>\"&";
++const HTML: &str = "&lt;tag&gt;&quot;&amp;";
++const JSON: &str = "\"<tag>\\\"&\"";
++
++fn assert_autoescape(suffix: &str, mode: Option<&str>, expected: &str) {
++    let dir = tempfile::tempdir().unwrap();
++    let template = dir.path().join(format!("report{suffix}"));
++    fs::write(&template, "{{ value }}").unwrap();
++
++    let mut command = Command::new(get_cargo_bin("minijinja-cli"));
++    command.arg(&template).arg("--no-newline");
++    command.arg(format!("-Dvalue={RAW}"));
++    if let Some(mode) = mode {
++        command.arg(format!("--autoescape={mode}"));
++    }
++    let output = command.output().unwrap();
++    assert!(
++        output.status.success(),
++        "{suffix} ({mode:?}): {}",
++        String::from_utf8_lossy(&output.stderr)
++    );
++    assert_eq!(
++        String::from_utf8(output.stdout).unwrap(),
++        expected,
++        "{suffix} ({mode:?})"
++    );
++    assert!(output.stderr.is_empty());
++}
++
++#[test]
++fn test_autoescape_suffixes() {
++    for (suffix, expected) in [
++        ("html", HTML),
++        ("htm", HTML),
++        ("xml", HTML),
++        ("xhtml", HTML),
++        ("json", JSON),
++        ("json5", JSON),
++        ("yaml", JSON),
++        ("yml", JSON),
++        ("txt", RAW),
++    ] {
++        for wrapper in ["", ".j2", ".jinja", ".jinja2"] {
++            let suffix = format!(".{suffix}{wrapper}");
++            assert_autoescape(&suffix, None, expected);
++            assert_autoescape(&suffix.to_ascii_uppercase(), Some("auto"), expected);
++        }
++    }
++    assert_autoescape(".hTmL.JiNjA2", Some("auto"), HTML);
++    assert_autoescape(".JsOn.j2", Some("auto"), JSON);
++}
++
++#[test]
++fn test_autoescape_skips_only_one_wrapper() {
++    for suffix in [
++        "",
++        ".j2",
++        ".jinja",
++        ".jinja2",
++        ".html.j2.jinja2",
++        ".json.jinja.j2",
++        ".html.txt.jinja",
++        ".html.j2.bak",
++        ".json.jinja3",
++    ] {
++        assert_autoescape(suffix, Some("auto"), RAW);
++    }
++}
++
++#[test]
++fn test_explicit_autoescape_overrides_suffixes() {
++    for suffix in [".html", ".html.JINJA2", ".JSON", ".JSON.j2", ".txt"] {
++        for (mode, expected) in [("html", HTML), ("json", JSON), ("none", RAW)] {
++            assert_autoescape(suffix, Some(mode), expected);
++        }
++    }
++}
++
++#[test]
++fn test_autoescape_long_help() {
++    let output = Command::new(get_cargo_bin("minijinja-cli"))
++        .arg("--long-help")
++        .output()
++        .unwrap();
++    assert!(output.status.success());
++    let help = String::from_utf8(output.stdout).unwrap();
++    let help = help.split_whitespace().collect::<Vec<_>>().join(" ");
++    assert!(help.contains(".j2, .jinja, or .jinja2 suffix is ignored"));
++    assert!(help.contains("ASCII case-insensitive"));
++    assert!(help.contains("explicit modes override file extension detection"));
++}

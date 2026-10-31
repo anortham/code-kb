@@ -1,0 +1,150 @@
+--- a/pkgs/core/src/addBusinessDays/context/test.ts
++++ b/pkgs/core/src/addBusinessDays/context/test.ts
+@@ -0,0 +1,91 @@
++import { TZDate, tz } from "@date-fns/tz";
++import { describe, expect, it } from "vitest";
++import { subBusinessDays } from "../../subBusinessDays/index.ts";
++import { addBusinessDays } from "../index.ts";
++
++describe("addBusinessDays timezone boundaries", () => {
++  it.each([
++    [
++      "2024-08-20T15:59:00Z",
++      3,
++      "Asia/Singapore",
++      "2024-08-23T23:59:00.000+08:00",
++    ],
++    [
++      "2024-08-20T16:01:00Z",
++      3,
++      "Asia/Singapore",
++      "2024-08-26T00:01:00.000+08:00",
++    ],
++    [
++      "2024-08-21T03:59:00Z",
++      3,
++      "America/New_York",
++      "2024-08-23T23:59:00.000-04:00",
++    ],
++    [
++      "2024-08-21T04:01:00Z",
++      3,
++      "America/New_York",
++      "2024-08-26T00:01:00.000-04:00",
++    ],
++    [
++      "2024-08-24T03:59:00Z",
++      -5,
++      "America/New_York",
++      "2024-08-16T23:59:00.000-04:00",
++    ],
++    [
++      "2024-08-24T04:01:00Z",
++      -5,
++      "America/New_York",
++      "2024-08-19T00:01:00.000-04:00",
++    ],
++    [
++      "2024-08-23T16:01:00Z",
++      5,
++      "Asia/Singapore",
++      "2024-08-30T00:01:00.000+08:00",
++    ],
++    [
++      "2024-03-09T04:59:00Z",
++      1,
++      "America/New_York",
++      "2024-03-11T23:59:00.000-04:00",
++    ],
++  ] as const)(
++    "shifts %s by %i business days in %s",
++    (input, amount, zone, expected) => {
++      const result = addBusinessDays(input, amount, { in: tz(zone) });
++      expect(result).toBeInstanceOf(TZDate);
++      expect(result.toISOString()).toBe(expected);
++    },
++  );
++
++  it("uses the context for date objects and timestamps without mutating the input", () => {
++    const input = new TZDate("2024-08-20T16:01:00Z", "America/New_York");
++    const original = input.toISOString();
++    for (const date of [input, new Date(+input), +input]) {
++      expect(
++        addBusinessDays(date, 3, { in: tz("Asia/Singapore") }).toISOString(),
++      ).toBe("2024-08-26T00:01:00.000+08:00");
++    }
++    expect(input.toISOString()).toBe(original);
++  });
++
++  it("constructs zero-day results in the context", () => {
++    expect(
++      addBusinessDays("2024-08-20T16:01:00Z", 0, {
++        in: tz("Asia/Singapore"),
++      }).toISOString(),
++    ).toBe("2024-08-21T00:01:00.000+08:00");
++  });
++
++  it("applies the context through subBusinessDays", () => {
++    expect(
++      subBusinessDays("2024-08-24T04:01:00Z", 5, {
++        in: tz("America/New_York"),
++      }).toISOString(),
++    ).toBe("2024-08-19T00:01:00.000-04:00");
++  });
++});
+--- a/pkgs/core/src/addBusinessDays/index.ts
++++ b/pkgs/core/src/addBusinessDays/index.ts
+@@ -48,7 +48,7 @@
+   amount: number,
+   options?: AddBusinessDaysOptions<ResultDate> | undefined,
+ ): ResultDate {
+-  const _date = toDate(date);
++  const _date = toDate(date, options?.in);
+   const startedOnWeekend = isWeekend(_date, options);
+ 
+   if (isNaN(amount)) return constructFrom(options?.in, NaN);
+--- a/pkgs/core/src/differenceInBusinessDays/context/test.ts
++++ b/pkgs/core/src/differenceInBusinessDays/context/test.ts
+@@ -0,0 +1,31 @@
++import { TZDate, tz } from "@date-fns/tz";
++import { describe, expect, it } from "vitest";
++import { differenceInBusinessDays } from "../index.ts";
++
++describe("differenceInBusinessDays timezone boundaries", () => {
++  it.each([
++    ["2024-04-09T04:01:00Z", "2024-04-09T03:59:00Z", "America/New_York", 1],
++    ["2024-04-09T03:59:00Z", "2024-04-09T04:01:00Z", "America/New_York", -1],
++    ["2024-04-08T16:01:00Z", "2024-04-08T15:59:00Z", "Asia/Singapore", 1],
++    ["2024-04-08T15:59:00Z", "2024-04-08T16:01:00Z", "Asia/Singapore", -1],
++    ["2024-04-10T03:59:00Z", "2024-04-09T04:01:00Z", "America/New_York", 0],
++    ["2024-04-09T15:59:00Z", "2024-04-08T16:01:00Z", "Asia/Singapore", 0],
++    ["2024-04-16T04:01:00Z", "2024-04-09T03:59:00Z", "America/New_York", 6],
++    ["2024-04-09T03:59:00Z", "2024-04-16T04:01:00Z", "America/New_York", -6],
++    ["2024-03-12T04:01:00Z", "2024-03-09T04:59:00Z", "America/New_York", 2],
++  ] as const)("compares %s and %s in %s", (later, earlier, zone, expected) => {
++    expect(differenceInBusinessDays(later, earlier, { in: tz(zone) })).toBe(
++      expected,
++    );
++  });
++
++  it("overrides the context of date objects and accepts timestamps", () => {
++    const later = new TZDate("2024-04-09T04:01:00Z", "Asia/Singapore");
++    const earlier = new Date("2024-04-09T03:59:00Z");
++    for (const date of [later, +later]) {
++      expect(
++        differenceInBusinessDays(date, earlier, { in: tz("America/New_York") }),
++      ).toBe(1);
++    }
++  });
++});
+--- a/pkgs/core/src/differenceInBusinessDays/index.ts
++++ b/pkgs/core/src/differenceInBusinessDays/index.ts
+@@ -73,7 +73,7 @@
+   options?: DifferenceInBusinessDaysOptions | undefined,
+ ): number {
+   const [laterDate_, earlierDate_] = normalizeDates(
+-    undefined,
++    options?.in,
+     laterDate,
+     earlierDate,
+   );

@@ -1,0 +1,8 @@
+Unable to set __version__, run `pip install -e .` or `python setup.py develop` first.
+test_argument_order_and_origin (tests.dialects.test_bigquery_timestamp_bucket.TestBigQueryTimestampBucket.test_argument_order_and_origin) ... ok
+test_round_trip (tests.dialects.test_bigquery_timestamp_bucket.TestBigQueryTimestampBucket.test_round_trip) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.004s
+
+OK

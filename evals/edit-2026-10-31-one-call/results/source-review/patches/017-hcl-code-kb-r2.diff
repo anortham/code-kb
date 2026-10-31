@@ -1,0 +1,100 @@
+--- a/gohcl/decode.go
++++ b/gohcl/decode.go
+@@ -7,6 +7,7 @@
+ 	"fmt"
+ 	"reflect"
+ 
++	"github.com/zclconf/go-cty/cty"
+ 	"github.com/zclconf/go-cty/cty/convert"
+ 	"github.com/zclconf/go-cty/cty/gocty"
+ 
+@@ -104,6 +105,11 @@
+ 		fieldV := val.Field(fieldIdx)
+ 
+ 		if attr == nil {
++			if exprType.AssignableTo(field.Type) {
++				// Omitted expressions evaluate to null so callers can still
++				// evaluate the field without checking for a nil expression.
++				fieldV.Set(reflect.ValueOf(hcl.StaticExpr(cty.NullVal(cty.DynamicPseudoType), body.MissingItemRange())))
++			}
+ 			continue
+ 		}
+ 
+--- a/gohcl/omitted_expression_test.go
++++ b/gohcl/omitted_expression_test.go
+@@ -0,0 +1,64 @@
++// Copyright IBM Corp. 2014, 2026
++// SPDX-License-Identifier: MPL-2.0
++
++package gohcl_test
++
++import (
++	"testing"
++
++	"github.com/hashicorp/hcl/v2"
++	"github.com/hashicorp/hcl/v2/gohcl"
++	"github.com/hashicorp/hcl/v2/hclparse"
++	"github.com/zclconf/go-cty/cty"
++)
++
++func TestDecodeBodyOmittedExpressions(t *testing.T) {
++	parser := hclparse.NewParser()
++	native, diags := parser.ParseHCL([]byte("scalar = \"present\"\n"), "test.hcl")
++	if diags.HasErrors() {
++		t.Fatal(diags)
++	}
++	json, diags := parser.ParseJSON([]byte(`{"scalar":"present"}`), "test.json")
++	if diags.HasErrors() {
++		t.Fatal(diags)
++	}
++
++	for name, file := range map[string]*hcl.File{"native": native, "json": json} {
++		for _, initialized := range []bool{false, true} {
++			t.Run(name+map[bool]string{false: "/zero", true: "/initialized"}[initialized], func(t *testing.T) {
++				var target struct {
++					Default  hcl.Expression `hcl:"default"`
++					Attr     hcl.Expression `hcl:"attr,attr"`
++					Optional hcl.Expression `hcl:"optional,optional"`
++					Scalar   string         `hcl:"scalar"`
++					Pointer  *string        `hcl:"pointer"`
++				}
++				if initialized {
++					expr := hcl.StaticExpr(cty.StringVal("previous"), hcl.Range{})
++					target.Default, target.Attr, target.Optional = expr, expr, expr
++				}
++
++				if diags := gohcl.DecodeBody(file.Body, nil, &target); diags.HasErrors() {
++					t.Fatal(diags)
++				}
++				for name, expr := range map[string]hcl.Expression{
++					"default": target.Default, "attr": target.Attr, "optional": target.Optional,
++				} {
++					if expr == nil {
++						t.Fatalf("%s expression is nil", name)
++					}
++					value, diags := expr.Value(nil)
++					if diags.HasErrors() || !value.RawEquals(cty.NullVal(cty.DynamicPseudoType)) {
++						t.Errorf("%s: got %#v with diagnostics %s; want null", name, value, diags)
++					}
++					if expr.Range() != file.Body.MissingItemRange() {
++						t.Errorf("%s: expression range does not identify the missing item", name)
++					}
++				}
++				if target.Scalar != "present" || target.Pointer != nil {
++					t.Errorf("unexpected scalar or pointer value: %#v", target)
++				}
++			})
++		}
++	}
++}
+--- a/gohcl/schema.go
++++ b/gohcl/schema.go
+@@ -51,6 +51,8 @@
+ 		var required bool
+ 
+ 		switch {
++		case exprType.AssignableTo(field.Type):
++			required = false
+ 		case field.Type.Kind() != reflect.Ptr && !optional:
+ 			required = true
+ 		default:

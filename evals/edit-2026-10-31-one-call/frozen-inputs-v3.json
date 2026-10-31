@@ -1,0 +1,89 @@
+{
+  "schema": 1,
+  "created_utc": "2026-10-31T18:28:09.819220+00:00",
+  "hash_algorithm": "edit_evaluation.hash_tree for directories; SHA-256 bytes for files",
+  "persistent_cache": "/home/murphy/.cache/code-kb-completed-edit/2026-10-31-one-call",
+  "frozen_cache": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0",
+  "provider_calls": 0,
+  "runtime": {
+    "binary": {
+      "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-31-one-call/tools/intelligence/code-kb",
+      "sha256": "f606b06be968642ea0ea68d6832b667f0e8c0d18c7ead82ba06e38978630bf80",
+      "source_commit": "0b31dfe6c878e3ca92c6680edcf5a9d21ec6c74f",
+      "source_branch": "feat/julie-3.11",
+      "version_label": "code-kb 2.11.2 (unbumped)"
+    },
+    "extractor": {
+      "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-31-one-call/tools/intelligence/julie-extract",
+      "sha256": "008372ec7a61f0921ef687d20e24c67547255f603d7dbca08710f8e27bef28bc",
+      "version": "julie-extract 3.11.0"
+    },
+    "codex": {
+      "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/tools/codex-runtime/codex",
+      "sdk_origin": "/home/murphy/.local/share/mise/installs/node/24.18.1/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex",
+      "sha256": "b93f6811d3f653f0fb83be4050d857fb9abbb111dfa2ce160563327daff7f306"
+    },
+    "codex_code_mode_host": {
+      "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/tools/codex-runtime/codex-code-mode-host",
+      "sha256": "8ee4f472e92ac226a189e98998633b2d07f989f208515750764db660369f2926"
+    }
+  },
+  "seeds": {
+    "sqlglot": {
+      "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/sqlglot",
+      "seed_digest": "495821034999b04d914bcb1ee64b3ffa84e33a7d6f519ac9df84b804efd594a2",
+      "source_pin": "feb0e08aba28a29590596bb3f5761fbaeb0e98b9"
+    },
+    "minijinja": {
+      "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/minijinja-restored-cargo",
+      "seed_digest": "01c0e239f0d4d956d7fcae86e4f7a53fbf925486ca4f47965291e345866f9292",
+      "source_pin": "81787c4eab656f3a4f4e92dea53f303a36f1685c"
+    },
+    "hcl": {
+      "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/hcl",
+      "seed_digest": "1c58dd1a8dc827c1564e2c30b3e9fac02a284a94f9dbd0036beeff22aee94e9d",
+      "source_pin": "4a347c448ee961e556dde0fad522a996e04c00c0"
+    },
+    "date-fns": {
+      "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/date-fns",
+      "seed_digest": "e0d8d6c9700a1bf4660aa8d759cf31858197e14b937ca93c8c2cca0732fe796f",
+      "source_pin": "a9739fb3e5384a810e90d7376446f6d84ecc5029"
+    },
+    "commons-lang": {
+      "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/commons-lang",
+      "seed_digest": "1b27eddcb69508862613b2feb40aecfec803b98c58b67d5946c386b68f4b763d",
+      "source_pin": "a5d6c5ed8847b2b14dacf062b646f94d6cc61a10"
+    },
+    "nodatime": {
+      "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/nodatime",
+      "seed_digest": "d3b4d1e76ec36f1587f992d7360fb591dab6aada4b7dcd0f41e25926d6208be5",
+      "source_pin": "649ce5a1c8ddf439eaed7b3bf9157882363cb937"
+    }
+  },
+  "source_roots": {
+    "sqlglot": "/home/murphy/.cache/code-kb-completed-edit/2026-10-31-one-call/sources/sqlglot",
+    "minijinja": "/home/murphy/.cache/code-kb-completed-edit/2026-10-31-one-call/sources/minijinja",
+    "hcl": "/home/murphy/.cache/code-kb-completed-edit/2026-10-31-one-call/sources/hcl",
+    "date-fns": "/home/murphy/.cache/code-kb-completed-edit/2026-10-31-one-call/sources/date-fns",
+    "commons-lang": "/home/murphy/.cache/code-kb-completed-edit/2026-10-31-one-call/sources/commons-lang",
+    "nodatime": "/home/murphy/.cache/code-kb-completed-edit/2026-10-31-one-call/sources/nodatime"
+  },
+  "source_roots_note": "Fresh shallow clones at the corpus pins. The frozen campaign's source checkouts no longer exist. The launcher only checks that HEAD equals the pin.",
+  "tools_date-fns_node": {
+    "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-31-one-call/tools/node-24.18.1",
+    "note": "Copy of the mise Node 24.18.1 tree. Its hash changed after 2026-10-27 only because the global npm package @openai/codex moved from 0.164.0 to 0.166.0 (bin/codex and lib/node_modules/@openai/codex are the only paths newer than 2026-10-27 18:00). Node, pnpm and the other packages are unchanged."
+  },
+  "runtime_bindings_v3": "/home/murphy/.cache/code-kb-completed-edit/2026-10-31-one-call/control/runtime-bindings-v3.json",
+  "runtime_bindings_v3_sha256": "34c0f1c0050379c8736cb9d55e4d8aad307caf9c888e570c48fa16cfe2a288ee",
+  "system": {
+    "platform": "Linux-7.2.13-200.fc44.x86_64-x86_64-with-glibc2.43",
+    "python": "3.14.8",
+    "bubblewrap": "bubblewrap 0.12.0"
+  },
+  "lineage": {
+    "base_manifest": "../edit-2026-10-27/manifest-v2.json",
+    "base_manifest_sha256": "542016a1019cb60786a6b41d3eca4802bf34cadc11fe377e0cd60aec2cb4e049",
+    "base_frozen_inputs_sha256": "f73d04e8a7399849a8c558a05706d499de1c6cb02bf2147efa0a42c3bda41000",
+    "method": "protocol-v3.md"
+  }
+}

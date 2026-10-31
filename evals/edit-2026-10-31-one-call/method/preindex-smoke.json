@@ -1,0 +1,38 @@
+{
+ "sqlglot": {
+  "status": "completed",
+  "elapsed_seconds": 6.678432,
+  "exit_status": 0,
+  "failure": null
+ },
+ "minijinja": {
+  "status": "completed",
+  "elapsed_seconds": 2.06941,
+  "exit_status": 0,
+  "failure": null
+ },
+ "hcl": {
+  "status": "completed",
+  "elapsed_seconds": 1.469466,
+  "exit_status": 0,
+  "failure": null
+ },
+ "date-fns": {
+  "status": "completed",
+  "elapsed_seconds": 3.893335,
+  "exit_status": 0,
+  "failure": null
+ },
+ "commons-lang": {
+  "status": "completed",
+  "elapsed_seconds": 3.72081,
+  "exit_status": 0,
+  "failure": null
+ },
+ "nodatime": {
+  "status": "completed",
+  "elapsed_seconds": 1.669268,
+  "exit_status": 0,
+  "failure": null
+ }
+}

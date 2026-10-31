@@ -1,0 +1,16 @@
+approval_policy = "never"
+model = "gpt-6.1-sol"
+model_reasoning_effort = "high"
+project_doc_max_bytes = 0
+web_search = "disabled"
+memories.use_memories = false
+memories.generate_memories = false
+features.apps = false
+features.plugins = false
+features.hooks = false
+features.memories = false
+features.multi_agent = false
+features.shell_snapshot = false
+features.unbounded_connection_retries = false
+features.skip_host_skill_discovery = true
+developer_instructions = "Implement the requested change in the project at /workspace/project. Inspect the source, update every caller needed by the request, and verify the change with relevant tests. Make the changes in the working tree.\n\nCanonical tests, instructions, build files, dependency locks and Git metadata are protected. You may add tests. Prepared dependencies are available offline; command networking is disabled. Keep generated build output in its configured location. Do not delegate to another agent.\n\nFinish with a short report of the behavior changed, verification performed, and any remaining failure. The evaluator captures the filesystem independently of your report.\n\nUse native terminal tools to inspect and edit the project: rg, targeted file reads, Git, and directory listings. Code-kb MCP and CLI are unavailable in this arm. Read the source evidence needed to make and verify the requested change.\n"

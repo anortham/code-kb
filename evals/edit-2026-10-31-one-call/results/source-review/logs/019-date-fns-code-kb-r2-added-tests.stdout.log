@@ -1,0 +1,30 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.1 [39m[90m/workspace/project/pkgs/core[39m
+
+ [32m✓[39m [30m[45m main [49m[39m src/addBusinessDays/context/test.ts[2m > [22maddBusinessDays timezone boundaries[2m > [22mshifts 2024-08-20T15:59:00Z by 3 business days in Asia/Singapore[32m 13[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/addBusinessDays/context/test.ts[2m > [22maddBusinessDays timezone boundaries[2m > [22mshifts 2024-08-20T16:01:00Z by 3 business days in Asia/Singapore[32m 12[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/addBusinessDays/context/test.ts[2m > [22maddBusinessDays timezone boundaries[2m > [22mshifts 2024-08-21T03:59:00Z by 3 business days in America/New_York[32m 12[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/addBusinessDays/context/test.ts[2m > [22maddBusinessDays timezone boundaries[2m > [22mshifts 2024-08-21T04:01:00Z by 3 business days in America/New_York[32m 12[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/addBusinessDays/context/test.ts[2m > [22maddBusinessDays timezone boundaries[2m > [22mshifts 2024-08-24T03:59:00Z by -5 business days in America/New_York[32m 12[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/addBusinessDays/context/test.ts[2m > [22maddBusinessDays timezone boundaries[2m > [22mshifts 2024-08-24T04:01:00Z by -5 business days in America/New_York[32m 1[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/addBusinessDays/context/test.ts[2m > [22maddBusinessDays timezone boundaries[2m > [22mshifts 2024-08-23T16:01:00Z by 5 business days in Asia/Singapore[32m 1[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/addBusinessDays/context/test.ts[2m > [22maddBusinessDays timezone boundaries[2m > [22mshifts 2024-03-09T04:59:00Z by 1 business days in America/New_York[32m 1[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/addBusinessDays/context/test.ts[2m > [22maddBusinessDays timezone boundaries[2m > [22muses the context for date objects and timestamps without mutating the input[32m 1[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/addBusinessDays/context/test.ts[2m > [22maddBusinessDays timezone boundaries[2m > [22mconstructs zero-day results in the context[32m 1[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/addBusinessDays/context/test.ts[2m > [22maddBusinessDays timezone boundaries[2m > [22mapplies the context through subBusinessDays[32m 0[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/differenceInBusinessDays/context/test.ts[2m > [22mdifferenceInBusinessDays timezone boundaries[2m > [22mcompares 2024-04-09T04:01:00Z and 2024-04-09T03:59:00Z in America/New_York[32m 12[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/differenceInBusinessDays/context/test.ts[2m > [22mdifferenceInBusinessDays timezone boundaries[2m > [22mcompares 2024-04-09T03:59:00Z and 2024-04-09T04:01:00Z in America/New_York[32m 12[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/differenceInBusinessDays/context/test.ts[2m > [22mdifferenceInBusinessDays timezone boundaries[2m > [22mcompares 2024-04-08T16:01:00Z and 2024-04-08T15:59:00Z in Asia/Singapore[32m 12[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/differenceInBusinessDays/context/test.ts[2m > [22mdifferenceInBusinessDays timezone boundaries[2m > [22mcompares 2024-04-08T15:59:00Z and 2024-04-08T16:01:00Z in Asia/Singapore[32m 12[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/differenceInBusinessDays/context/test.ts[2m > [22mdifferenceInBusinessDays timezone boundaries[2m > [22mcompares 2024-04-10T03:59:00Z and 2024-04-09T04:01:00Z in America/New_York[32m 12[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/differenceInBusinessDays/context/test.ts[2m > [22mdifferenceInBusinessDays timezone boundaries[2m > [22mcompares 2024-04-09T15:59:00Z and 2024-04-08T16:01:00Z in Asia/Singapore[32m 1[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/differenceInBusinessDays/context/test.ts[2m > [22mdifferenceInBusinessDays timezone boundaries[2m > [22mcompares 2024-04-16T04:01:00Z and 2024-04-09T03:59:00Z in America/New_York[32m 1[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/differenceInBusinessDays/context/test.ts[2m > [22mdifferenceInBusinessDays timezone boundaries[2m > [22mcompares 2024-04-09T03:59:00Z and 2024-04-16T04:01:00Z in America/New_York[32m 1[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/differenceInBusinessDays/context/test.ts[2m > [22mdifferenceInBusinessDays timezone boundaries[2m > [22mcompares 2024-03-12T04:01:00Z and 2024-03-09T04:59:00Z in America/New_York[32m 1[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/differenceInBusinessDays/context/test.ts[2m > [22mdifferenceInBusinessDays timezone boundaries[2m > [22moverrides the context of date objects and accepts timestamps[32m 1[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[32m21 passed[39m[22m[90m (21)[39m
+[2m   Start at [22m 19:05:56
+[2m   Duration [22m 186ms[2m (transform 73%, tests 13%, import 12%, worker 2%)[22m
+

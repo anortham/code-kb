@@ -1,0 +1,91 @@
+{
+  "schema": 1,
+  "control_root": "/home/murphy/.cache/code-kb-completed-edit/2026-10-31-one-call/control",
+  "intelligence_tools": "/home/murphy/.cache/code-kb-completed-edit/2026-10-31-one-call/tools/intelligence",
+  "cases": {
+    "sqlglot": {
+      "source_root": "/home/murphy/.cache/code-kb-completed-edit/2026-10-31-one-call/sources/sqlglot",
+      "dependencies": {
+        "python-packages": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_sqlglot_python-packages"
+      },
+      "tools": {}
+    },
+    "minijinja": {
+      "source_root": "/home/murphy/.cache/code-kb-completed-edit/2026-10-31-one-call/sources/minijinja",
+      "dependencies": {
+        "cargo-cache": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_minijinja_cargo-cache"
+      },
+      "tools": {
+        "rust": "/home/murphy/.rustup/toolchains/stable-x86_64-unknown-linux-gnu"
+      }
+    },
+    "hcl": {
+      "source_root": "/home/murphy/.cache/code-kb-completed-edit/2026-10-31-one-call/sources/hcl",
+      "dependencies": {
+        "go-mod-cache": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_hcl_go-mod-cache"
+      },
+      "tools": {}
+    },
+    "date-fns": {
+      "source_root": "/home/murphy/.cache/code-kb-completed-edit/2026-10-31-one-call/sources/date-fns",
+      "dependencies": {
+        "pnpm-store": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_date-fns_pnpm-store"
+      },
+      "tools": {
+        "node": "/home/murphy/.cache/code-kb-completed-edit/2026-10-31-one-call/tools/node-24.18.1"
+      }
+    },
+    "commons-lang": {
+      "source_root": "/home/murphy/.cache/code-kb-completed-edit/2026-10-31-one-call/sources/commons-lang",
+      "dependencies": {
+        "commons-m2": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_commons-lang_commons-m2"
+      },
+      "tools": {
+        "java": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/tools_commons-lang_java",
+        "maven": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/tools_commons-lang_maven"
+      }
+    },
+    "nodatime": {
+      "source_root": "/home/murphy/.cache/code-kb-completed-edit/2026-10-31-one-call/sources/nodatime",
+      "dependencies": {
+        "nodatime-nuget": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_nodatime_nodatime-nuget"
+      },
+      "tools": {
+        "dotnet": "/usr/lib64/dotnet"
+      }
+    }
+  },
+  "persistent_cache": "/home/murphy/.cache/code-kb-completed-edit/2026-10-31-one-call",
+  "seeds": {
+    "sqlglot": {
+      "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/sqlglot",
+      "seed_digest": "495821034999b04d914bcb1ee64b3ffa84e33a7d6f519ac9df84b804efd594a2",
+      "source_pin": "feb0e08aba28a29590596bb3f5761fbaeb0e98b9"
+    },
+    "minijinja": {
+      "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/minijinja-restored-cargo",
+      "seed_digest": "01c0e239f0d4d956d7fcae86e4f7a53fbf925486ca4f47965291e345866f9292",
+      "source_pin": "81787c4eab656f3a4f4e92dea53f303a36f1685c"
+    },
+    "hcl": {
+      "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/hcl",
+      "seed_digest": "1c58dd1a8dc827c1564e2c30b3e9fac02a284a94f9dbd0036beeff22aee94e9d",
+      "source_pin": "4a347c448ee961e556dde0fad522a996e04c00c0"
+    },
+    "date-fns": {
+      "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/date-fns",
+      "seed_digest": "e0d8d6c9700a1bf4660aa8d759cf31858197e14b937ca93c8c2cca0732fe796f",
+      "source_pin": "a9739fb3e5384a810e90d7376446f6d84ecc5029"
+    },
+    "commons-lang": {
+      "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/commons-lang",
+      "seed_digest": "1b27eddcb69508862613b2feb40aecfec803b98c58b67d5946c386b68f4b763d",
+      "source_pin": "a5d6c5ed8847b2b14dacf062b646f94d6cc61a10"
+    },
+    "nodatime": {
+      "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/nodatime",
+      "seed_digest": "d3b4d1e76ec36f1587f992d7360fb591dab6aada4b7dcd0f41e25926d6208be5",
+      "source_pin": "649ce5a1c8ddf439eaed7b3bf9157882363cb937"
+    }
+  }
+}

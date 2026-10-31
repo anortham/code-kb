@@ -1,0 +1,173 @@
+--- a/src/NodaTime.Test/LocalDateTest.CompareToIgnoringCalendar.cs
++++ b/src/NodaTime.Test/LocalDateTest.CompareToIgnoringCalendar.cs
+@@ -0,0 +1,49 @@
++// Copyright 2026 The Noda Time Authors. All rights reserved.
++// Use of this source code is governed by the Apache License 2.0,
++// as found in the LICENSE.txt file.
++
++using NUnit.Framework;
++
++namespace NodaTime.Test;
++
++public partial class LocalDateTest
++{
++    [Test]
++    public void CompareToIgnoringCalendar_AllCalendars()
++    {
++        var epoch = new LocalDate(1970, 1, 1);
++        foreach (string id in CalendarSystem.Ids)
++        {
++            var calendar = CalendarSystem.ForId(id);
++            var sameDay = epoch.WithCalendar(calendar);
++            Assert.That(epoch.CompareToIgnoringCalendar(sameDay), Is.Zero, id);
++            Assert.That(sameDay.CompareToIgnoringCalendar(epoch), Is.Zero, id);
++            Assert.That(epoch.CompareToIgnoringCalendar(sameDay.PlusDays(-1)), Is.GreaterThan(0), id);
++            Assert.That(epoch.CompareToIgnoringCalendar(sameDay.PlusDays(1)), Is.LessThan(0), id);
++            Assert.That(sameDay.PlusDays(-1).CompareToIgnoringCalendar(epoch), Is.LessThan(0), id);
++            Assert.That(sameDay.PlusDays(1).CompareToIgnoringCalendar(epoch), Is.GreaterThan(0), id);
++            Assert.That(sameDay.CompareToIgnoringCalendar(sameDay.PlusDays(1)), Is.LessThan(0), id);
++            Assert.AreSame(calendar, sameDay.Calendar);
++        }
++    }
++
++    [Test]
++    public void CompareToIgnoringCalendar_SameFieldsDifferentPhysicalDays()
++    {
++        var iso = new LocalDate(1970, 1, 1);
++        var julian = new LocalDate(1970, 1, 1, CalendarSystem.Julian);
++        Assert.That(iso.CompareToIgnoringCalendar(julian), Is.LessThan(0));
++        Assert.That(julian.CompareToIgnoringCalendar(iso), Is.GreaterThan(0));
++    }
++
++    [Test]
++    public void CompareToIgnoringCalendar_ExtremeDates()
++    {
++        // The minimum ISO date is outside the range of the Julian calendar.
++        var julian = new LocalDate(CalendarSystem.Julian.MaxYear, 12, 31, CalendarSystem.Julian);
++        Assert.That(LocalDate.MinIsoValue.CompareToIgnoringCalendar(LocalDate.MinIsoValue), Is.Zero);
++        Assert.That(LocalDate.MinIsoValue.CompareToIgnoringCalendar(julian), Is.LessThan(0));
++        Assert.That(julian.CompareToIgnoringCalendar(LocalDate.MinIsoValue), Is.GreaterThan(0));
++        Assert.That(LocalDate.MaxIsoValue.CompareToIgnoringCalendar(julian), Is.GreaterThan(0));
++    }
++}
+--- a/src/NodaTime.Test/LocalDateTimeTest.CompareToIgnoringCalendar.cs
++++ b/src/NodaTime.Test/LocalDateTimeTest.CompareToIgnoringCalendar.cs
+@@ -0,0 +1,54 @@
++// Copyright 2026 The Noda Time Authors. All rights reserved.
++// Use of this source code is governed by the Apache License 2.0,
++// as found in the LICENSE.txt file.
++
++using NUnit.Framework;
++
++namespace NodaTime.Test;
++
++public partial class LocalDateTimeTest
++{
++    [Test]
++    public void CompareToIgnoringCalendar_AllCalendars()
++    {
++        var epoch = new LocalDateTime(1970, 1, 1, 12, 34, 56).PlusNanoseconds(123456789);
++        foreach (string id in CalendarSystem.Ids)
++        {
++            var calendar = CalendarSystem.ForId(id);
++            var sameTime = epoch.WithCalendar(calendar);
++            Assert.That(epoch.CompareToIgnoringCalendar(sameTime), Is.Zero, id);
++            Assert.That(sameTime.CompareToIgnoringCalendar(epoch), Is.Zero, id);
++            Assert.That(epoch.CompareToIgnoringCalendar(sameTime.PlusNanoseconds(-1)), Is.GreaterThan(0), id);
++            Assert.That(epoch.CompareToIgnoringCalendar(sameTime.PlusNanoseconds(1)), Is.LessThan(0), id);
++            Assert.That(sameTime.PlusNanoseconds(-1).CompareToIgnoringCalendar(epoch), Is.LessThan(0), id);
++            Assert.That(sameTime.PlusNanoseconds(1).CompareToIgnoringCalendar(epoch), Is.GreaterThan(0), id);
++            Assert.That(sameTime.CompareToIgnoringCalendar(sameTime.PlusNanoseconds(1)), Is.LessThan(0), id);
++            Assert.AreSame(calendar, sameTime.Calendar);
++        }
++    }
++
++    [Test]
++    public void CompareToIgnoringCalendar_PhysicalDayTakesPriorityOverTimeOfDay()
++    {
++        var earlier = new LocalDate(1969, 12, 31) + LocalTime.MaxValue;
++        var later = new LocalDate(1970, 1, 1, CalendarSystem.Julian).AtMidnight();
++        Assert.That(earlier.CompareToIgnoringCalendar(later), Is.LessThan(0));
++        Assert.That(later.CompareToIgnoringCalendar(earlier), Is.GreaterThan(0));
++
++        // The ISO fields sort later, but the physical day is earlier.
++        var iso = new LocalDate(1970, 1, 1) + LocalTime.MaxValue;
++        var julian = new LocalDate(1969, 12, 20, CalendarSystem.Julian).AtMidnight();
++        Assert.That(iso.CompareToIgnoringCalendar(julian), Is.LessThan(0));
++        Assert.That(julian.CompareToIgnoringCalendar(iso), Is.GreaterThan(0));
++    }
++
++    [Test]
++    public void CompareToIgnoringCalendar_ExtremeDates()
++    {
++        var julian = new LocalDate(CalendarSystem.Julian.MaxYear, 12, 31, CalendarSystem.Julian).AtMidnight();
++        Assert.That(LocalDateTime.MinIsoValue.CompareToIgnoringCalendar(LocalDateTime.MinIsoValue), Is.Zero);
++        Assert.That(LocalDateTime.MinIsoValue.CompareToIgnoringCalendar(julian), Is.LessThan(0));
++        Assert.That(julian.CompareToIgnoringCalendar(LocalDateTime.MinIsoValue), Is.GreaterThan(0));
++        Assert.That(LocalDateTime.MaxIsoValue.CompareToIgnoringCalendar(julian), Is.GreaterThan(0));
++    }
++}
+--- a/src/NodaTime/LocalDate.cs
++++ b/src/NodaTime/LocalDate.cs
+@@ -31,6 +31,7 @@
+ /// a value in a different calendar system. However, ordering comparisons (either via the <see cref="CompareTo"/> method
+ /// or via operators) fail with <see cref="ArgumentException"/>; attempting to compare values in different calendars
+ /// almost always indicates a bug in the calling code.
++/// Use <see cref="CompareToIgnoringCalendar"/> to compare physical days across calendar systems.
+ /// </para>
+ /// <para>The default value of this type is 0001-01-01 (January 1st, 1 C.E.) in the ISO calendar.</para>
+ /// </remarks>
+@@ -529,6 +530,19 @@
+     }
+ 
+     /// <summary>
++    /// Compares the physical day of this date with another date, ignoring their calendar systems.
++    /// </summary>
++    /// <remarks>
++    /// The comparison uses the number of days since the Unix epoch for each date.
++    /// Unlike <see cref="CompareTo(LocalDate)"/>, this method allows dates in different calendar systems.
++    /// </remarks>
++    /// <param name="other">The other date to compare this one with.</param>
++    /// <returns>A value less than zero if this date is earlier than <paramref name="other"/>;
++    /// zero if they represent the same physical day; a value greater than zero if this date is later.</returns>
++    [Pure]
++    public int CompareToIgnoringCalendar(LocalDate other) => DaysSinceEpoch.CompareTo(other.DaysSinceEpoch);
++
++    /// <summary>
+     /// Performs a comparison with another date, trusting that the calendar of the other date is already correct.
+     /// This avoids duplicate calendar checks.
+     /// </summary>
+--- a/src/NodaTime/LocalDateTime.cs
++++ b/src/NodaTime/LocalDateTime.cs
+@@ -37,6 +37,7 @@
+ /// a value in a different calendar system. However, ordering comparisons (either via the <see cref="CompareTo"/> method
+ /// or via operators) fail with <see cref="ArgumentException"/>; attempting to compare values in different calendars
+ /// almost always indicates a bug in the calling code.
++/// Use <see cref="CompareToIgnoringCalendar"/> to compare physical dates and times across calendar systems.
+ /// </para>
+ /// <para>The default value of this type is 0001-01-01T00:00:00 (midnight on January 1st, 1 C.E.) in the ISO calendar.</para>
+ /// </remarks>
+@@ -482,6 +483,23 @@
+     }
+ 
+     /// <summary>
++    /// Compares the physical day and time of day of this value with another date/time, ignoring their calendar systems.
++    /// </summary>
++    /// <remarks>
++    /// The comparison uses the number of days since the Unix epoch first, then the time of day.
++    /// Unlike <see cref="CompareTo(LocalDateTime)"/>, this method allows values in different calendar systems.
++    /// </remarks>
++    /// <param name="other">The other local date/time to compare with this value.</param>
++    /// <returns>A value less than zero if this date/time is earlier than <paramref name="other"/>;
++    /// zero if they represent the same physical day and time of day; a value greater than zero if this date/time is later.</returns>
++    [Pure]
++    public int CompareToIgnoringCalendar(LocalDateTime other)
++    {
++        int dateComparison = date.CompareToIgnoringCalendar(other.date);
++        return dateComparison != 0 ? dateComparison : time.CompareTo(other.time);
++    }
++
++    /// <summary>
+     /// Implementation of <see cref="IComparable.CompareTo"/> to compare two LocalDateTimes.
+     /// See the type documentation for a description of ordering semantics.
+     /// </summary>

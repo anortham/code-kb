@@ -1,0 +1,12 @@
+=== RUN   TestDecodeBodyOmittedExpressions
+=== RUN   TestDecodeBodyOmittedExpressions/native/zero
+=== RUN   TestDecodeBodyOmittedExpressions/native/initialized
+=== RUN   TestDecodeBodyOmittedExpressions/json/zero
+=== RUN   TestDecodeBodyOmittedExpressions/json/initialized
+--- PASS: TestDecodeBodyOmittedExpressions (0.00s)
+    --- PASS: TestDecodeBodyOmittedExpressions/native/zero (0.00s)
+    --- PASS: TestDecodeBodyOmittedExpressions/native/initialized (0.00s)
+    --- PASS: TestDecodeBodyOmittedExpressions/json/zero (0.00s)
+    --- PASS: TestDecodeBodyOmittedExpressions/json/initialized (0.00s)
+PASS
+ok  	github.com/hashicorp/hcl/v2/gohcl	0.004s

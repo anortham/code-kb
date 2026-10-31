@@ -1,0 +1,385 @@
+--- a/src/main/java/org/apache/commons/lang3/ObjectUtils.java
++++ b/src/main/java/org/apache/commons/lang3/ObjectUtils.java
+@@ -33,6 +33,7 @@
+ import java.util.function.Supplier;
+ import java.util.stream.Stream;
+ 
++import org.apache.commons.lang3.compare.ComparableUtils;
+ import org.apache.commons.lang3.exception.CloneFailedException;
+ import org.apache.commons.lang3.function.Consumers;
+ import org.apache.commons.lang3.function.Suppliers;
+@@ -281,24 +282,19 @@
+ 
+     /**
+      * Null safe comparison of Comparables. {@code null} is assumed to be less than a non-{@code null} value.
+-     * <p>
+-     * TODO Move to ComparableUtils.
+-     * </p>
+      *
+      * @param <T> type of the values processed by this method.
+      * @param c1  The first comparable, may be null.
+      * @param c2  The second comparable, may be null.
+      * @return A negative value if c1 &lt; c2, zero if c1 = c2 and a positive value if c1 &gt; c2.
++     * @see ComparableUtils#compare(Comparable, Comparable)
+      */
+     public static <T extends Comparable<? super T>> int compare(final T c1, final T c2) {
+-        return compare(c1, c2, false);
++        return ComparableUtils.compare(c1, c2);
+     }
+ 
+     /**
+      * Null safe comparison of Comparables.
+-     * <p>
+-     * TODO Move to ComparableUtils.
+-     * </p>
+      *
+      * @param <T>         type of the values processed by this method.
+      * @param c1          The first comparable, may be null.
+@@ -307,18 +303,10 @@
+      *                    Non-{@code null} value.
+      * @return A negative value if c1 &lt; c2, zero if c1 = c2 and a positive value if c1 &gt; c2.
+      * @see java.util.Comparator#compare(Object, Object)
++     * @see ComparableUtils#compare(Comparable, Comparable, boolean)
+      */
+     public static <T extends Comparable<? super T>> int compare(final T c1, final T c2, final boolean nullGreater) {
+-        if (c1 == c2) {
+-            return 0;
+-        }
+-        if (c1 == null) {
+-            return nullGreater ? 1 : -1;
+-        }
+-        if (c2 == null) {
+-            return nullGreater ? -1 : 1;
+-        }
+-        return c1.compareTo(c2);
++        return ComparableUtils.compare(c1, c2, nullGreater);
+     }
+ 
+     /**
+@@ -1013,9 +1001,6 @@
+ 
+     /**
+      * Null safe comparison of Comparables.
+-     * <p>
+-     * TODO Move to ComparableUtils.
+-     * </p>
+      *
+      * @param <T>    type of the values processed by this method.
+      * @param values The set of comparable values, may be null.
+@@ -1026,18 +1011,11 @@
+      *         <li>If any of the comparables are null, the greater of the non-null objects.</li>
+      *         <li>If all the comparables are null, null is returned.</li>
+      *         </ul>
++     * @see ComparableUtils#max(Comparable...)
+      */
+     @SafeVarargs
+     public static <T extends Comparable<? super T>> T max(final T... values) {
+-        T result = null;
+-        if (values != null) {
+-            for (final T value : values) {
+-                if (compare(value, result, false) > 0) {
+-                    result = value;
+-                }
+-            }
+-        }
+-        return result;
++        return ComparableUtils.max(values);
+     }
+ 
+     /**
+@@ -1083,9 +1061,6 @@
+ 
+     /**
+      * Null safe comparison of Comparables.
+-     * <p>
+-     * TODO Move to ComparableUtils.
+-     * </p>
+      *
+      * @param <T>    type of the values processed by this method
+      * @param values The set of comparable values, may be null
+@@ -1096,18 +1071,11 @@
+      *         <li>If any of the comparables are null, the lesser of the non-null objects.</li>
+      *         <li>If all the comparables are null, null is returned.</li>
+      *         </ul>
++     * @see ComparableUtils#min(Comparable...)
+      */
+     @SafeVarargs
+     public static <T extends Comparable<? super T>> T min(final T... values) {
+-        T result = null;
+-        if (values != null) {
+-            for (final T value : values) {
+-                if (compare(value, result, true) < 0) {
+-                    result = value;
+-                }
+-            }
+-        }
+-        return result;
++        return ComparableUtils.min(values);
+     }
+ 
+     /**
+--- a/src/main/java/org/apache/commons/lang3/compare/ComparableUtils.java
++++ b/src/main/java/org/apache/commons/lang3/compare/ComparableUtils.java
+@@ -18,8 +18,6 @@
+ 
+ import java.util.function.Predicate;
+ 
+-import org.apache.commons.lang3.ObjectUtils;
+-
+ /**
+  * Helper translating {@link Comparable#compareTo} results to booleans.
+  *
+@@ -154,6 +152,43 @@
+     }
+ 
+     /**
++     * Null safe comparison of Comparables. {@code null} is assumed to be less than a non-{@code null} value.
++     *
++     * @param <T> type of the values processed by this method.
++     * @param c1 The first comparable, may be null.
++     * @param c2 The second comparable, may be null.
++     * @return A negative value if c1 &lt; c2, zero if c1 = c2 and a positive value if c1 &gt; c2.
++     * @since 3.22.0
++     */
++    public static <T extends Comparable<? super T>> int compare(final T c1, final T c2) {
++        return compare(c1, c2, false);
++    }
++
++    /**
++     * Null safe comparison of Comparables.
++     *
++     * @param <T> type of the values processed by this method.
++     * @param c1 The first comparable, may be null.
++     * @param c2 The second comparable, may be null.
++     * @param nullGreater if true, null is greater than any non-null value; otherwise, null is less than any non-null value.
++     * @return A negative value if c1 &lt; c2, zero if c1 = c2 and a positive value if c1 &gt; c2.
++     * @see java.util.Comparator#compare(Object, Object)
++     * @since 3.22.0
++     */
++    public static <T extends Comparable<? super T>> int compare(final T c1, final T c2, final boolean nullGreater) {
++        if (c1 == c2) {
++            return 0;
++        }
++        if (c1 == null) {
++            return nullGreater ? 1 : -1;
++        }
++        if (c2 == null) {
++            return nullGreater ? -1 : 1;
++        }
++        return c1.compareTo(c2);
++    }
++
++    /**
+      * Creates a predicate to test if the tested object is greater than or equal to {@code b}
+      *
+      * @param b The object to compare to the tested object
+@@ -211,37 +246,85 @@
+     }
+ 
+     /**
++     * Returns the greatest of the given values, ignoring null entries.
++     * <p>
++     * If multiple values compare equal, the first is returned.
++     * </p>
++     *
++     * @param <T> type of the values processed by this method.
++     * @param values The comparable values, may be null.
++     * @return The greatest non-null value, or null if the array is null, empty, or contains only nulls.
++     * @since 3.22.0
++     */
++    @SafeVarargs
++    public static <T extends Comparable<? super T>> T max(final T... values) {
++        T result = null;
++        if (values != null) {
++            for (final T value : values) {
++                if (compare(value, result, false) > 0) {
++                    result = value;
++                }
++            }
++        }
++        return result;
++    }
++
++    /**
+      * Returns the greater of two {@link Comparable} values, ignoring null.
+      * <p>
+-     * For three or more values, use {@link ObjectUtils#max(Comparable...)}.
++     * For three or more values, use {@link #max(Comparable...)}.
+      * </p>
+      *
+      * @param <A> Type of what we are comparing.
+      * @param comparable1 The first comparable, may be null.
+      * @param comparable2 The second comparable, may be null.
+      * @return The largest of {@code comparable1} and {@code comparable2}.
+-     * @see ObjectUtils#max(Comparable...)
++     * @see #max(Comparable...)
+      * @since 3.13.0
+      */
+     public static <A extends Comparable<A>> A max(final A comparable1, final A comparable2) {
+-        return ObjectUtils.compare(comparable1, comparable2, false) > 0 ? comparable1 : comparable2;
++        return compare(comparable1, comparable2, false) > 0 ? comparable1 : comparable2;
++    }
++
++    /**
++     * Returns the least of the given values, ignoring null entries.
++     * <p>
++     * If multiple values compare equal, the first is returned.
++     * </p>
++     *
++     * @param <T> type of the values processed by this method.
++     * @param values The comparable values, may be null.
++     * @return The least non-null value, or null if the array is null, empty, or contains only nulls.
++     * @since 3.22.0
++     */
++    @SafeVarargs
++    public static <T extends Comparable<? super T>> T min(final T... values) {
++        T result = null;
++        if (values != null) {
++            for (final T value : values) {
++                if (compare(value, result, true) < 0) {
++                    result = value;
++                }
++            }
++        }
++        return result;
+     }
+ 
+     /**
+      * Returns the lesser of two {@link Comparable} values, ignoring null.
+      * <p>
+-     * For three or more values, use {@link ObjectUtils#min(Comparable...)}.
++     * For three or more values, use {@link #min(Comparable...)}.
+      * </p>
+      *
+      * @param <A> Type of what we are comparing.
+      * @param comparable1 The first comparable, may be null.
+      * @param comparable2 The second comparable, may be null.
+      * @return The smallest of {@code comparable1} and {@code comparable2}.
+-     * @see ObjectUtils#min(Comparable...)
++     * @see #min(Comparable...)
+      * @since 3.13.0
+      */
+     public static <A extends Comparable<A>> A min(final A comparable1, final A comparable2) {
+-        return ObjectUtils.compare(comparable1, comparable2, true) < 0 ? comparable1 : comparable2;
++        return compare(comparable1, comparable2, true) < 0 ? comparable1 : comparable2;
+     }
+ 
+     private ComparableUtils() {
+--- a/src/test/java/org/apache/commons/lang3/compare/ComparableUtilsMigrationTest.java
++++ b/src/test/java/org/apache/commons/lang3/compare/ComparableUtilsMigrationTest.java
+@@ -0,0 +1,115 @@
++/*
++ * Licensed to the Apache Software Foundation (ASF) under one or more
++ * contributor license agreements.  See the NOTICE file distributed with
++ * this work for additional information regarding copyright ownership.
++ * The ASF licenses this file to You under the Apache License, Version 2.0
++ * (the "License"); you may not use this file except in compliance with
++ * the License.  You may obtain a copy of the License at
++ *
++ *      https://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.commons.lang3.compare;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++import static org.junit.jupiter.api.Assertions.assertNull;
++import static org.junit.jupiter.api.Assertions.assertSame;
++
++import java.math.BigDecimal;
++import java.sql.Date;
++
++import org.apache.commons.lang3.AbstractLangTest;
++import org.apache.commons.lang3.ObjectUtils;
++import org.junit.jupiter.api.Test;
++
++class ComparableUtilsMigrationTest extends AbstractLangTest {
++
++    @Test
++    void testCompareDefaultNullOrdering() {
++        assertEquals(0, ComparableUtils.<String>compare(null, null));
++        assertEquals(-1, ComparableUtils.compare(null, "a"));
++        assertEquals(1, ComparableUtils.compare("a", null));
++        assertEquals(0, ComparableUtils.compare("a", "a"));
++        assertEquals("a".compareTo("z"), ComparableUtils.compare("a", "z"));
++        assertEquals("z".compareTo("a"), ComparableUtils.compare("z", "a"));
++    }
++
++    @Test
++    void testCompareNullOrderingFlagAndCompatibility() {
++        final String[] values = {null, "a", "z"};
++        for (final boolean nullGreater : new boolean[] {false, true}) {
++            for (final String first : values) {
++                for (final String second : values) {
++                    final int expected;
++                    if (first == null && second == null) {
++                        expected = 0;
++                    } else if (first == null) {
++                        expected = nullGreater ? 1 : -1;
++                    } else if (second == null) {
++                        expected = nullGreater ? -1 : 1;
++                    } else {
++                        expected = first.compareTo(second);
++                    }
++                    assertEquals(expected, ComparableUtils.compare(first, second, nullGreater));
++                    assertEquals(expected, ObjectUtils.compare(first, second, nullGreater));
++                    if (!nullGreater) {
++                        assertEquals(expected, ObjectUtils.compare(first, second));
++                    }
++                }
++            }
++        }
++    }
++
++    @Test
++    void testComparableToSupertype() {
++        final Date first = new Date(0);
++        final Date second = new Date(1000);
++        assertEquals(-1, ComparableUtils.<Date>compare(first, second));
++        assertEquals(-1, ComparableUtils.<Date>compare(first, second, true));
++        final Date maximum = ComparableUtils.max(first, null, second);
++        final Date minimum = ComparableUtils.min(second, null, first);
++        assertSame(second, maximum);
++        assertSame(first, minimum);
++        assertEquals(-1, ObjectUtils.<Date>compare(first, second));
++        assertEquals(-1, ObjectUtils.<Date>compare(first, second, true));
++        assertSame(second, ObjectUtils.max(first, null, second));
++        assertSame(first, ObjectUtils.min(second, null, first));
++    }
++
++    @Test
++    void testEmptyAndNullVarargs() {
++        assertNull(ComparableUtils.<Integer>max());
++        assertNull(ComparableUtils.<Integer>min());
++        assertNull(ComparableUtils.max((Integer[]) null));
++        assertNull(ComparableUtils.min((Integer[]) null));
++        assertNull(ComparableUtils.max(new Integer[0]));
++        assertNull(ComparableUtils.min(new Integer[0]));
++        assertNull(ComparableUtils.max(new Integer[] {null, null, null}));
++        assertNull(ComparableUtils.min(new Integer[] {null, null, null}));
++        assertNull(ComparableUtils.max((Integer) null));
++        assertNull(ComparableUtils.min((Integer) null));
++        assertEquals(3, ComparableUtils.max(3));
++        assertEquals(3, ComparableUtils.min(3));
++    }
++
++    @Test
++    void testVarargsExtremaAndTies() {
++        final BigDecimal first = new BigDecimal("2.0");
++        final BigDecimal equal = new BigDecimal("2.00");
++        final BigDecimal lesser = BigDecimal.ONE;
++        final BigDecimal greater = BigDecimal.TEN;
++        assertSame(first, ComparableUtils.max(null, lesser, first, equal, null));
++        assertSame(first, ComparableUtils.min(null, greater, first, equal, null));
++        assertSame(first, ComparableUtils.max(new BigDecimal[] {first, equal}));
++        assertSame(first, ComparableUtils.min(new BigDecimal[] {first, equal}));
++        assertSame(first, ObjectUtils.max(null, lesser, first, equal, null));
++        assertSame(first, ObjectUtils.min(null, greater, first, equal, null));
++        assertSame(equal, ComparableUtils.max(first, equal));
++        assertSame(equal, ComparableUtils.min(first, equal));
++    }
++}

@@ -1,0 +1,26 @@
+  InheritDocTask replaced 53 of 53 inheritdoc tags and removed 649 non-public member docs in /workspace/project/src/NodaTime/bin/Debug/net8.0/NodaTime.xml
+  NodaTime -> /workspace/project/src/NodaTime/bin/Debug/net8.0/NodaTime.dll
+  InheritDocTask replaced 53 of 53 inheritdoc tags and removed 649 non-public member docs in /workspace/project/src/NodaTime/bin/Debug/netstandard2.0/NodaTime.xml
+  NodaTime -> /workspace/project/src/NodaTime/bin/Debug/netstandard2.0/NodaTime.dll
+  InheritDocTask replaced 5 of 5 inheritdoc tags and removed 2 non-public member docs in /workspace/project/src/NodaTime.Testing/bin/Debug/netstandard2.0/NodaTime.Testing.xml
+  NodaTime.Testing -> /workspace/project/src/NodaTime.Testing/bin/Debug/netstandard2.0/NodaTime.Testing.dll
+  NodaTime.Test -> /workspace/project/src/NodaTime.Test/bin/Debug/net10.0/NodaTime.Test.dll
+Test run for /workspace/project/src/NodaTime.Test/bin/Debug/net10.0/NodaTime.Test.dll (.NETCoreApp,Version=v10.0)
+VSTest version 18.0.2 (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+NUnit Adapter 6.3.0.0: Test execution started
+Running selected tests in /workspace/project/src/NodaTime.Test/bin/Debug/net10.0/NodaTime.Test.dll
+   NUnit3TestExecutor discovered 6 of 6 NUnit test cases using Current Discovery mode, Non-Explicit run
+  Passed CompareToIgnoringCalendar_AllCalendars [5 ms]
+  Passed CompareToIgnoringCalendar_ExtremeDates [< 1 ms]
+  Passed CompareToIgnoringCalendar_SameFieldsDifferentPhysicalDays [< 1 ms]
+  Passed CompareToIgnoringCalendar_AllCalendars [< 1 ms]
+  Passed CompareToIgnoringCalendar_ExtremeDates [< 1 ms]
+  Passed CompareToIgnoringCalendar_PhysicalDayTakesPriorityOverTimeOfDay [< 1 ms]
+
+Test Run Successful.
+Total tests: 6
+     Passed: 6
+ Total time: 4.0056 Seconds

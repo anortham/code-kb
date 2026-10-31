@@ -1,0 +1,8 @@
+
+running 3 tests
+test autoescape_ignores_unknown_suffixes_and_strips_only_one_wrapper ... ok
+test explicit_autoescape_modes_override_suffixes ... ok
+test autoescape_output_and_wrapper_suffixes ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+

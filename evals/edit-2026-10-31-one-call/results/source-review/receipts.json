@@ -1,0 +1,746 @@
+{
+ "schema": 1,
+ "reviewer": "Claude (lead agent), read every production diff and every added test on a fresh public replay",
+ "reviewed_utc": "2026-10-31T19:08:30.743983+00:00",
+ "method": "Fresh replay of each bundle onto its durable seed (digest must equal the bundle final digest), full diff read, then the added tests run in the grade sandbox with offline runtime setup, no network, no auth, protected inputs mounted read-only; source digest checked before and after. NodaTime also reruns PurityTest.AllPublicStructMethodsArePure.",
+ "receipts": [
+  {
+   "trial_id": "002-sqlglot-code-kb-r1",
+   "schedule_index": 2,
+   "case_id": "sqlglot",
+   "repeat": 1,
+   "raw_attempt_sha256": "0d8c2ebaac7d0e3128de6a43595de2d50ac45d4f42ff328f9e40e0bfbffca0a9",
+   "bundle_json_sha256": "e4c58935ae53dc25184f93f9544659c9bf9dd36775c175549eb4cee3a9134e0b",
+   "fresh_replay_matches_bundle": true,
+   "trusted_grade": {
+    "behavioral_pass": true,
+    "protection_status": "unchanged",
+    "commands": {
+     "public": [
+      [
+       "bigquery_regressions",
+       true
+      ]
+     ],
+     "hidden": [
+      [
+       "timestamp_bucket_acceptance",
+       true
+      ]
+     ]
+    }
+   },
+   "source_review": "passed",
+   "finding": "Parser maps TIMESTAMP_BUCKET(timestamp, width[, origin]) to DateBin(this=width, expression=timestamp, origin). A new BigQuery datebin_sql generates the same order back. Two- and three-argument forms are kept.",
+   "patch": "patches/002-sqlglot-code-kb-r1.diff",
+   "verification": [
+    {
+     "kind": "independent_added_tests",
+     "argv": [
+      "/usr/bin/env",
+      "PYTHONDONTWRITEBYTECODE=1",
+      "PYTHONPATH=/state/python-site:/workspace/project",
+      "/usr/bin/python3",
+      "-m",
+      "unittest",
+      "-v",
+      "tests.dialects.test_bigquery_timestamp_bucket"
+     ],
+     "exit_status": 0,
+     "timed_out": false,
+     "runtime_setup_passed": true,
+     "source_unchanged": true,
+     "source_digest": "39f34dd8ecf3177137c110beab5824943c11215f9639a9dd5a930b5d2b02bd92",
+     "stdout_log": "logs/002-sqlglot-code-kb-r1-added-tests.stdout.log",
+     "stderr_log": "logs/002-sqlglot-code-kb-r1-added-tests.stderr.log"
+    }
+   ]
+  },
+  {
+   "trial_id": "004-minijinja-code-kb-r1",
+   "schedule_index": 4,
+   "case_id": "minijinja",
+   "repeat": 1,
+   "raw_attempt_sha256": "127113bafc006a0e26ccf003a86f69771e771bf475e0df11719d7b2c1e4c7500",
+   "bundle_json_sha256": "6478c98089a01276c448d862e32e2366e0dad9a2fdf7cb7c4261be1a549bcf0d",
+   "fresh_replay_matches_bundle": true,
+   "trusted_grade": {
+    "behavioral_pass": true,
+    "protection_status": "unchanged",
+    "commands": {
+     "public": [
+      [
+       "minijinja_cli_regressions",
+       true
+      ]
+     ],
+     "hidden": [
+      [
+       "autoescape_suffix_acceptance",
+       true
+      ]
+     ]
+    }
+   },
+   "source_review": "passed",
+   "finding": "Auto mode lowercases the last suffix, skips one .j2, .jinja, or .jinja2 wrapper, and lowercases the suffix before it. Ordinary names keep their old mapping. Explicit html, json, and none still override. The long help names the three wrappers, the ASCII case-insensitive match, and the explicit override.",
+   "patch": "patches/004-minijinja-code-kb-r1.diff",
+   "verification": [
+    {
+     "kind": "independent_added_tests",
+     "argv": [
+      "/usr/bin/env",
+      "CARGO_HOME=/state/cargo",
+      "CARGO_NET_OFFLINE=true",
+      "CARGO_TARGET_DIR=/state/target",
+      "CARGO_INCREMENTAL=0",
+      "RUSTC=/tools/rust/bin/rustc",
+      "/tools/rust/bin/cargo",
+      "test",
+      "--locked",
+      "--offline",
+      "-p",
+      "minijinja-cli",
+      "--test",
+      "test_autoescape"
+     ],
+     "exit_status": 0,
+     "timed_out": false,
+     "runtime_setup_passed": true,
+     "source_unchanged": true,
+     "source_digest": "3b2a6f679c9f3d89cf70fc01334cb910a90d98c2ae7b279ca1687a91ff48121f",
+     "stdout_log": "logs/004-minijinja-code-kb-r1-added-tests.stdout.log",
+     "stderr_log": "logs/004-minijinja-code-kb-r1-added-tests.stderr.log"
+    }
+   ]
+  },
+  {
+   "trial_id": "006-hcl-code-kb-r1",
+   "schedule_index": 6,
+   "case_id": "hcl",
+   "repeat": 1,
+   "raw_attempt_sha256": "e22e42756c4cec4f68ad8a99f5343a4d7214b9b3bb1a667b3b9fcffd4bd25597",
+   "bundle_json_sha256": "1c04b0c971f9ea81dfc06982c8b16496ba1a0ba8466d2a884615aeaf851d2759",
+   "fresh_replay_matches_bundle": true,
+   "trusted_grade": {
+    "behavioral_pass": true,
+    "protection_status": "unchanged",
+    "commands": {
+     "public": [
+      [
+       "gohcl_regressions",
+       true
+      ]
+     ],
+     "hidden": [
+      [
+       "expression_field_acceptance",
+       true
+      ]
+     ]
+    }
+   },
+   "source_review": "passed",
+   "finding": "ImpliedBodySchema marks an hcl.Expression field optional before the scalar rule, so scalars stay required and pointers stay optional. DecodeBody assigns hcl.StaticExpr(cty.NullVal(cty.DynamicPseudoType), MissingItemRange()) to an omitted expression field.",
+   "patch": "patches/006-hcl-code-kb-r1.diff",
+   "verification": [
+    {
+     "kind": "independent_added_tests",
+     "argv": [
+      "/usr/bin/env",
+      "GOMODCACHE=/state/go-mod-cache",
+      "GOCACHE=/state/go-cache",
+      "/usr/lib/golang/bin/go",
+      "test",
+      "-v",
+      "-run",
+      "TestDecodeBodyOmittedExpressions",
+      "./gohcl"
+     ],
+     "exit_status": 0,
+     "timed_out": false,
+     "runtime_setup_passed": true,
+     "source_unchanged": true,
+     "source_digest": "577a7ad1f18447ac5f6b3c235559a9d1479af06072a89bcd1ffa6c42b5ca97d4",
+     "stdout_log": "logs/006-hcl-code-kb-r1-added-tests.stdout.log",
+     "stderr_log": "logs/006-hcl-code-kb-r1-added-tests.stderr.log"
+    }
+   ]
+  },
+  {
+   "trial_id": "008-date-fns-code-kb-r1",
+   "schedule_index": 8,
+   "case_id": "date-fns",
+   "repeat": 1,
+   "raw_attempt_sha256": "e1f948aeada52ed02e7f3bf1bcb46aaf2e47b4b10703b811cd9d7878cb52e066",
+   "bundle_json_sha256": "be17ddcd0866f134e9c6a4071adf0dd6af97bcad06b879840b378d86d03b7057",
+   "fresh_replay_matches_bundle": true,
+   "trusted_grade": {
+    "behavioral_pass": true,
+    "protection_status": "unchanged",
+    "commands": {
+     "public": [
+      [
+       "business_day_regressions",
+       true
+      ]
+     ],
+     "hidden": [
+      [
+       "business_day_context_acceptance",
+       true
+      ]
+     ]
+    }
+   },
+   "source_review": "passed",
+   "finding": "addBusinessDays builds the input with toDate(date, options?.in). differenceInBusinessDays normalizes both inputs with options?.in. These are the same two production changes as the accepted 2.11.x patches. No context keeps the old path.",
+   "patch": "patches/008-date-fns-code-kb-r1.diff",
+   "verification": [
+    {
+     "kind": "independent_added_tests",
+     "argv": [
+      "/usr/bin/env",
+      "-C",
+      "/workspace/project/pkgs/core",
+      "PATH=/tools/node/bin:/usr/bin:/bin",
+      "/tools/node/bin/pnpm",
+      "vitest",
+      "run",
+      "--project",
+      "main",
+      "--reporter",
+      "verbose",
+      "src/addBusinessDays/context/test.ts",
+      "src/differenceInBusinessDays/context/test.ts"
+     ],
+     "exit_status": 0,
+     "timed_out": false,
+     "runtime_setup_passed": true,
+     "source_unchanged": true,
+     "source_digest": "2b69e90c46b59b16475c807cd387cde2986a4babeb8fcddcc4727132fe36f038",
+     "stdout_log": "logs/008-date-fns-code-kb-r1-added-tests.stdout.log",
+     "stderr_log": "logs/008-date-fns-code-kb-r1-added-tests.stderr.log"
+    }
+   ]
+  },
+  {
+   "trial_id": "010-commons-lang-code-kb-r1",
+   "schedule_index": 10,
+   "case_id": "commons-lang",
+   "repeat": 1,
+   "raw_attempt_sha256": "d66a3549023ebf56faf5870b0a667aabecf428c2869314660d70f8a84b4ef127",
+   "bundle_json_sha256": "6926cfeb347a25cffc15b83cdb55b5fb334e96957c44a96cb881ae6256cdddb9",
+   "fresh_replay_matches_bundle": true,
+   "trusted_grade": {
+    "behavioral_pass": true,
+    "protection_status": "unchanged",
+    "commands": {
+     "public": [
+      [
+       "commons-public-comparable-regressions",
+       true
+      ]
+     ],
+     "hidden": [
+      [
+       "commons-comparable-migration-contract",
+       true
+      ]
+     ]
+    }
+   },
+   "source_review": "passed",
+   "finding": "ComparableUtils gains compare(T,T), compare(T,T,boolean), and varargs max/min with the ObjectUtils semantics and the <T extends Comparable<? super T>> bound. ObjectUtils.compare, max, and min keep their signatures and delegate. The two-value ComparableUtils max/min keep their behavior and no longer call ObjectUtils.",
+   "patch": "patches/010-commons-lang-code-kb-r1.diff",
+   "verification": [
+    {
+     "kind": "independent_added_tests",
+     "argv": [
+      "/usr/bin/env",
+      "JAVA_HOME=/tools/java",
+      "PATH=/tools/java/bin:/tools/maven/bin:/usr/bin:/bin",
+      "/tools/maven/bin/mvn",
+      "-B",
+      "-o",
+      "-Dmaven.repo.local=/state/commons-m2",
+      "-Dtest=ComparableUtilsMigrationTest",
+      "test"
+     ],
+     "exit_status": 0,
+     "timed_out": false,
+     "runtime_setup_passed": true,
+     "source_unchanged": true,
+     "source_digest": "10816a1f891bc125590ad163408270eb338a3951596f545887424ce1d4fc328b",
+     "stdout_log": "logs/010-commons-lang-code-kb-r1-added-tests.stdout.log",
+     "stderr_log": "logs/010-commons-lang-code-kb-r1-added-tests.stderr.log"
+    }
+   ]
+  },
+  {
+   "trial_id": "012-nodatime-code-kb-r1",
+   "schedule_index": 12,
+   "case_id": "nodatime",
+   "repeat": 1,
+   "raw_attempt_sha256": "aa60cd45db48058c02840aeff9b2a76a349917c7c8fbc6c5feba41f27f2c1cea",
+   "bundle_json_sha256": "24cd11ea64ac1bb7b2beb44ff60a6b938121c5a2df74b189c73b8091a36266da",
+   "fresh_replay_matches_bundle": true,
+   "trusted_grade": {
+    "behavioral_pass": true,
+    "protection_status": "unchanged",
+    "commands": {
+     "public": [
+      [
+       "nodatime-public-local-date-regressions",
+       true
+      ],
+      [
+       "nodatime-public-pure-struct-methods",
+       true
+      ]
+     ],
+     "hidden": [
+      [
+       "nodatime-calendar-neutral-contract",
+       true
+      ]
+     ]
+    }
+   },
+   "source_review": "passed",
+   "finding": "LocalDate.CompareToIgnoringCalendar compares DaysSinceEpoch. LocalDateTime.CompareToIgnoringCalendar compares the date that way, then the time of day. Both carry [Pure]. CompareTo, equality, and operators are unchanged. No DateTime conversion or calendar change.",
+   "patch": "patches/012-nodatime-code-kb-r1.diff",
+   "verification": [
+    {
+     "kind": "independent_added_tests",
+     "argv": [
+      "/usr/bin/env",
+      "DOTNET_CLI_HOME=/state/dotnet",
+      "NUGET_PACKAGES=/state/nodatime-nuget",
+      "DOTNET_CLI_TELEMETRY_OPTOUT=1",
+      "DOTNET_NOLOGO=1",
+      "/tools/dotnet/dotnet",
+      "test",
+      "src/NodaTime.Test/NodaTime.Test.csproj",
+      "--framework",
+      "net10.0",
+      "--no-restore",
+      "--filter",
+      "FullyQualifiedName~CompareToIgnoringCalendar",
+      "--results-directory",
+      "/state/results",
+      "--logger",
+      "console;verbosity=normal",
+      "-p:PublicSign=true"
+     ],
+     "exit_status": 0,
+     "timed_out": false,
+     "runtime_setup_passed": true,
+     "source_unchanged": true,
+     "source_digest": "cdd614a7e366673a73255c7931837a9e61e7ae28699575ffc07304f4ddaf29cd",
+     "stdout_log": "logs/012-nodatime-code-kb-r1-added-tests.stdout.log",
+     "stderr_log": "logs/012-nodatime-code-kb-r1-added-tests.stderr.log"
+    },
+    {
+     "kind": "independent_purity",
+     "argv": [
+      "/usr/bin/env",
+      "DOTNET_CLI_HOME=/state/dotnet",
+      "NUGET_PACKAGES=/state/nodatime-nuget",
+      "DOTNET_CLI_TELEMETRY_OPTOUT=1",
+      "DOTNET_NOLOGO=1",
+      "/tools/dotnet/dotnet",
+      "test",
+      "src/NodaTime.Test/NodaTime.Test.csproj",
+      "--framework",
+      "net10.0",
+      "--no-restore",
+      "--filter",
+      "FullyQualifiedName~NodaTime.Test.Annotations.PurityTest.AllPublicStructMethodsArePure",
+      "--results-directory",
+      "/state/results",
+      "--logger",
+      "console;verbosity=normal",
+      "-p:PublicSign=true"
+     ],
+     "exit_status": 0,
+     "timed_out": false,
+     "runtime_setup_passed": true,
+     "source_unchanged": true,
+     "source_digest": "cdd614a7e366673a73255c7931837a9e61e7ae28699575ffc07304f4ddaf29cd",
+     "stdout_log": "logs/012-nodatime-code-kb-r1-purity.stdout.log",
+     "stderr_log": "logs/012-nodatime-code-kb-r1-purity.stderr.log"
+    }
+   ]
+  },
+  {
+   "trial_id": "013-sqlglot-code-kb-r2",
+   "schedule_index": 13,
+   "case_id": "sqlglot",
+   "repeat": 2,
+   "raw_attempt_sha256": "ed81e215f9a056a64467749cf2d03f363172ee94a468970e72bbead5b82b6074",
+   "bundle_json_sha256": "76e810cadb26a5a6c2fa828f11d9986c67c855fb2130f6c6001771430a72172f",
+   "fresh_replay_matches_bundle": true,
+   "trusted_grade": {
+    "behavioral_pass": true,
+    "protection_status": "unchanged",
+    "commands": {
+     "public": [
+      [
+       "bigquery_regressions",
+       true
+      ]
+     ],
+     "hidden": [
+      [
+       "timestamp_bucket_acceptance",
+       true
+      ]
+     ]
+    }
+   },
+   "source_review": "passed",
+   "finding": "Parser maps TIMESTAMP_BUCKET(timestamp, width[, origin]) to DateBin(this=width, expression=timestamp, origin). A new BigQuery datebin_sql generates the same order back. Two- and three-argument forms are kept.",
+   "patch": "patches/013-sqlglot-code-kb-r2.diff",
+   "verification": [
+    {
+     "kind": "independent_added_tests",
+     "argv": [
+      "/usr/bin/env",
+      "PYTHONDONTWRITEBYTECODE=1",
+      "PYTHONPATH=/state/python-site:/workspace/project",
+      "/usr/bin/python3",
+      "-m",
+      "unittest",
+      "-v",
+      "tests.dialects.test_bigquery_timestamp_bucket"
+     ],
+     "exit_status": 0,
+     "timed_out": false,
+     "runtime_setup_passed": true,
+     "source_unchanged": true,
+     "source_digest": "a6a0b73ca195e3765357f62b45b316cdbbb09f53dc820a4ba88efe484d08a50a",
+     "stdout_log": "logs/013-sqlglot-code-kb-r2-added-tests.stdout.log",
+     "stderr_log": "logs/013-sqlglot-code-kb-r2-added-tests.stderr.log"
+    }
+   ]
+  },
+  {
+   "trial_id": "015-minijinja-code-kb-r2",
+   "schedule_index": 15,
+   "case_id": "minijinja",
+   "repeat": 2,
+   "raw_attempt_sha256": "14208bf2bdebc35da96d37912326517e9e1ccbc4b41514b3b7959dfa23f1e8d7",
+   "bundle_json_sha256": "55a2a3fa07dd19712ed307bda3c4f630e4126abd01d2fcb5166bd96181e23851",
+   "fresh_replay_matches_bundle": true,
+   "trusted_grade": {
+    "behavioral_pass": true,
+    "protection_status": "unchanged",
+    "commands": {
+     "public": [
+      [
+       "minijinja_cli_regressions",
+       true
+      ]
+     ],
+     "hidden": [
+      [
+       "autoescape_suffix_acceptance",
+       true
+      ]
+     ]
+    }
+   },
+   "source_review": "passed",
+   "finding": "Auto mode lowercases the last suffix, skips one .j2, .jinja, or .jinja2 wrapper, and lowercases the suffix before it. Ordinary names keep their old mapping. Explicit html, json, and none still override. The long help names the three wrappers, the ASCII case-insensitive match, and the explicit override.",
+   "patch": "patches/015-minijinja-code-kb-r2.diff",
+   "verification": [
+    {
+     "kind": "independent_added_tests",
+     "argv": [
+      "/usr/bin/env",
+      "CARGO_HOME=/state/cargo",
+      "CARGO_NET_OFFLINE=true",
+      "CARGO_TARGET_DIR=/state/target",
+      "CARGO_INCREMENTAL=0",
+      "RUSTC=/tools/rust/bin/rustc",
+      "/tools/rust/bin/cargo",
+      "test",
+      "--locked",
+      "--offline",
+      "-p",
+      "minijinja-cli",
+      "--test",
+      "test_autoescape"
+     ],
+     "exit_status": 0,
+     "timed_out": false,
+     "runtime_setup_passed": true,
+     "source_unchanged": true,
+     "source_digest": "733e3f6a65171cae36dbdd297cf7ab804889d813e68d7096b95d6957abed0b7a",
+     "stdout_log": "logs/015-minijinja-code-kb-r2-added-tests.stdout.log",
+     "stderr_log": "logs/015-minijinja-code-kb-r2-added-tests.stderr.log"
+    }
+   ]
+  },
+  {
+   "trial_id": "017-hcl-code-kb-r2",
+   "schedule_index": 17,
+   "case_id": "hcl",
+   "repeat": 2,
+   "raw_attempt_sha256": "fbf864d3689eb1f8205acb796101269658d94882044fbae151d3f5ff320181fd",
+   "bundle_json_sha256": "3c6bc28bf134584bbdb915d65ecbdf9dad729e0539b90dd777e1b982f65a0654",
+   "fresh_replay_matches_bundle": true,
+   "trusted_grade": {
+    "behavioral_pass": true,
+    "protection_status": "unchanged",
+    "commands": {
+     "public": [
+      [
+       "gohcl_regressions",
+       true
+      ]
+     ],
+     "hidden": [
+      [
+       "expression_field_acceptance",
+       true
+      ]
+     ]
+    }
+   },
+   "source_review": "passed",
+   "finding": "ImpliedBodySchema marks an hcl.Expression field optional before the scalar rule, so scalars stay required and pointers stay optional. DecodeBody assigns hcl.StaticExpr(cty.NullVal(cty.DynamicPseudoType), MissingItemRange()) to an omitted expression field.",
+   "patch": "patches/017-hcl-code-kb-r2.diff",
+   "verification": [
+    {
+     "kind": "independent_added_tests",
+     "argv": [
+      "/usr/bin/env",
+      "GOMODCACHE=/state/go-mod-cache",
+      "GOCACHE=/state/go-cache",
+      "/usr/lib/golang/bin/go",
+      "test",
+      "-v",
+      "-run",
+      "TestDecodeBodyOmittedExpressions",
+      "./gohcl"
+     ],
+     "exit_status": 0,
+     "timed_out": false,
+     "runtime_setup_passed": true,
+     "source_unchanged": true,
+     "source_digest": "776fe954c31b9a40b7809e2d89ec32c2586eabc3a70aa7d81ffd3af6117c7ae1",
+     "stdout_log": "logs/017-hcl-code-kb-r2-added-tests.stdout.log",
+     "stderr_log": "logs/017-hcl-code-kb-r2-added-tests.stderr.log"
+    }
+   ]
+  },
+  {
+   "trial_id": "019-date-fns-code-kb-r2",
+   "schedule_index": 19,
+   "case_id": "date-fns",
+   "repeat": 2,
+   "raw_attempt_sha256": "e89ce58d4f726c84913122c336bc2cb4c51ef489b3f9d7b63d4f3abd6eaa76d7",
+   "bundle_json_sha256": "7290ac51ad6a1dcfadd960bb4d0677a25633deafe9f985d8cf678c87ede3565e",
+   "fresh_replay_matches_bundle": true,
+   "trusted_grade": {
+    "behavioral_pass": true,
+    "protection_status": "unchanged",
+    "commands": {
+     "public": [
+      [
+       "business_day_regressions",
+       true
+      ]
+     ],
+     "hidden": [
+      [
+       "business_day_context_acceptance",
+       true
+      ]
+     ]
+    }
+   },
+   "source_review": "passed",
+   "finding": "addBusinessDays builds the input with toDate(date, options?.in). differenceInBusinessDays normalizes both inputs with options?.in. These are the same two production changes as the accepted 2.11.x patches. No context keeps the old path.",
+   "patch": "patches/019-date-fns-code-kb-r2.diff",
+   "verification": [
+    {
+     "kind": "independent_added_tests",
+     "argv": [
+      "/usr/bin/env",
+      "-C",
+      "/workspace/project/pkgs/core",
+      "PATH=/tools/node/bin:/usr/bin:/bin",
+      "/tools/node/bin/pnpm",
+      "vitest",
+      "run",
+      "--project",
+      "main",
+      "--reporter",
+      "verbose",
+      "src/addBusinessDays/context/test.ts",
+      "src/differenceInBusinessDays/context/test.ts"
+     ],
+     "exit_status": 0,
+     "timed_out": false,
+     "runtime_setup_passed": true,
+     "source_unchanged": true,
+     "source_digest": "b670f4bdb911c33f447e8036215eb87bd17536c908b459042692c7fbacdeffb5",
+     "stdout_log": "logs/019-date-fns-code-kb-r2-added-tests.stdout.log",
+     "stderr_log": "logs/019-date-fns-code-kb-r2-added-tests.stderr.log"
+    }
+   ]
+  },
+  {
+   "trial_id": "021-commons-lang-code-kb-r2",
+   "schedule_index": 21,
+   "case_id": "commons-lang",
+   "repeat": 2,
+   "raw_attempt_sha256": "76ad24dfdb4c3b50aca635c9c47eaaa260a36f856cd92efed7ea1ab8149491d5",
+   "bundle_json_sha256": "31bf021d8267a1036983e9c5e67740173f06f54f836099f93d1480c81d1e4982",
+   "fresh_replay_matches_bundle": true,
+   "trusted_grade": {
+    "behavioral_pass": true,
+    "protection_status": "unchanged",
+    "commands": {
+     "public": [
+      [
+       "commons-public-comparable-regressions",
+       true
+      ]
+     ],
+     "hidden": [
+      [
+       "commons-comparable-migration-contract",
+       true
+      ]
+     ]
+    }
+   },
+   "source_review": "passed",
+   "finding": "ComparableUtils gains compare(T,T), compare(T,T,boolean), and varargs max/min with the ObjectUtils semantics and the <T extends Comparable<? super T>> bound. ObjectUtils.compare, max, and min keep their signatures and delegate. The two-value ComparableUtils max/min keep their behavior and no longer call ObjectUtils.",
+   "patch": "patches/021-commons-lang-code-kb-r2.diff",
+   "verification": [
+    {
+     "kind": "independent_added_tests",
+     "argv": [
+      "/usr/bin/env",
+      "JAVA_HOME=/tools/java",
+      "PATH=/tools/java/bin:/tools/maven/bin:/usr/bin:/bin",
+      "/tools/maven/bin/mvn",
+      "-B",
+      "-o",
+      "-Dmaven.repo.local=/state/commons-m2",
+      "-Dtest=ComparableUtilsMigrationTest",
+      "test"
+     ],
+     "exit_status": 0,
+     "timed_out": false,
+     "runtime_setup_passed": true,
+     "source_unchanged": true,
+     "source_digest": "7fa192f0691ea69f6942fd88d47e5f2813471f050f945e6c9ea83aff804ca1a7",
+     "stdout_log": "logs/021-commons-lang-code-kb-r2-added-tests.stdout.log",
+     "stderr_log": "logs/021-commons-lang-code-kb-r2-added-tests.stderr.log"
+    }
+   ]
+  },
+  {
+   "trial_id": "023-nodatime-code-kb-r2",
+   "schedule_index": 23,
+   "case_id": "nodatime",
+   "repeat": 2,
+   "raw_attempt_sha256": "d1cbfdb5a8328bf7832384127254a1c2ee125af4b8b6a8d5e393d2c88e18d290",
+   "bundle_json_sha256": "19d74aae2dbf738ed1baef22433ec9e47c7a0d72a5e5bfd70d24185592c9ce82",
+   "fresh_replay_matches_bundle": true,
+   "trusted_grade": {
+    "behavioral_pass": true,
+    "protection_status": "unchanged",
+    "commands": {
+     "public": [
+      [
+       "nodatime-public-local-date-regressions",
+       true
+      ],
+      [
+       "nodatime-public-pure-struct-methods",
+       true
+      ]
+     ],
+     "hidden": [
+      [
+       "nodatime-calendar-neutral-contract",
+       true
+      ]
+     ]
+    }
+   },
+   "source_review": "passed",
+   "finding": "LocalDate.CompareToIgnoringCalendar compares DaysSinceEpoch. LocalDateTime.CompareToIgnoringCalendar compares the date that way, then the time of day. Both carry [Pure]. CompareTo, equality, and operators are unchanged. No DateTime conversion or calendar change.",
+   "patch": "patches/023-nodatime-code-kb-r2.diff",
+   "verification": [
+    {
+     "kind": "independent_added_tests",
+     "argv": [
+      "/usr/bin/env",
+      "DOTNET_CLI_HOME=/state/dotnet",
+      "NUGET_PACKAGES=/state/nodatime-nuget",
+      "DOTNET_CLI_TELEMETRY_OPTOUT=1",
+      "DOTNET_NOLOGO=1",
+      "/tools/dotnet/dotnet",
+      "test",
+      "src/NodaTime.Test/NodaTime.Test.csproj",
+      "--framework",
+      "net10.0",
+      "--no-restore",
+      "--filter",
+      "FullyQualifiedName~CompareToIgnoringCalendar",
+      "--results-directory",
+      "/state/results",
+      "--logger",
+      "console;verbosity=normal",
+      "-p:PublicSign=true"
+     ],
+     "exit_status": 0,
+     "timed_out": false,
+     "runtime_setup_passed": true,
+     "source_unchanged": true,
+     "source_digest": "1def28c6fc537e258b9cebf8b084a87c89ef7fbc1a12564b3e195f82d762f4f9",
+     "stdout_log": "logs/023-nodatime-code-kb-r2-added-tests.stdout.log",
+     "stderr_log": "logs/023-nodatime-code-kb-r2-added-tests.stderr.log"
+    },
+    {
+     "kind": "independent_purity",
+     "argv": [
+      "/usr/bin/env",
+      "DOTNET_CLI_HOME=/state/dotnet",
+      "NUGET_PACKAGES=/state/nodatime-nuget",
+      "DOTNET_CLI_TELEMETRY_OPTOUT=1",
+      "DOTNET_NOLOGO=1",
+      "/tools/dotnet/dotnet",
+      "test",
+      "src/NodaTime.Test/NodaTime.Test.csproj",
+      "--framework",
+      "net10.0",
+      "--no-restore",
+      "--filter",
+      "FullyQualifiedName~NodaTime.Test.Annotations.PurityTest.AllPublicStructMethodsArePure",
+      "--results-directory",
+      "/state/results",
+      "--logger",
+      "console;verbosity=normal",
+      "-p:PublicSign=true"
+     ],
+     "exit_status": 0,
+     "timed_out": false,
+     "runtime_setup_passed": true,
+     "source_unchanged": true,
+     "source_digest": "1def28c6fc537e258b9cebf8b084a87c89ef7fbc1a12564b3e195f82d762f4f9",
+     "stdout_log": "logs/023-nodatime-code-kb-r2-purity.stdout.log",
+     "stderr_log": "logs/023-nodatime-code-kb-r2-purity.stderr.log"
+    }
+   ]
+  }
+ ]
+}
