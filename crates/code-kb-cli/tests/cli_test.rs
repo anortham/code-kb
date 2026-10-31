@@ -1019,6 +1019,30 @@ fn test_cli_body_and_slice() {
     let context_stdout = String::from_utf8_lossy(&context_output.stdout);
     assert!(context_stdout.contains("Target: `run_task`"));
     assert!(context_stdout.contains("helper"));
+    assert!(context_stdout.contains("### Callers\n"), "{context_stdout}");
+    assert!(
+        context_stdout.contains("### Tests to run\n"),
+        "{context_stdout}"
+    );
+
+    let context_json = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .args(["--json", "context", "run_task"])
+        .output()
+        .expect("Failed to execute context --json");
+    assert!(context_json.status.success());
+    let context_json: serde_json::Value = serde_json::from_slice(&context_json.stdout).unwrap();
+    for key in ["callers", "tests", "open_ends"] {
+        assert!(
+            context_json.get(key).is_some(),
+            "{key} missing: {context_json}"
+        );
+    }
+    assert!(
+        context_json["callers"]["counts"]["sites"].is_u64(),
+        "{context_json}"
+    );
 
     // Test alias "slice"
     let slice_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))

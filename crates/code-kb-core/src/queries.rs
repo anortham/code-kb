@@ -6282,6 +6282,116 @@ fn merge_same_site(sites: Vec<ReferenceSite>) -> Vec<ReferenceSite> {
     merged
 }
 
+/// The kinds whose `type_facts` row is the type they return.
+const RETURNING_KINDS: &[&str] = &["function", "method", "constructor"];
+
+/// The one type that `type_facts` records for the row `alias`, or NULL for none, for two, or for
+/// an index without the table.
+fn recorded_type_sql(conn: &Connection, alias: &str) -> String {
+    if !has_table(conn, "type_facts")
+        || !has_column(conn, "type_facts", "symbol_id")
+        || !has_column(conn, "type_facts", "resolved_type")
+    {
+        return "NULL".to_string();
+    }
+    format!(
+        "(SELECT MIN(tf.resolved_type) FROM type_facts tf WHERE tf.symbol_id = {alias}.symbol_id
+          HAVING COUNT(DISTINCT tf.resolved_type) = 1)"
+    )
+}
+
+/// `return_type` when a symbol of `kind` returns it and `signature` does not spell it as a whole
+/// word outside its first parameter list, as `fn new() -> Self` does not spell `Builder`.
+pub(crate) fn unspelled_return_type(
+    kind: &str,
+    signature: Option<&str>,
+    return_type: Option<String>,
+) -> Option<String> {
+    let return_type = return_type.filter(|ty| !ty.trim().is_empty())?;
+    if !RETURNING_KINDS.contains(&kind) {
+        return None;
+    }
+    let signature = signature.unwrap_or_default();
+    let outside = match signature.find('(') {
+        Some(open) => {
+            let mut depth = 0usize;
+            let mut close = signature.len();
+            for (at, c) in signature[open..].char_indices() {
+                match c {
+                    '(' => depth += 1,
+                    ')' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            close = open + at + 1;
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            format!("{} {}", &signature[..open], &signature[close..])
+        }
+        None => signature.to_string(),
+    };
+    let is_word = |c: char| c.is_alphanumeric() || c == '_';
+    let spelled = outside.match_indices(return_type.as_str()).any(|(at, _)| {
+        !outside[..at].chars().next_back().is_some_and(is_word)
+            && !outside[at + return_type.len()..]
+                .chars()
+                .next()
+                .is_some_and(is_word)
+    });
+    (!spelled).then_some(return_type)
+}
+
+/// The return type of `symbol` from `type_facts` when its signature does not spell it.
+pub fn find_unspelled_return_type(
+    conn: &Connection,
+    symbol: &Symbol,
+) -> Result<Option<String>, QueryError> {
+    if !RETURNING_KINDS.contains(&symbol.kind.as_str()) {
+        return Ok(None);
+    }
+    let sql = recorded_type_sql(conn, "s");
+    let recorded: Option<String> = conn
+        .query_row(
+            &format!("SELECT {sql} FROM symbols s WHERE s.symbol_id = ?1"),
+            params![symbol.symbol_id],
+            |row| row.get(0),
+        )
+        .optional()?
+        .flatten();
+    Ok(unspelled_return_type(
+        &symbol.kind,
+        symbol.signature.as_deref(),
+        recorded,
+    ))
+}
+
+/// A callee row: name, signature, path, line, kind, and the one recorded type.
+type CalleeRow = (
+    String,
+    Option<String>,
+    String,
+    usize,
+    String,
+    Option<String>,
+);
+
+/// One callee line: the signature, the return type it does not spell, and the location.
+fn callee_entry(
+    signature: &str,
+    kind: &str,
+    return_type: Option<String>,
+    path: &str,
+    line: usize,
+) -> String {
+    match unspelled_return_type(kind, Some(signature), return_type) {
+        Some(return_type) => format!("{signature}; Returns: `{return_type}` ({path}:{line})"),
+        None => format!("{signature} ({path}:{line})"),
+    }
+}
+
 /// Resolve callee signatures directly in a single joined query, avoiding N+1 queries
 /// and preserving ambiguous methods across types. Prioritizes functions/methods over enum variants.
 pub fn find_callee_signatures(
@@ -6293,8 +6403,9 @@ pub fn find_callee_signatures(
 ) -> Result<Vec<String>, QueryError> {
     let relationship_call_language =
         call_languages_compatible_sql("s_from.language", "s_to.language");
+    let return_type = recorded_type_sql(conn, "s_to");
     let mut stmt = conn.prepare(&format!(
-        "SELECT DISTINCT s_to.name, {CALLEE_SIGNATURE_SQL}, s_to.path, s_to.start_line, s_to.kind
+        "SELECT DISTINCT s_to.name, {CALLEE_SIGNATURE_SQL}, s_to.path, s_to.start_line, s_to.kind, {return_type}
          FROM relationships r
          JOIN symbols s_from ON r.from_symbol_id = s_from.symbol_id
          JOIN symbols s_to ON r.to_symbol_id = s_to.symbol_id
@@ -6310,6 +6421,7 @@ pub fn find_callee_signatures(
             row.get::<_, String>(2)?.replace('\\', "/"),
             row.get::<_, Option<i64>>(3)?.unwrap_or(1) as usize,
             row.get::<_, String>(4)?,
+            row.get::<_, Option<String>>(5)?,
         ))
     })?;
 
@@ -6317,9 +6429,9 @@ pub fn find_callee_signatures(
     let mut variants = Vec::new();
 
     for r in rows.flatten() {
-        let (name, sig_opt, path, line, kind) = r;
+        let (name, sig_opt, path, line, kind, return_type) = r;
         let sig = sig_opt.unwrap_or(name);
-        let entry = format!("{sig} ({path}:{line})");
+        let entry = callee_entry(&sig, &kind, return_type, &path, line);
         if kind == "variant" {
             if !variants.contains(&entry) {
                 variants.push(entry);
@@ -6358,9 +6470,8 @@ pub fn find_callee_signatures(
     if signatures.len() < limit {
         let remaining = (limit - signatures.len()) * 2;
         let pending_language = pending_relationship_language_filter("p.kind", "s_from", "s_to");
-        let p_rows: Vec<(String, Option<String>, String, usize, String)> =
-            if has_pending_namespace_column(conn) {
-                let pending_sql = format!("SELECT DISTINCT s_to.name, {CALLEE_SIGNATURE_SQL}, s_to.path, s_to.start_line, s_to.kind
+        let p_rows: Vec<CalleeRow> = if has_pending_namespace_column(conn) {
+            let pending_sql = format!("SELECT DISTINCT s_to.name, {CALLEE_SIGNATURE_SQL}, s_to.path, s_to.start_line, s_to.kind, {return_type}
                  FROM pending_relationships p
                  JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
                  JOIN symbols s_to ON s_to.name = p.target_terminal_name
@@ -6369,29 +6480,31 @@ pub fn find_callee_signatures(
                    AND {pending_language}
                    AND {kind}
                     AND {pred}
-                 LIMIT ?3", kind = callee_target_kind("s_parent"), pred = pending_predicate, pending_language = pending_language);
-                let mut p_stmt = conn.prepare(&pending_sql)?;
-                let map_row = |row: &rusqlite::Row<'_>| {
-                    Ok((
-                        row.get::<_, String>(0)?,
-                        row.get::<_, Option<String>>(1)?,
-                        row.get::<_, String>(2)?.replace('\\', "/"),
-                        row.get::<_, Option<i64>>(3)?.unwrap_or(1) as usize,
-                        row.get::<_, String>(4)?,
-                    ))
-                };
-                let rows = match &owners {
-                    Some(owners) => p_stmt.query_map(
-                        params![symbol_name, symbol_id, remaining as i64, owners],
-                        map_row,
-                    )?,
-                    None => p_stmt
-                        .query_map(params![symbol_name, symbol_id, remaining as i64], map_row)?,
-                };
-                rows.flatten().collect()
-            } else {
-                let mut p_stmt = conn.prepare(&format!(
-                "SELECT DISTINCT s_to.name, {CALLEE_SIGNATURE_SQL}, s_to.path, s_to.start_line, s_to.kind
+                 LIMIT ?3", kind = callee_target_kind("s_parent"), pred = pending_predicate, pending_language = pending_language, return_type = return_type);
+            let mut p_stmt = conn.prepare(&pending_sql)?;
+            let map_row = |row: &rusqlite::Row<'_>| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, String>(2)?.replace('\\', "/"),
+                    row.get::<_, Option<i64>>(3)?.unwrap_or(1) as usize,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                ))
+            };
+            let rows = match &owners {
+                Some(owners) => p_stmt.query_map(
+                    params![symbol_name, symbol_id, remaining as i64, owners],
+                    map_row,
+                )?,
+                None => {
+                    p_stmt.query_map(params![symbol_name, symbol_id, remaining as i64], map_row)?
+                }
+            };
+            rows.flatten().collect()
+        } else {
+            let mut p_stmt = conn.prepare(&format!(
+                "SELECT DISTINCT s_to.name, {CALLEE_SIGNATURE_SQL}, s_to.path, s_to.start_line, s_to.kind, {return_type}
                  FROM pending_relationships p
                  JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
                  JOIN symbols s_to ON s_to.name = p.target_terminal_name
@@ -6401,23 +6514,24 @@ pub fn find_callee_signatures(
                  LIMIT ?3"
                 ))?;
 
-                let rows =
-                    p_stmt.query_map(params![symbol_name, symbol_id, remaining as i64], |row| {
-                        Ok((
-                            row.get::<_, String>(0)?,
-                            row.get::<_, Option<String>>(1)?,
-                            row.get::<_, String>(2)?.replace('\\', "/"),
-                            row.get::<_, Option<i64>>(3)?.unwrap_or(1) as usize,
-                            row.get::<_, String>(4)?,
-                        ))
-                    })?;
-                rows.flatten().collect()
-            };
+            let rows =
+                p_stmt.query_map(params![symbol_name, symbol_id, remaining as i64], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, Option<String>>(1)?,
+                        row.get::<_, String>(2)?.replace('\\', "/"),
+                        row.get::<_, Option<i64>>(3)?.unwrap_or(1) as usize,
+                        row.get::<_, String>(4)?,
+                        row.get::<_, Option<String>>(5)?,
+                    ))
+                })?;
+            rows.flatten().collect()
+        };
 
         for r in p_rows {
-            let (name, sig_opt, path, line, kind) = r;
+            let (name, sig_opt, path, line, kind, return_type) = r;
             let sig = sig_opt.unwrap_or(name);
-            let entry = format!("{sig} ({path}:{line})");
+            let entry = callee_entry(&sig, &kind, return_type, &path, line);
             if kind == "variant" {
                 if !variants.contains(&entry) {
                     variants.push(entry);
@@ -14213,5 +14327,38 @@ mod tests {
                 .map(|r| r.symbol.symbol_id)
                 .collect();
         assert!(search_ids.contains(&"local".to_string()));
+    }
+
+    #[test]
+    fn a_return_type_prints_only_when_the_signature_does_not_spell_it_outside_its_parameters() {
+        let ty = || Some("Builder".to_string());
+        assert_eq!(
+            unspelled_return_type("method", Some("fn new() -> Self"), ty()).as_deref(),
+            Some("Builder")
+        );
+        assert_eq!(
+            unspelled_return_type("method", Some("fn from(b: Builder) -> Self"), ty()).as_deref(),
+            Some("Builder")
+        );
+        assert_eq!(
+            unspelled_return_type("function", Some("fn make() -> Builder"), ty()),
+            None
+        );
+        assert_eq!(
+            unspelled_return_type("method", Some("public Builder build(int size)"), ty()),
+            None
+        );
+        assert_eq!(
+            unspelled_return_type("function", Some("fn make() -> BuilderSet"), ty()).as_deref(),
+            Some("Builder")
+        );
+        assert_eq!(
+            unspelled_return_type("variable", Some("let b = make()"), ty()),
+            None
+        );
+        assert_eq!(
+            unspelled_return_type("function", Some("fn f()"), None),
+            None
+        );
     }
 }
