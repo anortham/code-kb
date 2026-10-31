@@ -393,7 +393,7 @@ impl McpServer {
         let mut tools = vec![
             Tool {
                 name: "file_skeleton".to_string(),
-                description: "A file's types, functions, signatures, and docstrings with bodies stripped. Call this before you read a source file with Read, cat, or sed, then fetch the symbols you need with get_symbol_body; read the whole file only when you will change most of it. A directory returns its outline.".to_string(),
+                description: "A file's types, functions, signatures, and docstrings with bodies stripped. Call this on a folder or a file you do not know; a directory returns its outline. Read the file you will edit, since the editor needs it.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -1462,7 +1462,7 @@ impl McpServer {
                         "name": "code-kb",
                         "version": env!("CARGO_PKG_VERSION")
                     },
-                    "instructions": "Pass project_root, the absolute path of the project or git worktree you work in, on every call. Call file_skeleton before you read a source file, then get_symbol_body or get_symbol_context for the symbols you need. Use lookup_symbol for a name or a concept and find_references instead of grep on a name, and blast_radius to pick the tests to run. After you edit, call check_edit before you say the change is done."
+                    "instructions": "Pass project_root, the absolute path of the project or git worktree you work in, on every call. Call file_skeleton on a folder or a file you do not know. Before you change a symbol, call get_symbol_context for its body, callers, tests, and types. Read the file you will edit. Use lookup_symbol for a name or a concept, and find_references, not grep, for its uses. After you edit, call check_edit."
                 });
                 Some(JsonRpcResponse::success(id, init_result))
             }

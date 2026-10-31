@@ -30,7 +30,7 @@ When a task needs one signature or implementation, a file outline or symbol body
 1. **Repository Orientation (`file_skeleton` on a folder):** Understand directory structures and key exports in a few hundred tokens.
 2. **File Skeletons (`file_skeleton`):** Inspect function signatures, types, traits, and docstrings with implementation bodies stripped.
 3. **Symbol Lookup & Discovery (`lookup_symbol`):** Instant exact/prefix identifier lookups. A query that names no symbol exactly also gets ranked conceptual matches over names, signatures, and docstrings; substrings inside identifiers are found (`sha256` finds `parseSha256Sidecar`).
-4. **Surgical Symbol Context (`get_symbol_context`):** In a single turn, fetch a target function's body along with its callee signatures, parameter types, and associated unit tests.
+4. **Surgical Symbol Context (`get_symbol_context`):** In a single turn, fetch a target function's body along with its callers, the tests to run, its callee signatures, and parameter types.
 5. **Fresh Indexes:** Filesystem edits automatically refresh indexed files, and target body and skeleton reads refresh their file before answering.
 
 ---
@@ -69,6 +69,10 @@ disclosure skill, a `/code-kb:code-kb-telemetry` command for usage and token-sav
 `/code-kb:report-issue` command that files a bug with a diagnostic bundle, SessionStart and
 SubagentStart hooks that inject routing instructions, and Stop and SubagentStop hooks that run the
 edit check (see [After you edit](#after-you-edit-check_edit-and-the-stop-hooks)).
+
+The routing instructions tell the agent to call `file_skeleton` on a folder or a file it does
+not know, to call `get_symbol_context` before it changes a symbol, and to `Read` the file it
+will edit, since the editor needs that read.
 
 ### Codex
 

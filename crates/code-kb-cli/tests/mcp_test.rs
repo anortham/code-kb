@@ -700,7 +700,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     assert!(
         resp["result"]["instructions"]
             .as_str()
-            .is_some_and(|instructions| instructions == "Pass project_root, the absolute path of the project or git worktree you work in, on every call. Call file_skeleton before you read a source file, then get_symbol_body or get_symbol_context for the symbols you need. Use lookup_symbol for a name or a concept and find_references instead of grep on a name, and blast_radius to pick the tests to run. After you edit, call check_edit before you say the change is done.")
+            .is_some_and(|instructions| instructions == "Pass project_root, the absolute path of the project or git worktree you work in, on every call. Call file_skeleton on a folder or a file you do not know. Before you change a symbol, call get_symbol_context for its body, callers, tests, and types. Read the file you will edit. Use lookup_symbol for a name or a concept, and find_references, not grep, for its uses. After you edit, call check_edit.")
     );
 
     // 2. Send tools/list
@@ -731,6 +731,17 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     assert_eq!(tool_names, TOOLS);
     assert!(!tool_names.contains(&"replace_symbol_body"));
     assert!(!tool_names.contains(&"edit_file"));
+    let skeleton_description = tools
+        .iter()
+        .find(|tool| tool["name"] == "file_skeleton")
+        .and_then(|tool| tool["description"].as_str())
+        .expect("file_skeleton description");
+    assert!(
+        skeleton_description.contains("Call this on a folder or a file you do not know")
+            && skeleton_description.contains("Read the file you will edit")
+            && !skeleton_description.contains("before you read a source file"),
+        "{skeleton_description}"
+    );
 
     // Verify zero workspace pollution across all tools
     for tool in tools {

@@ -1966,8 +1966,19 @@ fn test_cli_hook_session_start() {
         "- **To find code by concept**, call `lookup_symbol` with a few words; it adds ranked matches when no name matches."
     ));
     assert!(
-        ctx.contains("- **After you edit**, call `check_edit` before you say the change is done.")
+        ctx.contains(
+            "- **To orient**, call `file_skeleton` on a folder or a file you do not know."
+        )
     );
+    assert!(ctx.contains(
+        "- **Before you change a symbol**, call `get_symbol_context`: it carries the body, callers, tests to run, and types."
+    ));
+    assert!(ctx.contains("- **Read the file you will edit**, since the editor needs it."));
+    assert!(ctx.contains(
+        "- **After you edit**, call `check_edit` before you say the change is done; `blast_radius()` lists the tests of the whole diff."
+    ));
+    assert!(ctx.contains("- Use `rg` for literal text:"));
+    assert!(!ctx.contains("Before you `Read`"));
     assert!(!ctx.contains("telemetry_summary"));
     assert!(!ctx.contains("search_symbols"));
     assert!(!ctx.contains("EnterWorktree"));
@@ -2904,6 +2915,41 @@ fn test_routing_block_omits_edit_tools_and_stays_under_three_kilobytes() {
         "routing block still names replace_symbol_body"
     );
     assert!(text.len() < 3072, "routing block is {} bytes", text.len());
+}
+
+const ROUTING_BLOCK_2_11_BYTES: usize = 1070;
+const ROUTING_BLOCK_2_11_WORDS: usize = 174;
+
+#[test]
+fn test_routing_block_stays_under_its_2_11_size() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = manifest_dir.parent().unwrap().parent().unwrap();
+    let text = std::fs::read_to_string(root.join("hooks/code-kb-routing-block.md")).unwrap();
+    assert!(
+        text.len() < ROUTING_BLOCK_2_11_BYTES,
+        "routing block is {} bytes",
+        text.len()
+    );
+    let words = text.split_whitespace().count();
+    assert!(
+        words < ROUTING_BLOCK_2_11_WORDS,
+        "routing block is {words} words"
+    );
+}
+
+#[test]
+fn test_skill_routes_orientation_to_the_skeleton_and_edits_to_read() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = manifest_dir.parent().unwrap().parent().unwrap();
+    let text = std::fs::read_to_string(root.join("skills/code-kb/SKILL.md")).unwrap();
+    let prose = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(prose.contains("Call `file_skeleton` on a folder or a file you do not know."));
+    assert!(prose.contains(
+        "Before you change a symbol, call `get_symbol_context` for its body, callers, tests to run, and types."
+    ));
+    assert!(prose.contains("Read the file you will edit, since the editor needs it."));
+    assert!(!prose.contains("Before you `Read`"));
+    assert!(prose.contains("Use `rg` for literal text"));
 }
 
 #[test]
