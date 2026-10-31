@@ -1103,8 +1103,8 @@ fn overloads_header<'a>(symbols: impl ExactSizeIterator<Item = &'a Symbol>) -> S
 pub const CONTEXT_TESTS_SHOWN: usize = 10;
 
 /// The context of one symbol, in the order an edit needs it: the target with its signature and
-/// return type, the body, the callers summary, the tests to run, the signatures it calls, its
-/// types, and the open ends of a depth-2 walk from it.
+/// return type, the body, the callers summary, the tests to run, the markers its siblings share,
+/// the signatures it calls, its types, and the open ends of a depth-2 walk from it.
 pub fn format_context_slice(slice: &ContextSlice) -> String {
     let sym = &slice.target_symbol;
     let mut out = String::new();
@@ -1137,6 +1137,7 @@ pub fn format_context_slice(slice: &ContextSlice) -> String {
 
     out.push_str(&context_callers_section(slice));
     out.push_str(&context_tests_section(slice));
+    out.push_str(&context_conventions_section(slice));
 
     if !slice.callee_signatures.is_empty() {
         out.push_str("### Dependencies (Signatures):\n");
@@ -1271,6 +1272,57 @@ fn context_tests_section(slice: &ContextSlice) -> String {
         out.push_str(&section_fold(
             slice.tests[shown..].iter().map(|row| row.path.as_str()),
             "test",
+        ));
+    }
+    out.push('\n');
+    out
+}
+
+/// The sibling conventions a context lists before it folds the rest into one line.
+pub const CONTEXT_CONVENTIONS_SHOWN: usize = 8;
+
+/// The markers that at least two thirds of the target's siblings carry, the ones it lacks first.
+fn context_conventions_section(slice: &ContextSlice) -> String {
+    let Some(first) = slice.conventions.first() else {
+        return String::new();
+    };
+    let sym = &slice.target_symbol;
+    let siblings = if sym.parent_symbol_id.is_some() {
+        format!(
+            "the other {} `{}` symbols of its owner",
+            first.siblings,
+            display_kind(sym)
+        )
+    } else {
+        format!(
+            "the other {} top-level `{}` symbols of its file",
+            first.siblings,
+            display_kind(sym)
+        )
+    };
+    let mut out =
+        format!("### Conventions\nMarkers that at least two thirds of {siblings} carry:\n");
+    for convention in slice.conventions.iter().take(CONTEXT_CONVENTIONS_SHOWN) {
+        let has = if convention.target_has {
+            "the target has it"
+        } else {
+            "the target lacks it"
+        };
+        out.push_str(&format!(
+            "- `{}`: {} of {} siblings; {has}\n",
+            on_one_line(&convention.text),
+            convention.siblings_with,
+            convention.siblings
+        ));
+    }
+    let hidden = slice
+        .conventions
+        .len()
+        .saturating_sub(CONTEXT_CONVENTIONS_SHOWN);
+    if hidden > 0 {
+        out.push_str(&format!(
+            "… {hidden} more shared {}.\n",
+            plural(hidden, "marker")
         ));
     }
     out.push('\n');
@@ -3665,8 +3717,8 @@ fn untied_sites(report: &CallersReportSites, more: &str) -> String {
 mod tests {
     use super::*;
     use crate::models::{
-        CallersReportSites, ImpactedSymbol, LabeledSite, ReferenceCounts, ReferenceReport,
-        ReferenceTarget, SiteLabel, TestTarget, TextOnlyLines, TextScanSummary,
+        CallersReportSites, Convention, ImpactedSymbol, LabeledSite, ReferenceCounts,
+        ReferenceReport, ReferenceTarget, SiteLabel, TestTarget, TextOnlyLines, TextScanSummary,
     };
 
     fn structural_fact(key: Option<&str>) -> crate::models::StructuralFact {
@@ -5152,7 +5204,39 @@ mod tests {
             callers: Some(ContextCallers::default()),
             tests: Vec::new(),
             open_ends: Vec::new(),
+            conventions: Vec::new(),
         }
+    }
+
+    fn sample_convention(text: &str, target_has: bool) -> Convention {
+        Convention {
+            annotation: text.into(),
+            carrier: None,
+            text: text.into(),
+            siblings_with: 3,
+            siblings: 3,
+            target_has,
+        }
+    }
+
+    #[test]
+    fn a_context_folds_the_conventions_past_eight_and_prints_none_without_any() {
+        let mut slice = sample_context_slice();
+        assert!(!format_context_slice(&slice).contains("### Conventions"));
+
+        slice.conventions = (0..10)
+            .map(|index| sample_convention(&format!("mark{index}"), index > 0))
+            .collect();
+
+        let text = format_context_slice(&slice);
+
+        assert!(
+            text.contains("- `mark0`: 3 of 3 siblings; the target lacks it\n- `mark1`: 3 of 3 siblings; the target has it\n"),
+            "{text}"
+        );
+        assert!(text.contains("- `mark7`: "), "{text}");
+        assert!(!text.contains("`mark8`"), "{text}");
+        assert!(text.contains("… 2 more shared markers.\n\n"), "{text}");
     }
 
     fn sample_site(caller: &str, label: SiteLabel, line: usize) -> LabeledSite {
@@ -5217,6 +5301,7 @@ mod tests {
             depth: 1,
             owner: None,
         }];
+        slice.conventions = vec![sample_convention("inline", false)];
 
         let text = format_context_slice(&slice);
 
@@ -5224,6 +5309,7 @@ mod tests {
             "### Target: `target_fn` (src/lib.rs:1-10)\n\nSignature: `pub fn target_fn()`\nReturns: `Builder`\n\n```rust\n",
             "### Callers\nSites: 4 · proven 1 · likely 1 · unresolved 1 · excluded 1\nProven (1):\n- `run` [src/use.rs:7] (kind: call; import)\nLikely (1):\n- `main` [src/use.rs:9] (kind: call; import)\nMore: find_references(symbol_id=\"id_target_fn\") lists every site; blast_radius(symbol_id=\"id_target_fn\") lists the tests that reach it through callers.\n\n",
             "### Tests to run\n- `test_1` [tests/t1.rs:3] run: cargo test test_1\n\n",
+            "### Conventions\nMarkers that at least two thirds of the other 3 top-level `function` symbols of its file carry:\n- `inline`: 3 of 3 siblings; the target lacks it\n\n",
             "### Dependencies (Signatures):\n",
             "### Types:\n",
             "### Open Ends\n",

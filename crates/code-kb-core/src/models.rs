@@ -404,8 +404,8 @@ pub struct TypeFact {
 }
 
 /// Everything an edit of one symbol needs in one answer: its body and return type, the summary
-/// of its callers report, the tests to run, the signatures it calls, its types, and the open ends
-/// of a depth-2 walk from it.
+/// of its callers report, the tests to run, the markers its siblings share, the signatures it
+/// calls, its types, and the open ends of a depth-2 walk from it.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ContextSlice {
     pub target_symbol: Symbol,
@@ -426,6 +426,24 @@ pub struct ContextSlice {
     pub tests: Vec<CallingTest>,
     #[serde(default)]
     pub open_ends: Vec<OpenEnd>,
+    /// The markers that at least two thirds of the target's siblings carry.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conventions: Vec<Convention>,
+}
+
+/// An annotation that at least two thirds of a symbol's siblings carry: the other symbols of its
+/// shown kind with its parent, or, for a symbol with no parent, in its file with no parent. `text`
+/// is the marker as written (`derive(Debug)`, `Obsolete("x")`), or its name when the siblings
+/// write it with different arguments.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Convention {
+    pub annotation: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub carrier: Option<String>,
+    pub text: String,
+    pub siblings_with: usize,
+    pub siblings: usize,
+    pub target_has: bool,
 }
 
 /// The callers summary of a context: the site counts of the target's callers report, its first

@@ -7,9 +7,9 @@ mod import_scope;
 
 use crate::db::local_variable_predicate;
 use crate::models::{
-    ANONYMOUS_CLASS_PREFIX, BlastRadiusResult, FileFact, ImpactedSymbol, LiteralFact, OpenEnd,
-    ReferenceSite, SearchExplain, StructuralFact, Symbol, SymbolSearchResult, TestTarget, TypeFact,
-    has_generated_lambda_name, is_generated_lambda_name,
+    ANONYMOUS_CLASS_PREFIX, BlastRadiusResult, Convention, FileFact, ImpactedSymbol, LiteralFact,
+    OpenEnd, ReferenceSite, SearchExplain, StructuralFact, Symbol, SymbolSearchResult, TestTarget,
+    TypeFact, has_generated_lambda_name, is_generated_lambda_name,
 };
 
 #[derive(Debug, Error)]
@@ -954,6 +954,18 @@ pub fn search_symbols_scoped(
 
 const MEMBER_LIST_OWNER_KINDS: &str = "'class', 'struct', 'interface', 'trait', 'enum', 'record', 'object', \
                            'protocol', 'union', 'module', 'namespace'";
+
+/// The kind that the output shows for the row `s`, as `formatters::display_kind` gives it.
+const SHOWN_KIND: &str = "CASE
+      WHEN s.language = 'html' AND s.kind = 'class' THEN 'element'
+      WHEN s.language = 'sql' AND s.kind = 'class' THEN 'table'
+      WHEN s.language = 'markdown' AND s.kind = 'module' THEN 'section'
+      WHEN s.language = 'markdown' AND s.kind = 'import' THEN 'link'
+      WHEN s.kind = 'property' AND s.language <> 'fsharp'
+           AND (s.signature GLOB 'self.*' OR s.signature GLOB 'this.*' OR s.signature GLOB 'cls.*')
+        THEN 'attribute'
+      ELSE s.kind
+    END";
 
 /// SQL predicate for the `:kind` filter over `symbols s`: the stored kind or the kind that
 /// `formatters::display_kind` shows, so a kind copied from the output always filters.
@@ -8652,6 +8664,97 @@ fn module_level_type_sql(alias: &str) -> String {
             WHERE type_scope.symbol_id = {alias}.parent_symbol_id
               AND type_scope.kind = 'namespace'))"
     )
+}
+
+/// The longest marker text a convention shows before it is cut.
+const CONVENTION_TEXT_CHARS: usize = 60;
+
+/// The annotations that at least two thirds of `target`'s siblings carry, when it has two or more:
+/// the other symbols of its shown kind with its parent, or, for a symbol with no parent, in its file
+/// with no parent. An annotation is its key and its carrier, so `derive(Debug)` and a bare `Debug`
+/// differ, and it shows as written when every sibling writes it alike, else by its name. The ones
+/// the target lacks come first, then the most shared.
+pub fn find_sibling_conventions(
+    conn: &Connection,
+    target: &Symbol,
+) -> Result<Vec<Convention>, QueryError> {
+    if !has_table(conn, "symbol_annotations") {
+        return Ok(Vec::new());
+    }
+    let (scope, owner) = match &target.parent_symbol_id {
+        Some(parent) => ("s.parent_symbol_id = ?1", parent.as_str()),
+        None => (
+            "s.parent_symbol_id IS NULL AND s.path = ?1",
+            target.path.as_str(),
+        ),
+    };
+    let sql = format!(
+        "WITH siblings AS (
+             SELECT s.symbol_id FROM symbols s
+             WHERE {scope} AND s.kind = ?2 AND s.symbol_id <> ?3
+               AND {SHOWN_KIND} = ?4
+         ),
+         total AS (SELECT COUNT(*) AS n FROM siblings)
+         SELECT a.annotation_key, NULLIF(a.carrier, '') AS carrier, MIN(a.annotation),
+                MIN(a.raw_text), COUNT(DISTINCT a.symbol_id) AS shared, total.n,
+                MAX(a.raw_text),
+                EXISTS (
+                    SELECT 1 FROM symbol_annotations own
+                    WHERE own.symbol_id = ?3 AND own.annotation_key = a.annotation_key
+                      AND NULLIF(own.carrier, '') IS NULLIF(a.carrier, '')
+                )
+         FROM symbol_annotations a JOIN siblings s ON s.symbol_id = a.symbol_id, total
+         WHERE total.n >= 2
+         GROUP BY a.annotation_key, NULLIF(a.carrier, '')
+         HAVING 3 * shared >= 2 * total.n"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let shown_kind = crate::formatters::display_kind(target);
+    let rows = stmt.query_map(
+        params![owner, target.kind, target.symbol_id, shown_kind],
+        |row| {
+            let annotation: String = row.get(2)?;
+            let carrier: Option<String> = row.get(1)?;
+            let first_raw: Option<String> = row.get(3)?;
+            let last_raw: Option<String> = row.get(6)?;
+            let raw = first_raw
+                .filter(|first| last_raw.as_deref().map(one_spaced) == Some(one_spaced(first)));
+            Ok(Convention {
+                text: convention_text(&annotation, carrier.as_deref(), raw.as_deref()),
+                annotation,
+                carrier,
+                siblings_with: row.get::<_, i64>(4)? as usize,
+                siblings: row.get::<_, i64>(5)? as usize,
+                target_has: row.get(7)?,
+            })
+        },
+    )?;
+    let mut conventions = rows.collect::<Result<Vec<_>, _>>()?;
+    conventions.sort_by(|a, b| {
+        a.target_has
+            .cmp(&b.target_has)
+            .then(b.siblings_with.cmp(&a.siblings_with))
+            .then_with(|| a.text.cmp(&b.text))
+    });
+    Ok(conventions)
+}
+
+fn one_spaced(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn convention_text(annotation: &str, carrier: Option<&str>, raw: Option<&str>) -> String {
+    if let Some(carrier) = carrier {
+        return format!("{carrier}({annotation})");
+    }
+    match raw.map(one_spaced).filter(|raw| !raw.is_empty()) {
+        Some(raw) if raw.chars().count() > CONVENTION_TEXT_CHARS => {
+            let cut: String = raw.chars().take(CONVENTION_TEXT_CHARS).collect();
+            format!("{cut}…")
+        }
+        Some(raw) => raw,
+        None => annotation.to_string(),
+    }
 }
 
 /// The workspace type definitions bound by the type facts of `target` and its direct members.

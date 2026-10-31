@@ -30,7 +30,7 @@ When a task needs one signature or implementation, a file outline or symbol body
 1. **Repository Orientation (`file_skeleton` on a folder):** Understand directory structures and key exports in a few hundred tokens.
 2. **File Skeletons (`file_skeleton`):** Inspect function signatures, types, traits, and docstrings with implementation bodies stripped.
 3. **Symbol Lookup & Discovery (`lookup_symbol`):** Instant exact/prefix identifier lookups. A query that names no symbol exactly also gets ranked conceptual matches over names, signatures, and docstrings; substrings inside identifiers are found (`sha256` finds `parseSha256Sidecar`).
-4. **One-Call Edit Context (`get_symbol_context`):** In a single turn, fetch a target function's body and return type, a summary of its callers with evidence labels, the tests to run with their commands, its callee signatures, its parameter types, and the open ends of a short impact walk.
+4. **One-Call Edit Context (`get_symbol_context`):** In a single turn, fetch a target function's body and return type, a summary of its callers with evidence labels, the tests to run with their commands, the markers its sibling symbols share, its callee signatures, its parameter types, and the open ends of a short impact walk.
 5. **Fresh Indexes:** Filesystem edits automatically refresh indexed files, and target body and skeleton reads refresh their file before answering.
 
 ---
