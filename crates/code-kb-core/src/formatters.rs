@@ -545,6 +545,52 @@ fn is_skeleton_row_shown(sym: &Symbol, parent: Option<&Symbol>) -> bool {
     is_shown(sym, parent) || is_structural_inline_child(sym, parent)
 }
 
+/// The rows of a public skeleton and how many rows of the full skeleton it hides: a row whose
+/// visibility is in [`crate::queries::HIDDEN_VISIBILITIES`] goes, with every row below it.
+pub fn public_surface(symbols: &[Symbol]) -> (Vec<Symbol>, usize) {
+    let by_id: HashMap<&str, &Symbol> = symbols.iter().map(|s| (s.symbol_id.as_str(), s)).collect();
+    let parent_of = |sym: &Symbol| {
+        sym.parent_symbol_id
+            .as_deref()
+            .and_then(|id| by_id.get(id).copied())
+    };
+    let hidden = |sym: &Symbol| {
+        let mut row = Some(sym);
+        let mut steps = 0;
+        while let Some(current) = row {
+            if crate::queries::is_hidden_visibility(current.visibility.as_deref()) {
+                return true;
+            }
+            steps += 1;
+            if steps > symbols.len() {
+                return false;
+            }
+            row = parent_of(current);
+        }
+        false
+    };
+    let mut kept = Vec::new();
+    let mut hidden_rows = 0;
+    for sym in symbols {
+        if !hidden(sym) {
+            kept.push(sym.clone());
+        } else if is_skeleton_row_shown(sym, parent_of(sym)) {
+            hidden_rows += 1;
+        }
+    }
+    (kept, hidden_rows)
+}
+
+/// The line under a public skeleton's file header, or the whole body when no row is public.
+pub fn public_surface_note(hidden_rows: usize, any_public: bool) -> String {
+    let rows = format!("{hidden_rows} private {}", plural(hidden_rows, "row"));
+    if any_public {
+        format!("// Public surface: {rows} hidden.\n\n")
+    } else {
+        format!("// No public rows: {rows} hidden.\n")
+    }
+}
+
 /// `; defines `a`, `b`` for the functions and classes declared inside a hidden body, so a view
 /// or wrapper defined in a factory stays visible. Lambdas are left out.
 /// C and C++ cannot define a function inside a function, so such a row comes from a macro the
@@ -748,6 +794,8 @@ pub struct OutlineFile {
     pub definitions: usize,
     pub tests: usize,
     pub fixtures: usize,
+    /// Top-level definitions that a public outline hides.
+    pub private: usize,
 }
 
 impl OutlineFile {
@@ -759,6 +807,9 @@ impl OutlineFile {
             (0, count) => tags.push(format!("{count} {}", plural(count, "definition"))),
             (shown, count) if count > shown => tags.push(format!("+{} more", count - shown)),
             _ => {}
+        }
+        if self.private > 0 {
+            tags.push(format!("{} private", self.private));
         }
         if self.tests > 0 {
             tags.push(format!("{} {}", self.tests, plural(self.tests, "test")));
@@ -899,8 +950,9 @@ pub fn add_path_to_outline(
                     names,
                     tests: count.tests,
                     fixtures: count.fixtures,
+                    private: count.private,
                 };
-                if file.definitions + file.tests + file.fixtures == 0 {
+                if file.definitions + file.tests + file.fixtures + file.private == 0 {
                     curr.plain_files.push(comp.to_string());
                 } else {
                     curr.files.insert(comp.to_string(), file);
@@ -1335,6 +1387,19 @@ fn caller_text(site: &ReferenceSite) -> String {
 
 const FOLD_FILES_NAMED: usize = 5;
 
+/// One line for languages whose julie capability table records no reference sites, so an answer
+/// does not read as a complete list of uses in their files.
+pub fn coverage_gap_line(gap: Option<&crate::models::CoverageGap>) -> String {
+    let Some(gap) = gap.filter(|gap| !gap.languages.is_empty()) else {
+        return String::new();
+    };
+    format!(
+        "Coverage: the index records no reference sites in {} files (julie: {} exception), so this answer lists no site inside them.\n",
+        gap.languages.join(" and "),
+        gap.capabilities.join(" and ")
+    )
+}
+
 /// The callers answer: three header lines, up to `limit` sites of each label, the reach sections,
 /// up to `limit` text-only lines, the blind spots of the index, and the import summary. Each
 /// section lists the rows of the first page window, so `offset = limit` continues every section.
@@ -1364,6 +1429,7 @@ pub fn format_reference_report(report: &ReferenceReport, limit: usize) -> String
             scan.files_total
         ));
     }
+    out.push_str(&coverage_gap_line(report.coverage_gap.as_ref()));
 
     let mut body = site_groups(&report.sites, limit);
     body.push_str(&override_sections(report, limit));
@@ -1426,6 +1492,7 @@ pub fn format_reference_report_page(
             scan.files_total
         ));
     }
+    out.push_str(&coverage_gap_line(report.coverage_gap.as_ref()));
 
     let mut body = site_groups_page(&report.sites, limit, offset);
     body.push_str(&override_sections_page(report, limit, offset));
@@ -2200,6 +2267,42 @@ pub fn format_find_symbol_results(
     }
     if out.is_empty() {
         out.push_str(&format!("No symbols found matching \"{query}\".\n"));
+    }
+    out
+}
+
+/// The routes and configuration keys a lookup names: one row each, as
+/// ``- route `GET /users/{id}` (path:line) -> handler`` or ``- config `a.b.c` (path:line)``.
+pub fn format_lookup_facts(
+    query: &str,
+    facts: &[crate::models::LookupFact],
+    found: usize,
+) -> String {
+    let routes = facts.iter().filter(|fact| fact.kind == "route").count();
+    let keys = facts.len() - routes;
+    let mut parts = Vec::new();
+    if routes > 0 {
+        parts.push(format!("{routes} {}", plural(routes, "route")));
+    }
+    if keys > 0 {
+        parts.push(format!("{keys} config {}", plural(keys, "key")));
+    }
+    let mut out = format!("Found {} matching \"{query}\":\n\n", parts.join(" and "));
+    for fact in facts {
+        out.push_str(&format!(
+            "- {} `{}` ({}:{})",
+            fact.kind, fact.key, fact.path, fact.line
+        ));
+        if let Some(handler) = &fact.handler {
+            out.push_str(&format!(" -> {handler}"));
+        }
+        out.push('\n');
+    }
+    if found > facts.len() {
+        out.push_str(&format!(
+            "[Showing {} of {found} routes and config keys; narrow the path or raise limit.]\n",
+            facts.len()
+        ));
     }
     out
 }
@@ -3039,6 +3142,11 @@ fn format_blast_radius_with_page(
     };
 
     out.push_str(&format!("## Blast Radius & Test Impact ({seed_label})\n\n"));
+    let coverage = coverage_gap_line(result.coverage_gap.as_ref());
+    if !coverage.is_empty() {
+        out.push_str(&coverage);
+        out.push('\n');
+    }
     if paged {
         out.push_str(&format!(
             "Page offset {offset}, limit {limit}; each section pages independently. Restart at offset 0 after an index change.\n\n"
@@ -4155,6 +4263,7 @@ mod tests {
                 definitions: 3,
                 tests: 90,
                 fixtures: 2,
+                private: 0,
             },
         )]);
         add_path_to_outline(&mut root, "tests/test_basic.py", &symbols, &counts, 3, "");
@@ -4454,6 +4563,7 @@ mod tests {
             report_symbols_unchecked: None,
             report_symbols_failed: None,
             report_sites_unchecked: None,
+            coverage_gap: None,
         };
 
         let formatted = format_blast_radius(&res);
@@ -4486,6 +4596,7 @@ mod tests {
             report_symbols_unchecked: None,
             report_symbols_failed: None,
             report_sites_unchecked: None,
+            coverage_gap: None,
         }
     }
 
@@ -4645,6 +4756,7 @@ mod tests {
             report_symbols_unchecked: None,
             report_symbols_failed: None,
             report_sites_unchecked: None,
+            coverage_gap: None,
         };
 
         let formatted = format_blast_radius(&res);
@@ -4979,6 +5091,7 @@ mod tests {
             report_symbols_unchecked: None,
             report_symbols_failed: None,
             report_sites_unchecked: None,
+            coverage_gap: None,
         };
 
         let formatted = format_blast_radius(&res);
@@ -5007,6 +5120,7 @@ mod tests {
             report_symbols_unchecked: None,
             report_symbols_failed: None,
             report_sites_unchecked: None,
+            coverage_gap: None,
         };
 
         let formatted = format_blast_radius(&res);
@@ -5080,6 +5194,7 @@ mod tests {
             report_symbols_unchecked: None,
             report_symbols_failed: None,
             report_sites_unchecked: None,
+            coverage_gap: None,
         };
         let formatted = format_blast_radius(&unresolved_only);
         assert!(!formatted.contains("No downstream callers"), "{formatted}");
@@ -5753,6 +5868,7 @@ mod tests {
             variant_uses: Vec::new(),
             registrations: Vec::new(),
             tests: Vec::new(),
+            coverage_gap: None,
         }
     }
 

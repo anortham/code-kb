@@ -94,6 +94,12 @@ pub struct SymbolLookup {
     /// The text for a query that finds nothing: the bound workspace and close names.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub miss: Option<String>,
+    /// Routes and configuration keys that a query with `/`, `.`, `{`, or `:` names.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub facts: Vec<crate::models::LookupFact>,
+    /// How many routes and keys matched before `limit` cut `facts`.
+    #[serde(skip)]
+    pub facts_found: usize,
 }
 
 /// Looks up `query` by name. A plain query that no row names exactly also gets the ranked search,
@@ -107,8 +113,22 @@ pub fn lookup_symbols_op(
     include_tests: bool,
     limit: usize,
 ) -> Result<SymbolLookup, OpError> {
-    let names =
-        queries::search_symbols_scoped(conn, query, kind, path_filter, include_tests, limit)?;
+    let (facts, facts_found) = if limit == 0 {
+        (Vec::new(), 0)
+    } else {
+        queries::lookup_facts(conn, query, kind, path_filter, include_tests, limit)?
+    };
+    let names = match queries::search_symbols_scoped(
+        conn,
+        query,
+        kind,
+        path_filter,
+        include_tests,
+        limit,
+    ) {
+        Err(QueryError::AmbiguousSymbol(..)) if !facts.is_empty() => Vec::new(),
+        names => names?,
+    };
     let plain = !query.contains('.') && !query.contains("::");
     let has_query_name = |symbol: &Symbol| symbol.name.eq_ignore_ascii_case(query);
     let named_exactly = names.iter().any(has_query_name);
@@ -126,7 +146,7 @@ pub fn lookup_symbols_op(
         ranked.retain(|hit| names.iter().all(|s| s.symbol_id != hit.symbol.symbol_id));
         ranked.truncate(limit);
     }
-    let found_nothing = names.is_empty() && ranked.is_empty();
+    let found_nothing = names.is_empty() && ranked.is_empty() && facts.is_empty();
     let one_word = !query.chars().any(char::is_whitespace);
     let shows_query_name = named_exactly || ranked.iter().any(|hit| has_query_name(&hit.symbol));
     let kind = kind.map(queries::normalize_kind);
@@ -162,12 +182,20 @@ pub fn lookup_symbols_op(
         let workspace = queries::workspace_name(conn);
         format!("No symbols found matching \"{query}\" in {workspace}. {hint}\n")
     });
+    let mut names = names;
+    names.retain(|symbol| {
+        !facts.iter().any(|fact| {
+            fact.kind == "config" && fact.path == symbol.path && fact.line == symbol.start_line
+        })
+    });
     Ok(SymbolLookup {
         names,
         ranked,
         suggestions: suggestions.symbols,
         suggestion_hint: suggestion_hint.filter(|_| miss.is_none()),
         miss,
+        facts,
+        facts_found,
     })
 }
 
@@ -189,14 +217,23 @@ pub fn render_symbol_lookup(
             .iter_mut()
             .chain(ranked.iter_mut().map(|hit| &mut hit.symbol)),
     )?;
-    let Some(hint) = &lookup.suggestion_hint else {
+    if lookup.facts.is_empty() && lookup.suggestion_hint.is_none() {
         return Ok(format_find_symbol_results(query, &names, &ranked, limit));
-    };
+    }
     let mut sections = Vec::new();
     if !names.is_empty() {
         sections.push(format_find_symbol_results(query, &names, &[], limit));
     }
-    sections.push(format!("{hint}\n"));
+    if !lookup.facts.is_empty() {
+        sections.push(crate::formatters::format_lookup_facts(
+            query,
+            &lookup.facts,
+            lookup.facts_found,
+        ));
+    }
+    if let Some(hint) = &lookup.suggestion_hint {
+        sections.push(format!("{hint}\n"));
+    }
     if !ranked.is_empty() {
         sections.push(format_find_symbol_results(query, &[], &ranked, limit));
     }
@@ -639,12 +676,24 @@ pub fn file_skeleton_op(
     conn: &Connection,
     file_path: &str,
 ) -> Result<String, OpError> {
+    file_skeleton_op_with(workspace, db_path, conn, file_path, false)
+}
+
+/// [`file_skeleton_op`]; with `public_only` the skeleton or folder outline leaves out private,
+/// protected, and fileprivate rows and says how many it hid.
+pub fn file_skeleton_op_with(
+    workspace: &Workspace,
+    db_path: &Path,
+    conn: &Connection,
+    file_path: &str,
+    public_only: bool,
+) -> Result<String, OpError> {
     let (effective_abs, rel_path) = workspace.resolve_path(Path::new(file_path))?;
     if !effective_abs.exists() {
         return Err(file_not_found(conn, &rel_path));
     }
     if effective_abs.is_dir() {
-        return codebase_outline_op(workspace, conn, 2, Some(&rel_path));
+        return codebase_outline_op_with(workspace, conn, 2, Some(&rel_path), public_only);
     }
     sync::ensure_fresh_file(workspace, db_path, conn, &rel_path)?;
 
@@ -672,12 +721,27 @@ pub fn file_skeleton_op(
     }
     let line_count = file_meta.and_then(|m| m.line_count.map(|l| l as usize));
     let parse_errors = queries::count_parse_diagnostics(conn, &rel_path);
-
-    Ok(format_file_skeleton(
-        &rel_path,
-        &symbols,
-        line_count,
-        parse_errors,
+    if !public_only || symbols.is_empty() {
+        return Ok(format_file_skeleton(
+            &rel_path,
+            &symbols,
+            line_count,
+            parse_errors,
+        ));
+    }
+    let (public, hidden_rows) = crate::formatters::public_surface(&symbols);
+    let text = format_file_skeleton(&rel_path, &public, line_count, parse_errors);
+    let header_end = text.find("\n\n").map_or(text.len(), |at| at + 2);
+    let (header, body) = text.split_at(header_end);
+    if public.is_empty() && !symbols.is_empty() {
+        return Ok(format!(
+            "{header}{}",
+            crate::formatters::public_surface_note(hidden_rows, false)
+        ));
+    }
+    Ok(format!(
+        "{header}{}{body}",
+        crate::formatters::public_surface_note(hidden_rows, true)
     ))
 }
 
@@ -709,14 +773,26 @@ pub fn codebase_outline_op(
     depth: usize,
     path_filter: Option<&str>,
 ) -> Result<String, OpError> {
+    codebase_outline_op_with(workspace, conn, depth, path_filter, false)
+}
+
+/// [`codebase_outline_op`]; with `public_only` each file names only the definitions a public
+/// outline shows and counts the others as `N private`.
+pub fn codebase_outline_op_with(
+    workspace: &Workspace,
+    conn: &Connection,
+    depth: usize,
+    path_filter: Option<&str>,
+    public_only: bool,
+) -> Result<String, OpError> {
     let rel_filter = path_filter.map(|p| workspace.relativize_filter(p));
     let path_filter = rel_filter.as_deref().filter(|path| !path.is_empty());
     let norm = path_filter
         .map(|p| p.replace('\\', "/").trim_matches('/').to_string())
         .filter(|p| !p.is_empty());
     let scope = queries::OutlineScope::new(path_filter, depth);
-    let symbols_by_file = queries::load_scoped_outline_symbols(conn, path_filter, depth, 5)?;
-    let counts = queries::load_outline_counts(conn, path_filter, depth)?;
+    let symbols_by_file = queries::load_outline_symbols(conn, path_filter, depth, 5, public_only)?;
+    let counts = queries::load_outline_counts_with(conn, path_filter, depth, public_only)?;
 
     let mut root_node = OutlineNode::default();
     let norm_filter = norm.as_deref().unwrap_or_default();
@@ -976,7 +1052,8 @@ fn discover_blast_radius(
             include_low_signal,
         )?;
         let depth = if max_depth == 0 { 2 } else { max_depth.min(5) };
-        return with_calling_tests(
+        let language = selected.language.clone();
+        let res = with_calling_tests(
             workspace,
             conn,
             Some(selected),
@@ -984,7 +1061,8 @@ fn discover_blast_radius(
             depth,
             limit,
             include_low_signal,
-        );
+        )?;
+        return Ok(with_coverage_gap(conn, res, &[language]));
     }
     let _snapshot = crate::db::read_snapshot(conn).map_err(QueryError::from)?;
     let symbol = selector.as_ref().and_then(|selector| match selector {
@@ -1008,7 +1086,9 @@ fn discover_blast_radius(
     let (symbol, symbol_path_filter) = match (clean_symbol, clean_file) {
         (Some(s), f) => (s, f),
         (None, Some(f)) => {
-            return file_blast_radius(workspace, conn, &f, depth, limit, include_low_signal);
+            let res = file_blast_radius(workspace, conn, &f, depth, limit, include_low_signal)?;
+            let languages = queries::languages_under(conn, &[f.as_str()])?;
+            return Ok(with_coverage_gap(conn, res, &languages));
         }
         (None, None) => {
             let mut changes = edit_check::uncommitted_changes(&workspace.root)?;
@@ -1021,7 +1101,9 @@ fn discover_blast_radius(
                 include_low_signal,
             )?;
             let targets = queries::diff_targets(conn, &changes)?;
-            return with_report_tests(
+            let paths: Vec<&str> = changes.keys().map(String::as_str).collect();
+            let languages = queries::languages_under(conn, &paths)?;
+            let res = with_report_tests(
                 workspace,
                 conn,
                 targets,
@@ -1030,7 +1112,8 @@ fn discover_blast_radius(
                 depth,
                 limit,
                 include_low_signal,
-            );
+            )?;
+            return Ok(with_coverage_gap(conn, res, &languages));
         }
     };
 
@@ -1045,7 +1128,8 @@ fn discover_blast_radius(
         include_low_signal,
     )?;
     let target = select_reference_target(conn, symbol, symbol_path_filter.as_deref()).ok();
-    with_calling_tests(
+    let languages: Vec<String> = target.iter().map(|t| t.language.clone()).collect();
+    let res = with_calling_tests(
         workspace,
         conn,
         target,
@@ -1053,7 +1137,19 @@ fn discover_blast_radius(
         depth,
         limit,
         include_low_signal,
-    )
+    )?;
+    Ok(with_coverage_gap(conn, res, &languages))
+}
+
+/// Records the target languages that hold no reference sites, so the answer says so.
+fn with_coverage_gap(
+    conn: &Connection,
+    mut res: BlastRadiusResult,
+    languages: &[String],
+) -> BlastRadiusResult {
+    let languages: Vec<&str> = languages.iter().map(String::as_str).collect();
+    res.coverage_gap = queries::coverage_gap(conn, &languages);
+    res
 }
 
 /// How long the callers reports of a file target's symbols may run, from the start of the

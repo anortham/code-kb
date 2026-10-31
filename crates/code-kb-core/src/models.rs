@@ -259,6 +259,9 @@ pub struct ReferenceReport {
     /// Tests with a proven or likely site of the target, each with the command that runs it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tests: Vec<CallingTest>,
+    /// The target's language records no reference sites, so sites inside its files are missing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coverage_gap: Option<CoverageGap>,
 }
 
 pub(crate) fn has_generated_lambda_name(name: &str) -> bool {
@@ -339,6 +342,29 @@ fn created_type(head: &str) -> Option<&str> {
         .next()
         .filter(|segment| segment.starts_with(|c: char| c.is_alphabetic() || c == '_'))?;
     Some(segment)
+}
+
+/// A route or configuration key that a `lookup_symbol` query names: `kind` is `route` or
+/// `config`, `key` is the route as its source spells it with its verb, or the dotted key path.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct LookupFact {
+    pub kind: String,
+    pub key: String,
+    pub path: String,
+    pub line: usize,
+    /// The function or controller action that serves a route, when the fact names one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub handler: Option<String>,
+    pub pattern_id: String,
+}
+
+/// Languages whose julie capability table records an `exception` for reference identifiers or
+/// pending relationships, so the index holds no reference sites inside their files.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct CoverageGap {
+    pub languages: Vec<String>,
+    /// The capabilities with the exception, of `identifiers` and `pending_relationships`.
+    pub capabilities: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -477,6 +503,10 @@ pub struct BlastRadiusResult {
     /// missing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub report_sites_unchecked: Option<usize>,
+    /// Languages of the target that record no reference sites, so callers inside their files
+    /// are missing from the walk.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coverage_gap: Option<CoverageGap>,
 }
 
 /// A symbol where the walk stopped because the index shows no caller of it, such as a method

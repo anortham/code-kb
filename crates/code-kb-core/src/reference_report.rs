@@ -362,6 +362,7 @@ fn report_with(
         variant_uses: reach.variant_uses,
         registrations: reach.registrations,
         tests: reach.tests,
+        coverage_gap: crate::queries::coverage_gap(conn, &[target.language.as_str()]),
     };
     Ok(report)
 }
