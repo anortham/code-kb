@@ -4,7 +4,7 @@
       "_meta": {
         "anthropic/alwaysLoad": true
       },
-      "description": "A file's types, functions, signatures, and docstrings with bodies stripped. Call this before you read a source file with Read, cat, or sed, then fetch the symbols you need with get_symbol_body; read the whole file only when you will change most of it. A directory returns its outline.",
+      "description": "A file's types, functions, signatures, and docstrings with bodies stripped. Call this on a folder or a file you do not know; a directory returns its outline. Read the file you will edit, since the editor needs it.",
       "inputSchema": {
         "properties": {
           "file_path": {

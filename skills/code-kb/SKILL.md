@@ -8,9 +8,9 @@ description: Navigates code with the code-kb MCP server (symbol lookup, concept 
 code-kb indexes symbol names, signatures, and docstrings, not file contents. Use `rg` for
 literal text: string literals, error messages, comments, and config values.
 
-Before you `Read`, `cat`, or `sed -n` a source file, call `file_skeleton` on it, then
-`get_symbol_body` or `get_symbol_context` for the symbols you need. Read a whole source file
-only when you will change most of it. Find a definition or its uses with `lookup_symbol` or
+Call `file_skeleton` on a folder or a file you do not know. Before you change a symbol, call
+`get_symbol_context` for its body, callers, tests to run, and types. Read the file you will
+edit, since the editor needs it. Find a definition or its uses with `lookup_symbol` or
 `find_references`, not `rg` on the name.
 
 ## `project_root`
@@ -33,7 +33,7 @@ A project with no index gets one on the first call. If the answer is
 | A file's interface, bodies stripped; a folder returns its layout and main exports | `file_skeleton(file_path)` | `code-kb skeleton <file>`; `code-kb outline [--path <p>]` for a folder |
 | A symbol by name or prefix, or code by concept (`"retry backoff"`); a query that names no symbol exactly also gets ranked matches | `lookup_symbol(query, path?)` | `code-kb lookup <query> [--path <p>]` |
 | One symbol's implementation | `get_symbol_body(symbol_name, file_path?)` | `code-kb body <symbol> [--file <f>]` |
-| Body, callee signatures, parameter types, and tests before an edit | `get_symbol_context(symbol_name, file_path?)` | `code-kb context <symbol> [--file <f>]` |
+| Before an edit: body, callers, tests to run, callees, and types | `get_symbol_context(symbol_name, file_path?)` | `code-kb context <symbol> [--file <f>]` |
 | Every site a change must reach: callers, overrides, constructions, enum variant uses, registrations, and the calling tests with run commands; or callees with `direction="callees"` | `find_references(symbol_name, file_path?)` | `code-kb refs <symbol> [--direction callees]` |
 | What a change affects and which tests to run | `blast_radius(symbol=...)`, `blast_radius(file=...)`, or `blast_radius()` for uncommitted changes | `code-kb blast-radius [target] [--file <f>]` |
 | After you edit: the symbols whose shape changed (removed, renamed, parameters, signature, fields, enum variants) and the sites your diff did not reach | `check_edit(base?)` | `code-kb check [--base REV]` |

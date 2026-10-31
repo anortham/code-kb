@@ -70,6 +70,10 @@ disclosure skill, a `/code-kb:code-kb-telemetry` command for usage and token-sav
 SubagentStart hooks that inject routing instructions, and Stop and SubagentStop hooks that run the
 edit check (see [After you edit](#after-you-edit-check_edit-and-the-stop-hooks)).
 
+The routing instructions tell the agent to call `file_skeleton` on a folder or a file it does
+not know, to call `get_symbol_context` before it changes a symbol, and to `Read` the file it
+will edit, since the editor needs that read.
+
 ### Codex
 
 ```bash
