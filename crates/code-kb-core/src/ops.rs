@@ -869,6 +869,7 @@ fn context_slice_within(
     let return_type = queries::find_unspelled_return_type(conn, &target_symbol)?;
     let related_types = queries::find_related_types(conn, &target_symbol, 10)?;
     let related_tests = queries::find_related_tests(conn, &target_symbol, 5)?;
+    let conventions = queries::find_sibling_conventions(conn, &target_symbol)?;
     let report = reference_report_for_impact_within(
         conn,
         &workspace.root,
@@ -890,6 +891,7 @@ fn context_slice_within(
         callers,
         tests,
         open_ends,
+        conventions,
     })
 }
 
@@ -2829,6 +2831,7 @@ mod tests {
             }),
             tests: Vec::new(),
             open_ends: Vec::new(),
+            conventions: Vec::new(),
         };
 
         let fitted = fit_context_slices_to_budget(&conn, vec![slice]).unwrap();
