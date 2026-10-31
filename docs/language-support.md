@@ -298,6 +298,26 @@ key lists those definitions as name rows instead of the `Ambiguous symbol` error
 A plain word adds no
 row, so the ranked search does not change.
 
+## Read and write sites
+
+julie 3.11.0 writes `access` (`write`, `read_write`, or `read`) on variable-reference and
+member-access identifiers; calls and type uses carry none. The callers report of a field,
+property, variable, constant, attribute, or enum member lists writes first in each label and
+counts them on the `Sites:` line; `get_symbol_context` and `check_edit` use the same order
+(CLAUDE.md, Callers report; `docs/edit-check.md`, Read and write sites).
+
+| Capability | Languages | Not applicable | Known gaps |
+| --- | --- | --- | --- |
+| Read and write sites | Rust, C, C++, Go, Zig, TypeScript, TSX, JavaScript, JSX, HTML, Vue, Python, Java, C#, VB.NET, PHP, Ruby, Swift, Kotlin, Scala, Dart, Elixir, F#, Erlang, Lua, QML, R, Bash, PowerShell, GDScript, Razor, SQL, XML (julie `identifier_metadata`: `identifiers.access`) | CSS, `go.mod`, `go.sum`, `qmldir`, regex, Markdown, JSON, TOML, YAML | A plain assignment that julie records as a declaration has no identifier, so it is no write site: a Python `global` assignment (`LIMIT = LIMIT + 1` shows only the read), a Bash or PowerShell top-level assignment, and a first Ruby `@ivar =`. A Java `total++` is a `write`, not a `read_write`. |
+
+Real-extraction regressions: `crates/code-kb-core/tests/access_split_test.rs` (a field with a
+write, a compound write, a line that writes and reads, and a read in another file, in Python,
+TypeScript, Java, C#, Go, and Rust; a method target keeps its old report; paging and
+`get_symbol_context`), `edit_check_fields_test.rs` (a removed Go field lists its writes first),
+and `cli_test.rs` (`refs --json`). A probe of Kotlin, Ruby, PHP, Swift, C, C++, Scala, Dart, Lua,
+JavaScript, Zig, GDScript, VB.NET, Bash, PowerShell, R, Elixir, and F# found the fact on member and
+variable writes and reads, with the gaps above.
+
 ## Languages with no reference sites
 
 julie's `language_capability_gaps` table records an `exception` for

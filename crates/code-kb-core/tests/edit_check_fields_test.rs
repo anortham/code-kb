@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use code_kb_core::SiteAccess;
 use code_kb_core::db::open_read_only;
 use code_kb_core::formatters::format_edit_check;
 use code_kb_core::ops::edit_check_op;
@@ -701,4 +702,49 @@ fn a_removed_python_instance_attribute_read_through_self_is_proven() {
     let text = format_edit_check(&check);
     let auth = field_change(&check, "tests/conftest.py");
     assert!(proven_site(auth, "tests/conftest.py", 6), "{text}");
+}
+
+#[test]
+fn a_removed_go_field_lists_its_writes_first_among_the_sites_outside_the_diff() {
+    let repo = committed_repo(&[
+        ("go.mod", "module example.com/app\n\ngo 1.22\n"),
+        (
+            "model.go",
+            "package app\n\ntype Counter struct {\n\tTotal int\n}\n\nfunc (c *Counter) Bump() {\n\tc.Total += 1\n}\n",
+        ),
+        (
+            "use.go",
+            "package app\n\nfunc Show(c *Counter) int {\n\treturn c.Total\n}\n\nfunc Step(c *Counter) {\n\tc.Total = c.Total + 1\n}\n\nfunc Reset(c *Counter) {\n\tc.Total = 0\n}\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "model.go",
+        "package app\n\ntype Counter struct {\n\tCount int\n}\n\nfunc (c *Counter) Bump() {\n\tc.Total += 1\n}\n",
+    );
+
+    let check = check_of(&repo);
+    let text = format_edit_check(&check);
+    let change = field_change(&check, "model.go");
+    let rows: Vec<_> = change
+        .proven
+        .iter()
+        .map(|site| (site.path.as_str(), site.line, site.access))
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            ("use.go", 12, Some(SiteAccess::Write)),
+            ("model.go", 8, Some(SiteAccess::ReadWrite)),
+            ("use.go", 8, Some(SiteAccess::ReadWrite)),
+            ("use.go", 4, Some(SiteAccess::Read)),
+        ],
+        "{text}"
+    );
+    assert!(
+        text.contains(
+            "    Not in your diff, proven (4):\n      use.go:12  `Reset`  write\n      model.go:8  `Bump`  read-write\n"
+        ),
+        "{text}"
+    );
 }

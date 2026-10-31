@@ -3365,3 +3365,60 @@ fn text_answers_for_oversized_files_and_symbols_stay_within_the_output_budget() 
     let json_body = run_refs(root, &["--json", "body", "long_function"]);
     assert!(json_body.contains("step 2999 of the long loop body"));
 }
+
+#[test]
+fn cli_refs_json_tags_each_site_of_a_field_with_its_access() {
+    let repo = code_kb_core::safe_tempdir();
+    let root = repo.path();
+    for (path, source) in [
+        (
+            "model.py",
+            "class Counter:\n    def __init__(self):\n        self.total = 0\n\n    def bump(self):\n        self.total += 1\n",
+        ),
+        (
+            "use.py",
+            "from model import Counter\n\n\ndef reset(c: Counter):\n    c.total = 0\n\n\ndef show(c: Counter):\n    return c.total\n",
+        ),
+        ("pyproject.toml", "[project]\nname = 'counter'\n"),
+    ] {
+        std::fs::write(root.join(path), source).unwrap();
+    }
+
+    let raw = run_refs(root, &["--json", "refs", "total", "--path", "model.py"]);
+    let helper_raw = {
+        let repo = three_caller_repo();
+        run_refs(repo.path(), &["--json", "refs", "helper"])
+    };
+
+    let report: serde_json::Value = serde_json::from_str(&raw).unwrap();
+    assert_eq!(
+        report["access_counts"],
+        serde_json::json!({ "writes": 1, "read_writes": 1, "reads": 1, "unclassified": 0 }),
+        "{raw}"
+    );
+    let accesses: Vec<_> = report["sites"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|site| (site["start_line"].clone(), site["access"].clone()))
+        .collect();
+    assert_eq!(
+        accesses,
+        [
+            (serde_json::json!(5), serde_json::json!("write")),
+            (serde_json::json!(6), serde_json::json!("read_write")),
+            (serde_json::json!(9), serde_json::json!("read")),
+        ],
+        "{raw}"
+    );
+    let helper: serde_json::Value = serde_json::from_str(&helper_raw).unwrap();
+    assert!(helper.get("access_counts").is_none(), "{helper_raw}");
+    assert!(
+        helper["sites"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|site| site.get("access").is_none()),
+        "{helper_raw}"
+    );
+}

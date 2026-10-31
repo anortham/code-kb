@@ -218,7 +218,8 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   (immediate callee signatures, each with `; Returns: <type>` by the same rule), `### Types`,
   and `### Open Ends`. `### Callers` comes from `reference_report_for_impact` (the labels and the
   3 s limit of `find_references`, without the text scan): the `Sites:` line, then the first 8
-  `proven` and 8 `likely` sites grouped by label as `find_references` prints them, a fold line
+  `proven` and 8 `likely` sites grouped by label as `find_references` prints them (writes first,
+  with the access counts, for a field, property, variable, or constant), a fold line
   for the rest of each label, the count of sites not checked within the time limit, the
   `Not visible to this index:` line of `find_references`, and a line that names
   `find_references(symbol_id="…")` and `blast_radius(symbol_id="…")`. The overloads of one answer
@@ -229,7 +230,7 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   where `test_commands.rs` names one; it shows 10 and folds the rest. `### Open Ends` lists the
   first three open ends of the depth-2 `blast_radius` walk from the target, which reuses the same
   report, and leaves out a target with no site. Every query reads the one index snapshot of the answer. CLI `context --json` adds
-  `return_type`, `callers` (`counts`, `sites`, `unchecked`, `cannot_see`), `tests`, and `open_ends`.
+  `return_type`, `callers` (`counts`, `sites`, `unchecked`, `cannot_see`, and `access_counts` when the split applies), `tests`, and `open_ends`.
 - `file_skeleton` with `public_only` (CLI `skeleton --public-only`) hides each row whose julie
   `visibility` is `private`, `protected`, or `fileprivate` (`HIDDEN_VISIBILITIES` in `queries.rs`),
   with the rows below it, and keeps `public`, `open`, `internal` (Rust `pub(crate)`, Java package
@@ -428,6 +429,19 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   full path (Kotlin `import a.b.boxIfPrimitive`) counts for its last segment. Counts are always
   complete, `limit` caps only the listed rows, and CLI `--json` prints the whole report. Callees
   keep the plain list.
+  Read and write sites: julie 3.11.0 writes `access` (`write`, `read_write`, or `read`) on
+  variable-reference and member-access identifiers; pending calls, relationships, and other
+  identifiers carry none. A site takes the access of its identifier rows, and a merged row that
+  holds a write and a read is `read_write`. When the target is a field, property, variable,
+  constant, attribute, or enum member and a site has an access, each label lists writes, then
+  read-writes, then reads, then sites with no access (`split_by_access` in `reference_report.rs`,
+  before paging); a site shows `; write`, `; read-write`, or `; read` after its basis and argument
+  count; the `Sites:` line ends with ` · writes N, read-writes M, reads K, unclassified U`; and CLI
+  `--json` adds `access` on each such site and `access_counts`. Labels, bases, and counts do not
+  change, and any other target, or one with no access fact, prints no access. A declaration that
+  julie records as a symbol (a Python `global` assignment, a Bash or PowerShell top-level
+  assignment, a first Ruby `@ivar =`) has no identifier, so it is no write site;
+  `docs/language-support.md` (Read and write sites) lists the languages.
   Proof rules: a package import proves a site only when it reaches no other top-level definition
   of the name (`import * as z from "zod"` reaches every `boolean` in the package, so `z.boolean()`
   is unresolved). A module receiver never proves a class member, and a Python receiver chain that
@@ -743,7 +757,10 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   Required named parameters are checked before accepting an argument count where the language
   reader can establish binding. Missing names keep the site outside the diff; ambiguous source
   or a spread that could supply them stays unresolved. Removed indexed members include reads
-  tied to their owner. A callback value is an advisory dependency when the callable contract
+  tied to their owner. The `proven` and `likely` sites outside the diff of a removed or changed
+  field, property, variable, or constant list writes first, then read-writes, reads, and sites
+  with no access, each tagged `write`, `read-write`, or `read` after its caller; JSON adds
+  `access`. A callback value is an advisory dependency when the callable contract
   changes, since its invocation is unknown; a removed callable value can be a proven dangling
   reference. Competing overloads and receivers retain their uncertainty.
   The base symbols come from a `julie-extract scan` of the base content of the changed files into

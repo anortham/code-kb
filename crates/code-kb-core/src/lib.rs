@@ -40,11 +40,11 @@ pub use formatters::{
     format_symbol_bodies, format_symbol_body, no_facts_heading, stop_sites,
 };
 pub use models::{
-    BlastRadiusResult, CallersReportSites, CallingTest, ConstructionSite, ContextCallers,
-    ContextSlice, CoverageGap, FileFact, ImpactedSymbol, LabeledSite, LiteralFact, LookupFact,
-    OpenEnd, OverrideRow, ReferenceCounts, ReferenceReport, ReferenceSite, ReferenceTarget,
-    Registration, SearchExplain, SiteLabel, StructuralFact, Symbol, SymbolSearchResult, TestTarget,
-    TextOnlyLines, TextScanSummary, TypeFact, VariantUse,
+    AccessCounts, BlastRadiusResult, CallersReportSites, CallingTest, ConstructionSite,
+    ContextCallers, ContextSlice, CoverageGap, FileFact, ImpactedSymbol, LabeledSite, LiteralFact,
+    LookupFact, OpenEnd, OverrideRow, ReferenceCounts, ReferenceReport, ReferenceSite,
+    ReferenceTarget, Registration, SearchExplain, SiteAccess, SiteLabel, StructuralFact, Symbol,
+    SymbolSearchResult, TestTarget, TextOnlyLines, TextScanSummary, TypeFact, VariantUse,
 };
 pub use ops::{
     LOOKUP_BODY_CHARS, MAX_CONTEXT_OVERLOADS, OpError, SymbolLookup, SymbolSelector,

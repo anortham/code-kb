@@ -20,7 +20,7 @@ use crate::models::{
 use crate::queries::{self, QueryError};
 use crate::reference_report::{
     overload_group, reference_report_for_impact, reference_report_for_impact_within,
-    select_reference_target, tests_at, unchecked_site_count,
+    select_reference_target, split_by_access, tests_at, unchecked_site_count,
 };
 use crate::slicer::{self, SliceError};
 use crate::sync::{self, SyncError};
@@ -901,11 +901,12 @@ const CONTEXT_WALK_DEPTH: usize = 2;
 
 fn context_callers(report: &ReferenceReport) -> ContextCallers {
     let counts = &report.counts;
+    let mut ordered = report.sites.clone();
+    let access_counts = split_by_access(&report.target.kind, &mut ordered);
     let mut sites = Vec::new();
     for label in [SiteLabel::Proven, SiteLabel::Likely] {
         sites.extend(
-            report
-                .sites
+            ordered
                 .iter()
                 .filter(|site| site.label == label)
                 .take(CONTEXT_SITES_PER_LABEL)
@@ -923,6 +924,7 @@ fn context_callers(report: &ReferenceReport) -> ContextCallers {
         sites,
         unchecked: unchecked_site_count(report),
         cannot_see: report.cannot_see.clone(),
+        access_counts,
     }
 }
 
@@ -2809,6 +2811,7 @@ mod tests {
             basis: "import".into(),
             end_line: None,
             arg_count: None,
+            access: None,
         };
         let slice = ContextSlice {
             target_symbol: symbol,
@@ -2826,6 +2829,7 @@ mod tests {
                 sites: (1..=8).map(site).collect(),
                 unchecked: 0,
                 cannot_see: Vec::new(),
+                access_counts: None,
             }),
             tests: Vec::new(),
             open_ends: Vec::new(),
