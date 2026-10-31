@@ -3566,6 +3566,15 @@ fn get_symbol_by_name_internal(
     }
 }
 
+/// Every definition that a qualified `name` selects, the candidates of its `AmbiguousSymbol` error.
+pub fn qualified_name_candidates(
+    conn: &Connection,
+    name: &str,
+    path_filter: Option<&str>,
+) -> Result<Vec<Symbol>, QueryError> {
+    name_candidates(conn, name, path_filter, false)
+}
+
 fn ambiguous_symbol(name: &str, candidates: &[Symbol]) -> QueryError {
     QueryError::AmbiguousSymbol(
         name.to_string(),

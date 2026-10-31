@@ -1395,9 +1395,19 @@ pub fn coverage_gap_line(gap: Option<&crate::models::CoverageGap>) -> String {
     };
     format!(
         "Coverage: the index records no reference sites in {} files (julie: {} exception), so this answer lists no site inside them.\n",
-        gap.languages.join(" and "),
-        gap.capabilities.join(" and ")
+        series(&gap.languages),
+        series(&gap.capabilities)
     )
+}
+
+/// `a`, `a and b`, or `a, b, and c`.
+fn series(items: &[String]) -> String {
+    match items {
+        [] => String::new(),
+        [one] => one.clone(),
+        [first, second] => format!("{first} and {second}"),
+        [head @ .., last] => format!("{}, and {last}", head.join(", ")),
+    }
 }
 
 /// The callers answer: three header lines, up to `limit` sites of each label, the reach sections,

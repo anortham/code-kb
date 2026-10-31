@@ -263,7 +263,7 @@ for each language is julie's:
 | Java, C#, VB.NET, Kotlin, Scala, Swift, F#, PHP, C++, Razor | A `private`, `protected`, or Swift `fileprivate` modifier, or the language's default for a member with no modifier (C# and Razor members are private). |
 | Dart, GDScript, Lua, R | Dart, GDScript, and Lua names that start with `_`, a Lua `local`, and an R name that starts with `.` or a roxygen `@keywords internal`. |
 | C | A `static` declaration. |
-| Ruby, Elixir, Erlang, Zig, Bash, PowerShell | Ruby `private` and `protected` sections, Elixir `defp`, an Erlang function no `-export` names, a Zig declaration without `pub` or `export`, a nested Bash function, and a PowerShell `private:` scope. |
+| Ruby, Elixir, Erlang, Zig, Bash, PowerShell | Ruby `private` and `protected` sections, Elixir `defp`, an Erlang function no `-export` names, a Zig declaration without `pub` or `export`, a nested Bash function or a Bash variable without `export`, and a PowerShell `private:` function, a variable without `global:` scope, a `hidden` class member, or a function that a module manifest does not export. |
 | JSON, YAML, TOML, Markdown, and other data and document languages | None: julie records no visibility, so every row stays. |
 
 `data_fills_test.rs` checks Rust, Python, TypeScript, and a Rust folder outline
@@ -292,7 +292,10 @@ and `config` families of `CATEGORY_ALIASES`:
 
 Exact matches come first. The rows follow the `path` filter, hide test paths
 unless `is_test` is true, and follow a `kind` of `route` or `config`; any other
-`kind` hides them. CLI `lookup --json` adds them as `facts`. A plain word adds no
+`kind` hides them. CLI `lookup --json` adds them as `facts`, and `facts_found` when
+`limit` cut them. A qualified query that names several definitions and a route or
+key lists those definitions as name rows instead of the `Ambiguous symbol` error.
+A plain word adds no
 row, so the ranked search does not change.
 
 ## Languages with no reference sites

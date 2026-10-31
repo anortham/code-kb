@@ -403,7 +403,7 @@ impl McpServer {
                         },
                         "public_only": {
                             "type": "boolean",
-                            "description": "Hide private and protected rows and count them (default: false)."
+                            "description": "Hide private, protected, and fileprivate rows and count them (default: false)."
                         }
                     },
                     "required": ["file_path"]

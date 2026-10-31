@@ -97,9 +97,9 @@ pub struct SymbolLookup {
     /// Routes and configuration keys that a query with `/`, `.`, `{`, or `:` names.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub facts: Vec<crate::models::LookupFact>,
-    /// How many routes and keys matched before `limit` cut `facts`.
-    #[serde(skip)]
-    pub facts_found: usize,
+    /// How many routes and keys matched, set only when `limit` cut `facts`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub facts_found: Option<usize>,
 }
 
 /// Looks up `query` by name. A plain query that no row names exactly also gets the ranked search,
@@ -126,7 +126,17 @@ pub fn lookup_symbols_op(
         include_tests,
         limit,
     ) {
-        Err(QueryError::AmbiguousSymbol(..)) if !facts.is_empty() => Vec::new(),
+        Err(QueryError::AmbiguousSymbol(..)) if !facts.is_empty() => {
+            let kind = kind.map(queries::normalize_kind);
+            let mut candidates = queries::qualified_name_candidates(conn, query, path_filter)?;
+            candidates.retain(|symbol| {
+                kind.as_deref().is_none_or(|kind| {
+                    symbol.kind == kind || crate::formatters::display_kind(symbol) == kind
+                })
+            });
+            candidates.truncate(limit);
+            candidates
+        }
         names => names?,
     };
     let plain = !query.contains('.') && !query.contains("::");
@@ -194,8 +204,8 @@ pub fn lookup_symbols_op(
         suggestions: suggestions.symbols,
         suggestion_hint: suggestion_hint.filter(|_| miss.is_none()),
         miss,
+        facts_found: (facts_found > facts.len()).then_some(facts_found),
         facts,
-        facts_found,
     })
 }
 
@@ -228,7 +238,7 @@ pub fn render_symbol_lookup(
         sections.push(crate::formatters::format_lookup_facts(
             query,
             &lookup.facts,
-            lookup.facts_found,
+            lookup.facts_found.unwrap_or(lookup.facts.len()),
         ));
     }
     if let Some(hint) = &lookup.suggestion_hint {

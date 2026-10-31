@@ -324,3 +324,55 @@ fn a_blast_radius_of_a_json_key_says_the_index_records_no_sites_in_json() {
     }
     assert!(!python.contains("Coverage:"), "{python}");
 }
+
+#[test]
+fn a_qualified_lookup_lists_ambiguous_definitions_beside_the_keys_it_names() {
+    let repo = scanned_repo(&[
+        ("config.toml", "[server]\nport = 1\n"),
+        ("src/a.rs", "pub struct Server {\n    pub port: u16,\n}\n"),
+        ("src/b.rs", "pub struct Server {\n    pub port: u16,\n}\n"),
+    ]);
+
+    let (lookup, text) = repo.lookup("Server.port");
+
+    let paths: Vec<_> = lookup.names.iter().map(|s| s.path.as_str()).collect();
+    assert_eq!(paths, ["src/a.rs", "src/b.rs"], "{text}");
+    assert!(
+        text.contains("- config `server.port` (config.toml:2)\n"),
+        "{text}"
+    );
+}
+
+#[test]
+fn a_lookup_json_answer_counts_the_keys_that_limit_cut() {
+    let repo = scanned_repo(&[
+        ("a/config.toml", "[server]\nport = 1\n"),
+        ("b/config.toml", "[server]\nport = 2\n"),
+        ("c/config.toml", "[server]\nport = 3\n"),
+    ]);
+    let conn = open_read_only(&repo.db).unwrap();
+
+    let cut = lookup_symbols_op(&repo.db, &conn, "server.port", None, None, false, 2).unwrap();
+    let whole = lookup_symbols_op(&repo.db, &conn, "server.port", None, None, false, 20).unwrap();
+
+    let cut_json = serde_json::to_value(&cut).unwrap();
+    assert_eq!(cut_json["facts"].as_array().unwrap().len(), 2, "{cut_json}");
+    assert_eq!(cut_json["facts_found"], 3, "{cut_json}");
+    let whole_json = serde_json::to_value(&whole).unwrap();
+    assert!(whole_json.get("facts_found").is_none(), "{whole_json}");
+}
+
+#[test]
+fn a_coverage_line_lists_three_languages_as_a_series() {
+    let gap = code_kb_core::CoverageGap {
+        languages: vec!["json".into(), "markdown".into(), "toml".into()],
+        capabilities: vec!["identifiers".into()],
+    };
+
+    let line = code_kb_core::formatters::coverage_gap_line(Some(&gap));
+
+    assert!(
+        line.starts_with("Coverage: the index records no reference sites in json, markdown, and toml files (julie: identifiers exception)"),
+        "{line}"
+    );
+}
