@@ -295,7 +295,8 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
 - Recovery on a miss: every not-found path builds its text from `symbol_not_found_parts` or
   `file_not_found_parts` in `queries.rs`. The text names the bound workspace, then
   ``` `path` does not define it; it is defined in:``` with the definitions elsewhere when a path
-  filter excludes a symbol of that exact name, or
+  filter excludes a symbol of that exact name (for a qualified name, one with that owner; a qualified name that nothing in the path
+  filter is close to takes its close names from the whole project), or
   `Did you mean one of:` with up to three candidates as `kind `name` (path:line)`, or
   `No similar name is indexed; check the workspace and spelling.` Candidates come from the
   substring search first, then from `symbol_names_tri` trigram rows kept within an edit distance

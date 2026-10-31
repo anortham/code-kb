@@ -3936,7 +3936,7 @@ pub fn name_suggestions(
     path_filter: Option<&str>,
     keep: &dyn Fn(&Symbol) -> bool,
 ) -> NameSuggestions {
-    let terminal = split_qualified_name(name).1;
+    let (owners, terminal) = split_qualified_name(name);
     let pick = |path_filter: Option<&str>, accept: &dyn Fn(&Symbol) -> bool| {
         let mut found: Vec<Symbol> = symbol_name_candidates(conn, name, path_filter)
             .into_iter()
@@ -3946,7 +3946,17 @@ pub fn name_suggestions(
         found
     };
     if let Some(path) = path_filter {
-        let elsewhere = pick(None, &|symbol| symbol.name == terminal);
+        let elsewhere = if owners.is_empty() {
+            pick(None, &|symbol| symbol.name == terminal)
+        } else {
+            let mut defined: Vec<Symbol> = name_candidates(conn, name, None, false)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|symbol| symbol.kind != "import" && keep(symbol))
+                .collect();
+            defined.truncate(SUGGESTED_NAMES);
+            defined
+        };
         if !elsewhere.is_empty() {
             return NameSuggestions {
                 excluded_by: Some(path.to_string()),
@@ -3954,9 +3964,13 @@ pub fn name_suggestions(
             };
         }
     }
+    let mut symbols = pick(path_filter, &|_| true);
+    if symbols.is_empty() && path_filter.is_some() && !owners.is_empty() {
+        symbols = pick(None, &|_| true);
+    }
     NameSuggestions {
         excluded_by: None,
-        symbols: pick(path_filter, &|_| true),
+        symbols,
     }
 }
 

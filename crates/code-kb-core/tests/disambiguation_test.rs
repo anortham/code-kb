@@ -1503,6 +1503,64 @@ fn a_wrong_file_path_names_the_file_that_defines_the_symbol() {
 }
 
 #[test]
+fn a_wrong_file_path_names_only_definitions_of_a_qualified_name_with_its_owner() {
+    let (_repo, ws, db) = scanned(&[
+        (
+            "app/cli.py",
+            "class ScriptInfo:\n    def load(self):\n        return 1\n",
+        ),
+        ("app/db.py", "def get_db():\n    return 1\n"),
+        (
+            "app/other.py",
+            "class ScriptInfo:\n    def get_db(self):\n        return 2\n",
+        ),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+
+    let error = get_context_slice_op(
+        &ws,
+        &db,
+        &conn,
+        "ScriptInfo.get_db",
+        Some("app/cli.py"),
+        false,
+    )
+    .unwrap_err()
+    .to_string();
+
+    assert!(error.contains("`app/cli.py` does not define it"), "{error}");
+    assert!(error.contains("(app/other.py:2)"), "{error}");
+    assert!(!error.contains("app/db.py"), "{error}");
+}
+
+#[test]
+fn a_wrong_file_path_offers_a_qualified_name_with_another_owner_only_as_a_close_name() {
+    let (_repo, ws, db) = scanned(&[
+        (
+            "app/cli.py",
+            "class ScriptInfo:\n    def load(self):\n        return 1\n",
+        ),
+        ("app/db.py", "def get_db():\n    return 1\n"),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+
+    let error = get_context_slice_op(
+        &ws,
+        &db,
+        &conn,
+        "ScriptInfo.get_db",
+        Some("app/cli.py"),
+        false,
+    )
+    .unwrap_err()
+    .to_string();
+
+    assert!(!error.contains("does not define it"), "{error}");
+    assert!(error.contains("Did you mean one of:"), "{error}");
+    assert!(error.contains("`get_db` (app/db.py:1)"), "{error}");
+}
+
+#[test]
 fn a_folder_as_file_path_narrows_the_lookup_to_that_folder() {
     let (_repo, ws, db) = scanned(&[
         ("src/watch.rs", "pub fn stop_file_watching() {}\n"),
