@@ -6282,8 +6282,6 @@ fn merge_same_site(sites: Vec<ReferenceSite>) -> Vec<ReferenceSite> {
     merged
 }
 
-/// Resolve callee signatures directly in a single joined query, avoiding N+1 queries
-/// and preserving ambiguous methods across types. Prioritizes functions/methods over enum variants.
 /// The kinds whose `type_facts` row is the type they return.
 const RETURNING_KINDS: &[&str] = &["function", "method", "constructor"];
 
@@ -6394,6 +6392,8 @@ fn callee_entry(
     }
 }
 
+/// Resolve callee signatures directly in a single joined query, avoiding N+1 queries
+/// and preserving ambiguous methods across types. Prioritizes functions/methods over enum variants.
 pub fn find_callee_signatures(
     conn: &Connection,
     symbol_name: &str,

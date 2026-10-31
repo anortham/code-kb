@@ -219,15 +219,17 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   and `### Open Ends`. `### Callers` comes from `reference_report_for_impact` (the labels and the
   3 s limit of `find_references`, without the text scan): the `Sites:` line, then the first 8
   `proven` and 8 `likely` sites grouped by label as `find_references` prints them, a fold line
-  for the rest of each label, the count of sites not checked within the time limit, and a line
-  that names `find_references(symbol_id="…")` and `blast_radius(symbol_id="…")`. A target with no
-  site gets the one line ``No indexed code calls or uses `name`.``, and a failed report a line
-  that names `find_references`. `### Tests to run` lists the report's `Tests that call or use it`
+  for the rest of each label, the count of sites not checked within the time limit, the
+  `Not visible to this index:` line of `find_references`, and a line that names
+  `find_references(symbol_id="…")` and `blast_radius(symbol_id="…")`. The overloads of one answer
+  share the 3 s: each report takes an equal part of what the reports before it left. A target with
+  no site gets the one line ``No indexed code calls or uses `name`.`` and that `Not visible` line,
+  and a failed report a line that names `find_references`. `### Tests to run` lists the report's `Tests that call or use it`
   with their run commands, then the related tests (below) that it does not list, with a command
   where `test_commands.rs` names one; it shows 10 and folds the rest. `### Open Ends` lists the
   first three open ends of the depth-2 `blast_radius` walk from the target, which reuses the same
-  report. Every query reads the one index snapshot of the answer. CLI `context --json` adds
-  `return_type`, `callers` (`counts`, `sites`, `unchecked`), `tests`, and `open_ends`.
+  report, and leaves out a target with no site. Every query reads the one index snapshot of the answer. CLI `context --json` adds
+  `return_type`, `callers` (`counts`, `sites`, `unchecked`, `cannot_see`), `tests`, and `open_ends`.
 - `OUTPUT_BUDGET_CHARS` in `formatters.rs` (32,000 characters, about 8K tokens, below the 10K tokens
   at which Claude Code warns about a large MCP answer) bounds a file skeleton and the source in a
   `get_symbol_body` or `get_symbol_context` text answer. A skeleton over it prints its rows in

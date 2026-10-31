@@ -403,12 +403,15 @@ pub struct ContextSlice {
 }
 
 /// The callers summary of a context: the site counts of the target's callers report, its first
-/// proven and likely sites in report order, and the sites its checks did not reach in time.
+/// proven and likely sites in report order, the sites its checks did not reach in time, and the
+/// calls that the index cannot see in the target's language.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct ContextCallers {
     pub counts: CallersReportSites,
     pub sites: Vec<LabeledSite>,
     pub unchecked: usize,
+    #[serde(default)]
+    pub cannot_see: Vec<String>,
 }
 
 /// One `search` hit. `score` is the rerank score; `explain` is present only when the

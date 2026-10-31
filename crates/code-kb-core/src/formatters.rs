@@ -1124,6 +1124,7 @@ fn context_callers_section(slice: &ContextSlice) -> String {
         counts,
         sites,
         unchecked,
+        cannot_see,
     }) = &slice.callers
     else {
         out.push_str(&format!(
@@ -1131,9 +1132,14 @@ fn context_callers_section(slice: &ContextSlice) -> String {
         ));
         return out;
     };
+    let not_visible = if cannot_see.is_empty() {
+        String::new()
+    } else {
+        format!("Not visible to this index: {}.\n", cannot_see.join("; "))
+    };
     if counts.sites == 0 {
         out.push_str(&format!(
-            "No indexed code calls or uses `{}`.\n\n",
+            "No indexed code calls or uses `{}`.\n{not_visible}\n",
             slice.target_symbol.name
         ));
         return out;
@@ -1179,6 +1185,7 @@ fn context_callers_section(slice: &ContextSlice) -> String {
             if *unchecked == 1 { "it" } else { "they" },
         ));
     }
+    out.push_str(&not_visible);
     out.push_str(&context_drill_down(id));
     out.push('\n');
     out
@@ -5077,6 +5084,7 @@ mod tests {
                 sample_site("main", SiteLabel::Likely, 9),
             ],
             unchecked: 0,
+            cannot_see: Vec::new(),
         });
         slice.tests = vec![sample_test(1)];
         slice.open_ends = vec![OpenEnd {
@@ -5125,6 +5133,7 @@ mod tests {
             },
             sites: vec![sample_site("run", SiteLabel::Proven, 7)],
             unchecked: 2,
+            cannot_see: Vec::new(),
         });
 
         let text = format_context_slice(&slice);
@@ -5144,6 +5153,41 @@ mod tests {
                 "### Callers\nNo indexed code calls or uses `target_fn`.\n\n### Tests to run"
             ),
             "{text}"
+        );
+    }
+
+    #[test]
+    fn a_context_names_the_calls_its_index_cannot_see() {
+        let mut silent = sample_context_slice();
+        silent.callers = Some(ContextCallers {
+            cannot_see: vec!["calls inside macro bodies".into()],
+            ..ContextCallers::default()
+        });
+        let mut called = sample_context_slice();
+        called.callers = Some(ContextCallers {
+            counts: CallersReportSites {
+                sites: 1,
+                proven: 1,
+                ..CallersReportSites::default()
+            },
+            sites: vec![sample_site("run", SiteLabel::Proven, 7)],
+            unchecked: 0,
+            cannot_see: vec![
+                "calls through getattr() or names built at runtime".into(),
+                "calls inside macro bodies".into(),
+            ],
+        });
+
+        let silent = format_context_slice(&silent);
+        let called = format_context_slice(&called);
+
+        assert!(
+            silent.contains("### Callers\nNo indexed code calls or uses `target_fn`.\nNot visible to this index: calls inside macro bodies.\n\n"),
+            "{silent}"
+        );
+        assert!(
+            called.contains("- `run` [src/use.rs:7] (kind: call; import)\nNot visible to this index: calls through getattr() or names built at runtime; calls inside macro bodies.\nMore: "),
+            "{called}"
         );
     }
 

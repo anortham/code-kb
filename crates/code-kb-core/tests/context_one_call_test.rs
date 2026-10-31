@@ -134,10 +134,11 @@ fn a_context_with_no_caller_says_so_in_one_line() {
     let text = format_context_slices(std::slice::from_ref(&slice));
 
     assert!(
-        text.contains("### Callers\nNo indexed code calls or uses `lonely`.\n\n"),
+        text.contains("### Callers\nNo indexed code calls or uses `lonely`.\nNot visible to this index: calls through getattr() or names built at runtime.\n\n"),
         "{text}"
     );
     assert!(!text.contains("Sites: "), "{text}");
+    assert!(!text.contains("### Open Ends"), "{text}");
 }
 
 const RUST_BUILDER: &[(&str, &str)] = &[

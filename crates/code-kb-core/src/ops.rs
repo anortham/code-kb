@@ -1,6 +1,7 @@
 use rusqlite::Connection;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
+use std::time::{Duration, Instant};
 use thiserror::Error;
 
 use crate::db::{DbError, ensure_fts_index_path};
@@ -371,6 +372,7 @@ pub fn get_symbol_bodies_selected_op(
 
 /// Like [`get_context_slice_selected_op`], but a name that selects up to
 /// [`MAX_CONTEXT_OVERLOADS`] overloads of one owner in one file returns a slice for each overload.
+/// The callers reports of the overloads share one [`CONTEXT_REPORT_TIME_LIMIT`].
 pub fn get_context_slices_selected_op(
     workspace: &Workspace,
     db_path: &Path,
@@ -379,31 +381,47 @@ pub fn get_context_slices_selected_op(
     file_path: Option<&str>,
     include_external: bool,
 ) -> Result<Vec<ContextSlice>, OpError> {
-    let slice = |selector: &SymbolSelector, file_path: Option<&str>| {
-        get_context_slice_selected_op(
+    let deadline = Instant::now() + CONTEXT_REPORT_TIME_LIMIT;
+    let slice = |selector: &SymbolSelector, file_path: Option<&str>, slices_left: usize| {
+        let left = deadline.saturating_duration_since(Instant::now());
+        context_slice_within(
             workspace,
             db_path,
             conn,
             selector,
             file_path,
             include_external,
+            report_time_share(left, slices_left),
         )
     };
-    match slice(selector, file_path) {
-        Err(ambiguity @ OpError::Query(QueryError::AmbiguousSymbol(..))) => overload_selectors(
-            workspace,
-            db_path,
-            conn,
-            selector,
-            file_path,
-            ambiguity,
-            MAX_CONTEXT_OVERLOADS,
-        )?
-        .iter()
-        .map(|overload| slice(overload, None))
-        .collect(),
+    match slice(selector, file_path, 1) {
+        Err(ambiguity @ OpError::Query(QueryError::AmbiguousSymbol(..))) => {
+            let overloads = overload_selectors(
+                workspace,
+                db_path,
+                conn,
+                selector,
+                file_path,
+                ambiguity,
+                MAX_CONTEXT_OVERLOADS,
+            )?;
+            let count = overloads.len();
+            overloads
+                .iter()
+                .enumerate()
+                .map(|(index, overload)| slice(overload, None, count - index))
+                .collect()
+        }
         result => result.map(|slice| vec![slice]),
     }
+}
+
+/// The time limit of the callers reports of one context answer, the limit of `find_references`.
+const CONTEXT_REPORT_TIME_LIMIT: Duration = Duration::from_secs(3);
+
+/// The part of `left` that the next of `slices_left` callers reports may use.
+fn report_time_share(left: Duration, slices_left: usize) -> Duration {
+    left / u32::try_from(slices_left.max(1)).unwrap_or(u32::MAX)
 }
 
 /// `bodies` fitted so that [`format_symbol_bodies`] prints at most [`OUTPUT_BUDGET_CHARS`]:
@@ -630,6 +648,27 @@ pub fn get_context_slice_selected_op(
     file_path: Option<&str>,
     include_external: bool,
 ) -> Result<ContextSlice, OpError> {
+    context_slice_within(
+        workspace,
+        db_path,
+        conn,
+        selector,
+        file_path,
+        include_external,
+        CONTEXT_REPORT_TIME_LIMIT,
+    )
+}
+
+/// [`get_context_slice_selected_op`] with its callers report bounded by `report_time_limit`.
+fn context_slice_within(
+    workspace: &Workspace,
+    db_path: &Path,
+    conn: &Connection,
+    selector: &SymbolSelector,
+    file_path: Option<&str>,
+    include_external: bool,
+    report_time_limit: Duration,
+) -> Result<ContextSlice, OpError> {
     let (target_symbol, target_body) =
         get_symbol_body_selected_op(workspace, db_path, conn, selector, file_path)?;
     let _snapshot = crate::db::read_snapshot(conn).map_err(QueryError::from)?;
@@ -644,7 +683,13 @@ pub fn get_context_slice_selected_op(
     let return_type = queries::find_unspelled_return_type(conn, &target_symbol)?;
     let related_types = queries::find_related_types(conn, &target_symbol, 10)?;
     let related_tests = queries::find_related_tests(conn, &target_symbol, 5)?;
-    let report = reference_report_for_impact(conn, &workspace.root, &target_symbol).ok();
+    let report = reference_report_for_impact_within(
+        conn,
+        &workspace.root,
+        &target_symbol,
+        report_time_limit,
+    )
+    .ok();
     let callers = report.as_ref().map(context_callers);
     let tests = context_tests(conn, &workspace.root, report.as_ref(), &related_tests)?;
     let open_ends = context_open_ends(workspace, conn, &target_symbol, report)?;
@@ -691,6 +736,7 @@ fn context_callers(report: &ReferenceReport) -> ContextCallers {
         },
         sites,
         unchecked: unchecked_site_count(report),
+        cannot_see: report.cannot_see.clone(),
     }
 }
 
@@ -744,8 +790,26 @@ fn context_tests(
 }
 
 /// The open ends of the depth-2 `blast_radius` walk from `target`, with `report` standing in for
-/// the callers report that the walk would run again.
+/// the callers report that the walk would run again. A target with no site is no open end, since
+/// the callers section already says that nothing calls it.
 fn context_open_ends(
+    workspace: &Workspace,
+    conn: &Connection,
+    target: &Symbol,
+    report: Option<ReferenceReport>,
+) -> Result<Vec<OpenEnd>, OpError> {
+    let path = target.path.replace('\\', "/");
+    let silent = report
+        .as_ref()
+        .is_some_and(|report| report.counts.sites == 0);
+    let mut open_ends = context_walk_open_ends(workspace, conn, target, report)?;
+    if silent {
+        open_ends.retain(|end| end.path != path || end.line != target.start_line);
+    }
+    Ok(open_ends)
+}
+
+fn context_walk_open_ends(
     workspace: &Workspace,
     conn: &Connection,
     target: &Symbol,
@@ -1945,9 +2009,10 @@ mod tests {
 
     use super::{
         CallersReportSites, ContextCallers, ContextSlice, FileReportLimits, OUTLINE_SHORTENED_NOTE,
-        OUTPUT_BUDGET_CHARS, codebase_outline_op, file_blast_radius_within, fit_bodies_to_budget,
-        fit_body_to_budget, fit_context_slices_to_budget, format_context_slices,
-        format_symbol_bodies, one_level_deeper,
+        OUTPUT_BUDGET_CHARS, SymbolSelector, codebase_outline_op, context_slice_within,
+        file_blast_radius_within, fit_bodies_to_budget, fit_body_to_budget,
+        fit_context_slices_to_budget, format_context_slices, format_symbol_bodies,
+        one_level_deeper, report_time_share,
     };
     use crate::workspace::Workspace;
     use crate::{
@@ -1987,6 +2052,47 @@ mod tests {
 
     fn limits(budget: Duration, report: Duration) -> FileReportLimits {
         FileReportLimits { budget, report }
+    }
+
+    #[test]
+    fn a_context_report_past_its_time_share_counts_its_unchecked_sites() {
+        let (_temp, workspace, conn) = scanned_package();
+        let db = workspace.root.join(".code-kb").join("artifact.db");
+        let target = crate::queries::get_symbol_by_name(&conn, "dispatch", Some("src/pkg/app.py"))
+            .unwrap()
+            .unwrap();
+
+        let slice = context_slice_within(
+            &workspace,
+            &db,
+            &conn,
+            &SymbolSelector::Id(target.symbol_id),
+            None,
+            false,
+            Duration::ZERO,
+        )
+        .unwrap();
+
+        assert!(
+            slice
+                .callers
+                .as_ref()
+                .is_some_and(|callers| callers.unchecked > 0),
+            "{slice:#?}"
+        );
+    }
+
+    #[test]
+    fn the_overloads_of_a_context_share_one_report_time_limit() {
+        assert_eq!(
+            report_time_share(Duration::from_secs(3), 4),
+            Duration::from_millis(750)
+        );
+        assert_eq!(
+            report_time_share(Duration::from_secs(3), 1),
+            Duration::from_secs(3)
+        );
+        assert_eq!(report_time_share(Duration::ZERO, 2), Duration::ZERO);
     }
 
     #[test]
@@ -2474,6 +2580,7 @@ mod tests {
                 },
                 sites: (1..=8).map(site).collect(),
                 unchecked: 0,
+                cannot_see: Vec::new(),
             }),
             tests: Vec::new(),
             open_ends: Vec::new(),
