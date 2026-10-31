@@ -18,6 +18,22 @@ pub enum DbError {
     Sqlite(#[from] rusqlite::Error),
 }
 
+/// A read transaction on `conn`, so every query of one answer reads the same index state: the
+/// watcher can refresh a file between two queries, and a row that one query found would be gone
+/// in the next. `None` when `conn` is already in a transaction, whose snapshot then holds.
+pub fn read_snapshot(conn: &Connection) -> rusqlite::Result<Option<rusqlite::Transaction<'_>>> {
+    if !conn.is_autocommit() {
+        return Ok(None);
+    }
+    let snapshot = conn.unchecked_transaction()?;
+    // A deferred transaction takes its snapshot at its first read of a table, and a first query
+    // over JSON alone reads none.
+    snapshot.query_row("SELECT COUNT(*) FROM sqlite_schema", [], |row| {
+        row.get::<_, i64>(0)
+    })?;
+    Ok(Some(snapshot))
+}
+
 /// Opens a read-only SQLite connection configured for low-overhead WAL reads.
 pub fn open_read_only(path: &Path) -> Result<Connection, DbError> {
     if !path.exists() {

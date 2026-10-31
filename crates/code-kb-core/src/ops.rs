@@ -611,6 +611,7 @@ pub fn get_context_slice_selected_op(
 ) -> Result<ContextSlice, OpError> {
     let (target_symbol, target_body) =
         get_symbol_body_selected_op(workspace, db_path, conn, selector, file_path)?;
+    let _snapshot = crate::db::read_snapshot(conn).map_err(QueryError::from)?;
 
     let callee_signatures = queries::find_callee_signatures(
         conn,
@@ -963,6 +964,7 @@ fn discover_blast_radius(
     if let Some(selector @ SymbolSelector::Id(_)) = selector.as_ref() {
         let db_path = db_path.ok_or(OpError::SymbolIdRequiresDatabasePath)?;
         let selected = resolve_symbol_op(workspace, db_path, conn, selector, file)?;
+        let _snapshot = crate::db::read_snapshot(conn).map_err(QueryError::from)?;
         let res = queries::compute_blast_radius_scoped_with_ids_and_low_signal(
             conn,
             &[],
@@ -984,6 +986,7 @@ fn discover_blast_radius(
             include_low_signal,
         );
     }
+    let _snapshot = crate::db::read_snapshot(conn).map_err(QueryError::from)?;
     let symbol = selector.as_ref().and_then(|selector| match selector {
         SymbolSelector::Name(name) => Some(name.as_str()),
         SymbolSelector::Id(_) => None,

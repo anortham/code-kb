@@ -99,6 +99,7 @@ pub fn reference_report(
     target: &Symbol,
     _include_external: bool,
 ) -> Result<ReferenceReport, QueryError> {
+    let _snapshot = crate::db::read_snapshot(conn)?;
     report_within(conn, root, target, ACCOUNTING_TIME_LIMIT)
 }
 
