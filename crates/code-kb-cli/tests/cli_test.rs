@@ -2985,7 +2985,7 @@ fn test_skill_routes_orientation_to_the_skeleton_and_edits_to_read() {
     let prose = text.split_whitespace().collect::<Vec<_>>().join(" ");
     assert!(prose.contains("Call `file_skeleton` on a folder or a file you do not know."));
     assert!(prose.contains(
-        "Before you change a symbol, call `get_symbol_context` for its body, callers, tests to run, and types."
+        "Before you change a symbol, call `get_symbol_context`: it carries the body, callers, tests to run, and types."
     ));
     assert!(prose.contains("Read the file you will edit, since the editor needs it."));
     assert!(!prose.contains("Before you `Read`"));
@@ -3050,16 +3050,34 @@ fn outdated_routing_rule(sentence: &str) -> Option<&'static str> {
     {
         return Some("calls file_skeleton before every Read");
     }
+    if sentence
+        .split_once("lookup_symbol")
+        .is_some_and(|(_, after_lookup)| {
+            names_word_before(after_lookup, FOLLOW_UP_WORDS, &["get_symbol_body"])
+        })
+    {
+        return Some("follows a lookup_symbol with get_symbol_body");
+    }
     let after_context = sentence.split_once("get_symbol_context")?.1;
     if names_word_before(
         after_context,
-        &["then", "call", "next"],
+        FOLLOW_UP_WORDS,
         &["find_references", "blast_radius"],
     ) {
         return Some("follows get_symbol_context with find_references or blast_radius");
     }
     None
 }
+
+const FOLLOW_UP_WORDS: &[&str] = &[
+    "then",
+    "call",
+    "next",
+    "afterwards",
+    "afterward",
+    "follow",
+    "followed",
+];
 
 fn outdated_routing_rules(text: &str) -> Vec<String> {
     guidance_sentences(text)
@@ -3077,6 +3095,8 @@ fn test_outdated_routing_rules_are_caught_in_the_2_11_wording() {
         "Pass project_root on every call. Call file_skeleton before you read a source file, then get_symbol_body or get_symbol_context for the symbols you need.",
         "- **Before you change a symbol**, call `get_symbol_context`; to pick the tests to run, call `blast_radius`.",
         "Call `get_symbol_context`, then `find_references` and `blast_radius`.",
+        "Call `get_symbol_context`; afterwards run `blast_radius`.",
+        "Use `lookup_symbol`, then `get_symbol_body` or `get_symbol_context`, for a symbol by name.",
     ] {
         assert!(!outdated_routing_rules(old).is_empty(), "missed: {old}");
     }
@@ -3084,6 +3104,7 @@ fn test_outdated_routing_rules_are_caught_in_the_2_11_wording() {
         "- **To orient**, call `file_skeleton` on a folder or a file you do not know.",
         "- **Before you change a symbol**, call `get_symbol_context`: it carries the body, callers, tests to run, and types.",
         "The context answer lists the first callers and the tests to run, so the edit needs no other call. For the full list of callers or tests, call `find_references` or `blast_radius`.",
+        "A `lookup_symbol` query that names one definition with a short body also gets that body; a longer body gets a line with the `symbol_id` to pass to `get_symbol_body`.",
     ] {
         assert!(
             outdated_routing_rules(current).is_empty(),
@@ -3104,6 +3125,11 @@ fn test_guidance_routes_without_skeleton_before_read_or_required_drill_downs() {
         "crates/code-kb-cli/src/mcp/server.rs",
         "README.md",
         "docs/site/index.html",
+        "docs/argument-counts.md",
+        "docs/edit-check.md",
+        "docs/language-support.md",
+        "docs/reach-sections.md",
+        "scripts/release-dogfood-prompt.md",
     ] {
         collect_guidance_files(&root.join(entry), &mut files);
     }

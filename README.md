@@ -554,7 +554,7 @@ code-kb search "sha256 sidecar" --explain
 # Retrieve exact implementation body of a symbol
 code-kb body Workspace
 
-# Get surgical context bundle: body + callees + types + tests (alias: code-kb slice)
+# Before an edit: body, return type, callers summary, tests to run, callees, types, open ends (alias: code-kb slice)
 code-kb context ensure_fresh_file
 
 # Find callers, each labeled proven, likely, unresolved, or excluded, with a text count

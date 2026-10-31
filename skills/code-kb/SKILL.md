@@ -9,8 +9,8 @@ code-kb indexes symbol names, signatures, and docstrings, not file contents. Use
 literal text: string literals, error messages, comments, and config values.
 
 Call `file_skeleton` on a folder or a file you do not know. Before you change a symbol, call
-`get_symbol_context` for its body, callers, tests to run, and types. Read the file you will
-edit, since the editor needs it. Find a definition or its uses with `lookup_symbol` or
+`get_symbol_context`: it carries the body, callers, tests to run, and types. Read the file you
+will edit, since the editor needs it. Find a definition or its uses with `lookup_symbol` or
 `find_references`, not `rg` on the name.
 
 The context answer lists the first callers and the tests to run, so the edit needs no other
@@ -53,9 +53,9 @@ Four query commands have no dedicated MCP tool. `code-kb outline` returns a fold
 - For a name that several symbols share, such as `new`, pass `file_path` or a qualified name (`Server::new`).
 - Lookup hides test code. Pass `is_test=true` (CLI `--include-tests`) to show it.
 - Callee lists leave out standard library and runtime calls. Pass `include_external=true` (CLI `--include-external`) to show them.
-- After the sites, `find_references` lists `Overrides`, `Overrides of`, `Constructions`, `Variant uses`, `Registrations`, and `Tests that call or use it` (each test with a `run:` command) when they have rows. They never change a site's label. The `get_symbol_context` answer shows the first sites and the tests; its last `### Callers` line names the `find_references` and `blast_radius` calls, with the `symbol_id`, that list the rest.
+- After the sites, `find_references` lists `Overrides`, `Overrides of`, `Constructions`, `Variant uses`, `Registrations`, and `Tests that call or use it` (each test with a `run:` command) when they have rows. They never change a site's label. The `get_symbol_context` answer shows the first sites and the tests; the `More:` line under its `### Callers` names the `find_references` and `blast_radius` calls, with the `symbol_id`, that list the rest.
 - `blast_radius` lists only the tests that the index can reach. `### Open Ends`, in `blast_radius` and in `get_symbol_context` (a walk two levels deep), names symbols that no indexed code calls, such as a method that the runtime or a framework calls; the list does not show the tests that reach the target through them. A list that ends with ``A `depth` of 5 lists N more tests`` stopped at the depth. With either warning, run the wider test suite before you say the change is done.
-- A target in a language that records no reference sites (JSON, Markdown, and other data or document languages) gets a `Coverage:` line in `find_references` and `blast_radius`. An empty list there does not mean that nothing uses the target.
+- A target in a language that records no reference sites (JSON, Markdown, and other data or document languages) gets a `Coverage:` line in `find_references` and `blast_radius`. An empty list there does not mean that nothing uses the target. `get_symbol_context` prints no such line, so its ``No indexed code calls or uses`` line for such a target does not mean that either.
 - Each caller site has a label. `proven` sites have index evidence. A call shows its argument count (`; 2 args`); a `likely` or `unresolved` call whose count no definition of the target accepts is `excluded` with the range (`3 args; `render` takes 1-2`). Read the code before you rely on a `likely` or `unresolved` site. The `Text only` lines and the `Not visible to this index` line show what the index did not record.
 
 - `check_edit` compares the working tree with `base`, else the commit the session started at, else `HEAD`. Under `Not in your diff`, `proven` and `likely` sites still use the old shape: edit them, or say why they need no change. `Unresolved outside the diff` is a count; read those sites with `find_references`. The `Stop` and `SubagentStop` hooks run the same check and block the stop once for each diff that leaves a `proven` site outside it, except for a `signature changed` row or a JavaScript parameter change.

@@ -14,6 +14,10 @@
           "project_root": {
             "description": "Absolute path of the project or git worktree you work in. Change it when you move to another.",
             "type": "string"
+          },
+          "public_only": {
+            "description": "Hide private, protected, and fileprivate rows and count them (default: false).",
+            "type": "boolean"
           }
         },
         "required": [
@@ -28,7 +32,7 @@
       "_meta": {
         "anthropic/alwaysLoad": true
       },
-      "description": "Find symbols by name, qualified name ('Type::method'), prefix, or concept; returns kind, path, line, signature, and id. A query that names no symbol exactly also gets the ranked matches by name words, signatures, and docs. Use instead of grep on a name.",
+      "description": "Find symbols by name, qualified name ('Type::method'), prefix, or concept; returns kind, path, line, signature, and id. A query that names no symbol exactly also gets the ranked matches by name words, signatures, and docs. A query that names one definition with a short body also gets that body. Use instead of grep on a name.",
       "inputSchema": {
         "properties": {
           "is_test": {
@@ -101,7 +105,7 @@
       "_meta": {
         "anthropic/alwaysLoad": true
       },
-      "description": "A symbol's body with the signatures of what it calls, its parameter types, and its tests, in one call. Overloads return one context each, at most 4. Use before you change a function.",
+      "description": "A symbol's body and return type, its callers summary, the tests to run with their commands, the signatures of what it calls, its parameter types, and open ends, in one call. Overloads return one context each, at most 4. Use before you change a function.",
       "inputSchema": {
         "properties": {
           "file_path": {
