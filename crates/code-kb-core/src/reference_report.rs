@@ -5303,11 +5303,38 @@ fn site_row(row: &NameRow, verdict: Verdict, spec: &Spec) -> SiteRow {
     }
 }
 
+/// The access of the rows of one line: an `excluded` row is tied to another definition, so its
+/// access counts only for a site that is excluded too.
+#[derive(Default)]
+struct LineAccess {
+    counted: Option<SiteAccess>,
+    excluded: Option<SiteAccess>,
+}
+
+impl LineAccess {
+    fn add(&mut self, row: &SiteRow) {
+        let slot = match row.label {
+            SiteLabel::Excluded => &mut self.excluded,
+            _ => &mut self.counted,
+        };
+        *slot = SiteAccess::merge(*slot, row.access);
+    }
+
+    fn of(&self, label: SiteLabel) -> Option<SiteAccess> {
+        match label {
+            SiteLabel::Excluded => self.excluded,
+            _ => self.counted,
+        }
+    }
+}
+
 fn merge_site_rows(rows: Vec<SiteRow>) -> Vec<LabeledSite> {
     let mut merged: HashMap<(String, usize), SiteRow> = HashMap::new();
+    let mut accesses: HashMap<(String, usize), LineAccess> = HashMap::new();
     let mut order: Vec<(String, usize)> = Vec::new();
     for row in rows {
         let key = (row.site.path.clone(), row.site.start_line.unwrap_or(0));
+        accesses.entry(key.clone()).or_default().add(&row);
         match merged.get_mut(&key) {
             None => {
                 order.push(key.clone());
@@ -5324,19 +5351,21 @@ fn merge_site_rows(rows: Vec<SiteRow>) -> Vec<LabeledSite> {
                         row.site.start_column,
                     )
                 };
-                let access = SiteAccess::merge(kept.access, row.access);
                 let better = rank(&row) < rank(kept);
                 if better {
                     *kept = row;
                 }
                 kept.end_line = end;
-                kept.access = access;
             }
         }
     }
     order
         .into_iter()
-        .filter_map(|key| merged.remove(&key))
+        .filter_map(|key| {
+            let mut row = merged.remove(&key)?;
+            row.access = accesses.remove(&key).unwrap_or_default().of(row.label);
+            Some(row)
+        })
         .map(|row| LabeledSite {
             site: row.site,
             label: row.label,

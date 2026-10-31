@@ -308,15 +308,16 @@ counts them on the `Sites:` line; `get_symbol_context` and `check_edit` use the 
 
 | Capability | Languages | Not applicable | Known gaps |
 | --- | --- | --- | --- |
-| Read and write sites | Rust, C, C++, Go, Zig, TypeScript, TSX, JavaScript, JSX, HTML, Vue, Python, Java, C#, VB.NET, PHP, Ruby, Swift, Kotlin, Scala, Dart, Elixir, F#, Erlang, Lua, QML, R, Bash, PowerShell, GDScript, Razor, SQL, XML (julie `identifier_metadata`: `identifiers.access`) | CSS, `go.mod`, `go.sum`, `qmldir`, regex, Markdown, JSON, TOML, YAML | A plain assignment that julie records as a declaration has no identifier, so it is no write site: a Python `global` assignment (`LIMIT = LIMIT + 1` shows only the read), a Bash or PowerShell top-level assignment, and a first Ruby `@ivar =`. A Java `total++` is a `write`, not a `read_write`. |
+| Read and write sites | Rust, C, C++, Go, Zig, TypeScript, TSX, JavaScript, JSX, HTML, Vue, Python, Java, C#, VB.NET, PHP, Ruby, Swift, Kotlin, Scala, Dart, Elixir, F#, Lua, QML, R, Bash, PowerShell, GDScript, Razor, SQL (julie `identifier_metadata`: `identifiers.access`) | CSS, XML, `go.mod`, `go.sum`, `qmldir`, regex, Markdown, JSON, TOML, YAML | A plain assignment that julie records as a declaration has no identifier, so it is no write site: a Python `global` assignment (`LIMIT = LIMIT + 1` shows only the read), a Bash or PowerShell top-level assignment, and a first Ruby `@ivar =`. A Razor `total = total + 1;` in an `@{ }` block shows only the read. A Java `total++` is a `write`, not a `read_write`. julie writes no variable-reference identifier for Erlang, so an Erlang variable has no site and no access. |
 
 Real-extraction regressions: `crates/code-kb-core/tests/access_split_test.rs` (a field with a
 write, a compound write, a line that writes and reads, and a read in another file, in Python,
 TypeScript, Java, C#, Go, and Rust; a method target keeps its old report; paging and
 `get_symbol_context`), `edit_check_fields_test.rs` (a removed Go field lists its writes first),
 and `cli_test.rs` (`refs --json`). A probe of Kotlin, Ruby, PHP, Swift, C, C++, Scala, Dart, Lua,
-JavaScript, Zig, GDScript, VB.NET, Bash, PowerShell, R, Elixir, and F# found the fact on member and
-variable writes and reads, with the gaps above.
+JavaScript, Zig, GDScript, VB.NET, Bash, PowerShell, R, Elixir, F#, HTML, Vue, QML, Razor, and SQL
+found the fact on member and variable writes and reads, with the gaps above; an Erlang and an XML
+sample have no such identifier.
 
 ## Languages with no reference sites
 

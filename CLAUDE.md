@@ -432,7 +432,8 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   Read and write sites: julie 3.11.0 writes `access` (`write`, `read_write`, or `read`) on
   variable-reference and member-access identifiers; pending calls, relationships, and other
   identifiers carry none. A site takes the access of its identifier rows, and a merged row that
-  holds a write and a read is `read_write`. When the target is a field, property, variable,
+  holds a write and a read is `read_write`; an `excluded` row of the line, which another
+  definition holds (`a.x = b.x` for `A.x`), adds its access only to an `excluded` site. When the target is a field, property, variable,
   constant, attribute, or enum member and a site has an access, each label lists writes, then
   read-writes, then reads, then sites with no access (`split_by_access` in `reference_report.rs`,
   before paging); a site shows `; write`, `; read-write`, or `; read` after its basis and argument

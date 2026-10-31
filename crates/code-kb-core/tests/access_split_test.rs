@@ -274,6 +274,32 @@ fn a_line_that_writes_and_reads_the_field_is_one_read_write_site() {
 }
 
 #[test]
+fn a_read_of_another_class_field_on_the_write_line_leaves_the_site_a_write() {
+    let repo = scanned_repo(&[
+        (
+            "model.py",
+            "class A:\n    def __init__(self):\n        self.x = 0\n\n\nclass B:\n    def __init__(self):\n        self.x = 0\n",
+        ),
+        (
+            "use.py",
+            "from model import A, B\n\n\ndef copy(a: A, b: B):\n    a.x = b.x\n",
+        ),
+    ]);
+
+    let report = report(&repo, "A.x", "model.py");
+
+    assert_eq!(
+        proven_rows(&report),
+        [("use.py".to_string(), 5, Some(SiteAccess::Write))],
+        "{report:#?}"
+    );
+    assert!(
+        format_reference_report(&report, 20)
+            .contains("- `copy` [use.py:5] (kind: member_access; receiver type; write)\n")
+    );
+}
+
+#[test]
 fn a_function_target_keeps_its_report_without_access() {
     let repo = scanned_repo(&[
         (
