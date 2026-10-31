@@ -282,7 +282,8 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   `OUTPUT_BUDGET_CHARS`), and CLI `lookup --json` adds `body`. A longer body gets the line
   ``The body of `name` has N lines, more than a lookup shows. Call get_symbol_body with symbol_id=<id>.``
   A limit that cuts the exact names runs the name query once more to prove that the row is the only
-  one. Two definitions, overloads, a member listing, ranked rows, and a miss get no body.
+  one. A body that cannot be read (its row is gone from the refreshed file) adds nothing. Two
+  definitions, overloads, a member listing, ranked rows, and a miss get no body.
 - Reference rules: a pending call whose receiver names an import binding in the caller's file matches
   a target whose path holds that module as a directory or file name (`flask.Flask(...)` matches
   `src/flask/app.py`). A relative import source (`../core/util.js`) names one file, resolved from

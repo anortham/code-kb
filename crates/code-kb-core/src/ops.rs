@@ -144,8 +144,9 @@ pub fn lookup_symbols_with_body_op(
 
 /// Adds the body of the one definition that `lookup` names: one exact-name row of a definition
 /// kind, with the imports of that name folded and no other exact-name row. A body over
-/// [`LOOKUP_BODY_CHARS`] gets a line that names its `symbol_id` instead. Member listings,
-/// misses, ranked rows, and overloads get nothing.
+/// [`LOOKUP_BODY_CHARS`] gets a line that names its `symbol_id` instead, and a body that cannot
+/// be read (its row is gone from the refreshed file) gets nothing. Member listings, misses,
+/// ranked rows, and overloads get nothing.
 #[allow(clippy::too_many_arguments)]
 fn add_unique_definition_body(
     workspace: &Workspace,
@@ -161,8 +162,12 @@ fn add_unique_definition_body(
     let Some(target) = unique_definition(query, &lookup.names, limit) else {
         return Ok(());
     };
-    let complete =
-        lookup.names.len() < limit || lookup.names.iter().any(|s| !is_exact_name_row(query, s));
+    let counted = lookup
+        .names
+        .iter()
+        .filter(|s| !queries::folds_into_import_line(query, s, true))
+        .count();
+    let complete = counted < limit || lookup.names.iter().any(|s| !is_exact_name_row(query, s));
     if !complete {
         let wider = queries::search_symbols_scoped(
             conn,
@@ -176,26 +181,24 @@ fn add_unique_definition_body(
             return Ok(());
         }
     }
-    let target = target.clone();
     let selector = SymbolSelector::Id(target.symbol_id.clone());
-    let read_hint = |lines: Option<usize>| {
-        let size = lines.map_or(String::new(), |n| format!(" has {n} lines,"));
-        format!(
-            "The body of `{}`{size} more than a lookup shows. Call get_symbol_body with symbol_id={}.\n",
-            target.name, target.symbol_id
-        )
+    let Ok((symbol, source)) =
+        get_symbol_body_selected_op(workspace, db_path, conn, &selector, None)
+    else {
+        return Ok(());
     };
-    match get_symbol_body_selected_op(workspace, db_path, conn, &selector, None) {
-        Ok((symbol, source)) => {
-            let text = format_symbol_bodies(&[(symbol, source.clone())]);
-            if text.len() <= LOOKUP_BODY_CHARS {
-                lookup.body = Some(source);
-                lookup.body_text = Some(text);
-            } else {
-                lookup.body_text = Some(read_hint(Some(source.lines().count())));
-            }
-        }
-        Err(_) => lookup.body_text = Some(read_hint(None)),
+    let hint = format!(
+        "The body of `{}` has {} lines, more than a lookup shows. Call get_symbol_body with symbol_id={}.\n",
+        symbol.name,
+        source.lines().count(),
+        symbol.symbol_id
+    );
+    let text = format_symbol_bodies(&[(symbol, source.clone())]);
+    if text.len() <= LOOKUP_BODY_CHARS {
+        lookup.body = Some(source);
+        lookup.body_text = Some(text);
+    } else {
+        lookup.body_text = Some(hint);
     }
     Ok(())
 }

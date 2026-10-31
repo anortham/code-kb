@@ -176,3 +176,45 @@ fn a_qualified_lookup_of_one_method_prints_its_body() {
     assert!(!text.contains("return 2"), "{text}");
     assert!(found.body.is_some());
 }
+
+#[test]
+fn a_lookup_at_the_largest_limit_of_one_definition_with_many_imports_prints_its_body() {
+    let importers: Vec<(String, String)> = (0..200)
+        .map(|i| {
+            (
+                format!("pkg/use_{i}.py"),
+                "from pkg.util import helper\n".to_string(),
+            )
+        })
+        .collect();
+    let mut files = vec![
+        ("pkg/__init__.py", ""),
+        ("pkg/util.py", "def helper(x):\n    return x + 1\n"),
+    ];
+    files.extend(importers.iter().map(|(p, c)| (p.as_str(), c.as_str())));
+    let repo = scanned_repo(&files);
+
+    let (found, text) = lookup(&repo, "helper", 200);
+
+    assert!(text.contains("200 imports of `helper`"), "{text}");
+    assert_eq!(
+        found.body.as_deref(),
+        Some("def helper(x):\n    return x + 1")
+    );
+}
+
+#[test]
+fn a_lookup_whose_body_read_finds_the_row_gone_names_no_stale_id() {
+    let repo = scanned_repo(&[("src/net.rs", NET)]);
+    fs::write(
+        repo.workspace.canonical_root.join("src/net.rs"),
+        "pub fn retry_count() -> u32 {\n    3\n}\n\npub fn send_later() {\n    retry_count();\n}\n",
+    )
+    .unwrap();
+
+    let (found, text) = lookup(&repo, "send_again", 20);
+
+    let stale_id = &found.names[0].symbol_id;
+    assert!(!text.contains(&format!("symbol_id={stale_id}")), "{text}");
+    assert_eq!(found.body, None);
+}
