@@ -8,8 +8,8 @@ use rusqlite::types::ToSql;
 use rusqlite::{Connection, OptionalExtension, Row, Statement, params, params_from_iter};
 
 use crate::models::{
-    LabeledSite, ReferenceCounts, ReferenceReport, ReferenceSite, ReferenceTarget, SiteLabel,
-    Symbol, TextOnlyLines, TextScanSummary,
+    AccessCounts, LabeledSite, ReferenceCounts, ReferenceReport, ReferenceSite, ReferenceTarget,
+    SiteAccess, SiteLabel, Symbol, TextOnlyLines, TextScanSummary,
 };
 use crate::queries::{
     QueryError, built_receiver_sql, call_language_family, call_languages_compatible,
@@ -123,6 +123,7 @@ pub fn reference_report_for_edit(
             text_scan: false,
             arity_exclusion: false,
             absent_target: crate::queries::get_symbol_by_id(conn, &target.symbol_id)?.is_none(),
+            access_split: true,
         },
         absent_condition,
     )
@@ -160,6 +161,7 @@ pub(crate) fn reference_report_for_removed_member(
             text_scan: false,
             arity_exclusion: false,
             absent_target: true,
+            access_split: true,
         },
         None,
     )
@@ -192,6 +194,7 @@ pub(crate) fn reference_report_for_impact_within(
             text_scan: false,
             arity_exclusion: true,
             absent_target: false,
+            access_split: false,
         },
         None,
     )
@@ -213,6 +216,9 @@ struct ReportMode {
     arity_exclusion: bool,
     /// The index does not hold the target, so its row cannot be joined by id.
     absent_target: bool,
+    /// Order the sites of a field, property, variable, or constant by access and count them;
+    /// without it the sites keep their access facts and their order.
+    access_split: bool,
 }
 
 fn report_within(
@@ -225,6 +231,7 @@ fn report_within(
         text_scan: true,
         arity_exclusion: true,
         absent_target: false,
+        access_split: true,
     };
     report_with(conn, root, target, time_limit, mode, None)
 }
@@ -340,6 +347,10 @@ fn report_with(
     let reach = sections::reach_sections(&mut accounting, target, &sites)?;
     cannot_see.splice(0..0, cannot_see_for_language(&target.language));
     cannot_see.extend(reach.notes);
+    let access_counts = match mode.access_split {
+        true => split_by_access(&target.kind, &mut sites),
+        false => None,
+    };
     let report = ReferenceReport {
         target: report_target(conn, target, definitions_with_name)?,
         counts,
@@ -363,8 +374,35 @@ fn report_with(
         registrations: reach.registrations,
         tests: reach.tests,
         coverage_gap: crate::queries::coverage_gap(conn, &[target.language.as_str()]),
+        access_counts,
     };
     Ok(report)
+}
+
+/// The kinds of a target whose sites write or read a value.
+const VALUE_KINDS: &[&str] = &[
+    "field",
+    "property",
+    "variable",
+    "constant",
+    "attribute",
+    "enum_member",
+];
+
+/// Orders the sites of a target of `kind` inside each label by access (writes, read-writes,
+/// reads, then the rest) and counts them when the target is a field, property, variable, or
+/// constant. Any other target, or one with no access fact, keeps its order and loses the access
+/// of its sites, so its report does not change.
+pub(crate) fn split_by_access(kind: &str, sites: &mut [LabeledSite]) -> Option<AccessCounts> {
+    let applies = VALUE_KINDS.contains(&kind) && sites.iter().any(|site| site.access.is_some());
+    if !applies {
+        for site in sites.iter_mut() {
+            site.access = None;
+        }
+        return None;
+    }
+    sites.sort_by_key(|site| (site.label.rank(), SiteAccess::rank(site.access)));
+    Some(AccessCounts::of(sites.iter()))
 }
 
 fn cannot_see_for_language(language: &str) -> Vec<String> {
@@ -786,6 +824,8 @@ struct NameRow {
     /// A call identifier on the line of a definition of the name, which is no site of its own and
     /// only gives its argument facts to a call row of its line (a one-line caller).
     on_definition_line: bool,
+    /// Whether an identifier writes or reads the name; pending and relationship rows have none.
+    access: Option<SiteAccess>,
 }
 
 impl NameRow {
@@ -1643,6 +1683,7 @@ struct SiteRow {
     binds_other_overload: bool,
     end_line: Option<usize>,
     arg_count: Option<u32>,
+    access: Option<SiteAccess>,
 }
 
 struct Claim {
@@ -2723,6 +2764,7 @@ impl<'a> Accounting<'a> {
                     out.push(SiteRow {
                         end_line: None,
                         arg_count: None,
+                        access: None,
                         label: SiteLabel::Proven,
                         basis: "qualified path".to_string(),
                         claimed: true,
@@ -2835,6 +2877,7 @@ impl<'a> Accounting<'a> {
                 arguments: None,
                 links_enclosing_class: false,
                 on_definition_line: false,
+                access: None,
             });
         }
 
@@ -2888,6 +2931,7 @@ impl<'a> Accounting<'a> {
                     arguments: None,
                     links_enclosing_class: row.get(10)?,
                     on_definition_line: false,
+                    access: None,
                 });
             }
         }
@@ -2909,7 +2953,9 @@ impl<'a> Accounting<'a> {
                         CASE WHEN json_valid(i.metadata_json)
                              THEN json_extract(i.metadata_json, '$.arg_names') END,
                         CASE WHEN json_valid(i.metadata_json)
-                             THEN json_extract(i.metadata_json, '$.arg_labels') END
+                             THEN json_extract(i.metadata_json, '$.arg_labels') END,
+                        CASE WHEN json_valid(i.metadata_json)
+                             THEN json_extract(i.metadata_json, '$.access') END
                  FROM identifiers i
                  LEFT JOIN symbols s ON s.symbol_id = i.containing_symbol_id
                  WHERE i.name = ?1 AND COALESCE(s.kind, '') != 'import'
@@ -2973,6 +3019,10 @@ impl<'a> Accounting<'a> {
                     arguments,
                     links_enclosing_class: false,
                     on_definition_line: false,
+                    access: row
+                        .get::<_, Option<String>>(15)?
+                        .as_deref()
+                        .and_then(SiteAccess::parse),
                 });
             }
         }
@@ -5249,14 +5299,42 @@ fn site_row(row: &NameRow, verdict: Verdict, spec: &Spec) -> SiteRow {
         binds_other_overload: false,
         end_line,
         arg_count: row.arg_count,
+        access: row.access,
+    }
+}
+
+/// The access of the rows of one line: an `excluded` row is tied to another definition, so its
+/// access counts only for a site that is excluded too.
+#[derive(Default)]
+struct LineAccess {
+    counted: Option<SiteAccess>,
+    excluded: Option<SiteAccess>,
+}
+
+impl LineAccess {
+    fn add(&mut self, row: &SiteRow) {
+        let slot = match row.label {
+            SiteLabel::Excluded => &mut self.excluded,
+            _ => &mut self.counted,
+        };
+        *slot = SiteAccess::merge(*slot, row.access);
+    }
+
+    fn of(&self, label: SiteLabel) -> Option<SiteAccess> {
+        match label {
+            SiteLabel::Excluded => self.excluded,
+            _ => self.counted,
+        }
     }
 }
 
 fn merge_site_rows(rows: Vec<SiteRow>) -> Vec<LabeledSite> {
     let mut merged: HashMap<(String, usize), SiteRow> = HashMap::new();
+    let mut accesses: HashMap<(String, usize), LineAccess> = HashMap::new();
     let mut order: Vec<(String, usize)> = Vec::new();
     for row in rows {
         let key = (row.site.path.clone(), row.site.start_line.unwrap_or(0));
+        accesses.entry(key.clone()).or_default().add(&row);
         match merged.get_mut(&key) {
             None => {
                 order.push(key.clone());
@@ -5283,13 +5361,18 @@ fn merge_site_rows(rows: Vec<SiteRow>) -> Vec<LabeledSite> {
     }
     order
         .into_iter()
-        .filter_map(|key| merged.remove(&key))
+        .filter_map(|key| {
+            let mut row = merged.remove(&key)?;
+            row.access = accesses.remove(&key).unwrap_or_default().of(row.label);
+            Some(row)
+        })
         .map(|row| LabeledSite {
             site: row.site,
             label: row.label,
             basis: row.basis,
             end_line: row.end_line,
             arg_count: row.arg_count,
+            access: row.access,
         })
         .collect()
 }

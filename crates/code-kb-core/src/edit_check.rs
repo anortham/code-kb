@@ -25,8 +25,8 @@ use tracing::warn;
 use crate::db::{DbError, ensure_fts_index_path, open_read_only};
 use crate::formatters::displayed_symbol_name;
 use crate::models::{
-    CallingTest, ConstructionSite, LabeledSite, ReferenceReport, SiteLabel, Symbol, VariantUse,
-    is_anonymous_class, is_generated_lambda_name,
+    CallingTest, ConstructionSite, LabeledSite, ReferenceReport, SiteAccess, SiteLabel, Symbol,
+    VariantUse, is_anonymous_class, is_generated_lambda_name,
 };
 use crate::queries::{
     DOCUMENTATION_LANGUAGES, MAX_BLAST_DEPTH, MAX_RESULT_LIMIT, QueryError,
@@ -146,6 +146,9 @@ pub struct EditSite {
     pub caller: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    /// Whether the site writes or reads a field, property, variable, or constant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access: Option<SiteAccess>,
 }
 
 /// A symbol whose shape changed, with its sites sorted by whether the diff reached them.
@@ -491,8 +494,8 @@ impl PendingCheck {
                         line: candidate.line,
                         change: candidate.change,
                         in_diff: listed.placed.in_diff,
-                        proven: listed.placed.proven,
-                        likely: listed.placed.likely,
+                        proven: writes_first(listed.placed.proven),
+                        likely: writes_first(listed.placed.likely),
                         unresolved: listed.placed.unresolved,
                     });
                 }
@@ -2027,6 +2030,13 @@ fn walk_seed_callers<'a>(
     (callers, seeds_cut)
 }
 
+/// The sites in their order with writes first, then read-writes, reads, and sites with no
+/// access; sites with no access keep their order.
+fn writes_first(mut sites: Vec<EditSite>) -> Vec<EditSite> {
+    sites.sort_by_key(|site| SiteAccess::rank(site.access));
+    sites
+}
+
 fn is_call(kind: &str) -> bool {
     matches!(kind, "calls" | "call" | "instantiates")
 }
@@ -2049,6 +2059,7 @@ fn edit_site(labeled: &LabeledSite, line: usize, note: Option<String>) -> EditSi
             labeled.site.enclosing_symbol_name.as_deref(),
         ),
         note,
+        access: labeled.access,
     }
 }
 
@@ -2986,6 +2997,7 @@ impl<'a> SiteLister<'a> {
                     line: row.line,
                     caller: format!("{}.{}", row.owner, row.name),
                     note: None,
+                    access: None,
                 },
             );
         }
@@ -3004,6 +3016,7 @@ impl<'a> SiteLister<'a> {
                     line: *line,
                     caller: String::new(),
                     note: Some(format!("imports `{}`", report.target.name)),
+                    access: None,
                 },
             );
         }
@@ -3117,6 +3130,7 @@ impl<'a> SiteLister<'a> {
                         line,
                         caller: caller.clone(),
                         note,
+                        access: None,
                     },
                 );
             }
@@ -3418,6 +3432,7 @@ impl<'a> SiteLister<'a> {
                     line: construction.line,
                     caller,
                     note: None,
+                    access: None,
                 },
             );
         }
@@ -3461,6 +3476,7 @@ impl<'a> SiteLister<'a> {
                         line,
                         caller: format!("{}.{}", subject.name, method.name),
                         note: None,
+                        access: None,
                     },
                 );
             }
@@ -3664,6 +3680,7 @@ fn variant_site(used: &VariantUse) -> EditSite {
         line: used.line,
         caller: used.caller.clone(),
         note: None,
+        access: None,
     }
 }
 
@@ -3979,6 +3996,7 @@ mod tests {
             basis: "name".to_owned(),
             end_line: None,
             arg_count: None,
+            access: None,
         }
     }
 

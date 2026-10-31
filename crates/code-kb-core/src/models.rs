@@ -108,6 +108,81 @@ impl SiteLabel {
     }
 }
 
+/// Whether a site of a field, property, variable, or constant writes it, reads it, or both, from
+/// the `access` that julie writes on a variable-reference or member-access identifier.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum SiteAccess {
+    Write,
+    ReadWrite,
+    Read,
+}
+
+impl SiteAccess {
+    pub fn parse(text: &str) -> Option<Self> {
+        match text {
+            "write" => Some(SiteAccess::Write),
+            "read_write" => Some(SiteAccess::ReadWrite),
+            "read" => Some(SiteAccess::Read),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SiteAccess::Write => "write",
+            SiteAccess::ReadWrite => "read_write",
+            SiteAccess::Read => "read",
+        }
+    }
+
+    /// The access of one site that several rows of one line share: a write and a read together
+    /// are a read-write.
+    pub fn merge(kept: Option<Self>, other: Option<Self>) -> Option<Self> {
+        match (kept, other) {
+            (None, access) | (access, None) => access,
+            (Some(a), Some(b)) if a == b => Some(a),
+            _ => Some(SiteAccess::ReadWrite),
+        }
+    }
+
+    /// Position in the report order inside a label: writes, read-writes, reads, then sites with
+    /// no access.
+    pub fn rank(access: Option<Self>) -> usize {
+        match access {
+            Some(SiteAccess::Write) => 0,
+            Some(SiteAccess::ReadWrite) => 1,
+            Some(SiteAccess::Read) => 2,
+            None => 3,
+        }
+    }
+}
+
+/// How many sites of a field, property, variable, or constant write it, read and write it, read
+/// it, or carry no access.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AccessCounts {
+    pub writes: usize,
+    pub read_writes: usize,
+    pub reads: usize,
+    pub unclassified: usize,
+}
+
+impl AccessCounts {
+    pub fn of<'a>(sites: impl IntoIterator<Item = &'a LabeledSite>) -> Self {
+        let mut counts = AccessCounts::default();
+        for site in sites {
+            match site.access {
+                Some(SiteAccess::Write) => counts.writes += 1,
+                Some(SiteAccess::ReadWrite) => counts.read_writes += 1,
+                Some(SiteAccess::Read) => counts.reads += 1,
+                None => counts.unclassified += 1,
+            }
+        }
+        counts
+    }
+}
+
 /// One line of the project that holds the target's name, with the evidence that ties it to the
 /// target. `end_line` is set only when the site spans more than its first line.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -121,6 +196,10 @@ pub struct LabeledSite {
     /// The number of arguments the call passes, when julie recorded it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub arg_count: Option<u32>,
+    /// Whether the site writes or reads the target; set only on the sites of a field, property,
+    /// variable, or constant target whose report has an access fact.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access: Option<SiteAccess>,
 }
 
 /// Lines that hold the target's name as a whole word but have no site, definition, or import.
@@ -262,6 +341,10 @@ pub struct ReferenceReport {
     /// The target's language records no reference sites, so sites inside its files are missing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub coverage_gap: Option<CoverageGap>,
+    /// The sites by access, when the target is a field, property, variable, or constant and a
+    /// site has an access fact.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access_counts: Option<AccessCounts>,
 }
 
 pub(crate) fn has_generated_lambda_name(name: &str) -> bool {
@@ -456,6 +539,8 @@ pub struct ContextCallers {
     pub unchecked: usize,
     #[serde(default)]
     pub cannot_see: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access_counts: Option<AccessCounts>,
 }
 
 /// One `search` hit. `score` is the rerank score; `explain` is present only when the

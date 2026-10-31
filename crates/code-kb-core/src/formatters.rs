@@ -3,9 +3,10 @@ use std::path::Path;
 
 use crate::edit_check::{BaseSource, EditCheck, EditSite, ShapeChange};
 use crate::models::{
-    BlastRadiusResult, CallersReportSites, CallingTest, ConstructionSite, ContextCallers,
-    ContextSlice, ImpactedSymbol, LabeledSite, OpenEnd, OverrideRow, ReferenceReport,
-    ReferenceSite, Registration, SearchExplain, SiteLabel, Symbol, SymbolSearchResult, VariantUse,
+    AccessCounts, BlastRadiusResult, CallersReportSites, CallingTest, ConstructionSite,
+    ContextCallers, ContextSlice, ImpactedSymbol, LabeledSite, OpenEnd, OverrideRow,
+    ReferenceReport, ReferenceSite, Registration, SearchExplain, SiteAccess, SiteLabel, Symbol,
+    SymbolSearchResult, VariantUse,
 };
 
 /// Format progressive disclosure file skeleton with implementation bodies stripped.
@@ -1178,6 +1179,7 @@ fn context_callers_section(slice: &ContextSlice) -> String {
         sites,
         unchecked,
         cannot_see,
+        access_counts,
     }) = &slice.callers
     else {
         out.push_str(&format!(
@@ -1198,8 +1200,13 @@ fn context_callers_section(slice: &ContextSlice) -> String {
         return out;
     }
     out.push_str(&format!(
-        "Sites: {} · proven {} · likely {} · unresolved {} · excluded {}\n",
-        counts.sites, counts.proven, counts.likely, counts.unresolved, counts.excluded,
+        "Sites: {} · proven {} · likely {} · unresolved {} · excluded {}{}\n",
+        counts.sites,
+        counts.proven,
+        counts.likely,
+        counts.unresolved,
+        counts.excluded,
+        access_counts_text(access_counts.as_ref()),
     ));
     for (label, title, total) in [
         (SiteLabel::Proven, "Proven", counts.proven),
@@ -1219,7 +1226,7 @@ fn context_callers_section(slice: &ContextSlice) -> String {
                 site.path,
                 site.kind,
                 labeled.basis,
-                arg_count_text(labeled)
+                site_tags(labeled)
             ));
         }
         let hidden = total.saturating_sub(shown.len());
@@ -1615,7 +1622,7 @@ pub fn format_reference_report(report: &ReferenceReport, limit: usize) -> String
     let target = &report.target;
     let counts = &report.counts;
     let mut out = format!(
-        "References to {} `{}` ({}:{})\nSites: {} · proven {} · likely {} · unresolved {} · excluded {}\n",
+        "References to {} `{}` ({}:{})\nSites: {} · proven {} · likely {} · unresolved {} · excluded {}{}\n",
         target.kind,
         target.display_name,
         target.path,
@@ -1625,6 +1632,7 @@ pub fn format_reference_report(report: &ReferenceReport, limit: usize) -> String
         counts.likely,
         counts.unresolved,
         counts.excluded,
+        access_counts_text(report.access_counts.as_ref()),
     );
     out.push_str(&text_count_line(report));
     let scan = &report.text_scan;
@@ -1678,7 +1686,7 @@ pub fn format_reference_report_page(
     let target = &report.target;
     let counts = &report.counts;
     let mut out = format!(
-        "References to {} `{}` ({}:{})\nSites: {} · proven {} · likely {} · unresolved {} · excluded {}\n",
+        "References to {} `{}` ({}:{})\nSites: {} · proven {} · likely {} · unresolved {} · excluded {}{}\n",
         target.kind,
         target.display_name,
         target.path,
@@ -1688,6 +1696,7 @@ pub fn format_reference_report_page(
         counts.likely,
         counts.unresolved,
         counts.excluded,
+        access_counts_text(report.access_counts.as_ref()),
     );
     out.push_str(&text_count_line(report));
     let scan = &report.text_scan;
@@ -1783,7 +1792,7 @@ fn site_groups_page(sites: &[LabeledSite], limit: usize, offset: usize) -> Strin
                 site.path,
                 site.kind,
                 labeled.basis,
-                arg_count_text(labeled)
+                site_tags(labeled)
             ));
         }
         if end < group.len() {
@@ -2028,7 +2037,7 @@ fn site_groups(sites: &[LabeledSite], limit: usize) -> String {
                 site.path,
                 site.kind,
                 labeled.basis,
-                arg_count_text(labeled)
+                site_tags(labeled)
             ));
         }
         if shown < group.len() {
@@ -2036,6 +2045,36 @@ fn site_groups(sites: &[LabeledSite], limit: usize) -> String {
         }
     }
     out
+}
+
+/// The tags after a site's basis: its argument count, then its access.
+fn site_tags(labeled: &LabeledSite) -> String {
+    let mut out = arg_count_text(labeled);
+    if let Some(access) = labeled.access {
+        out.push_str("; ");
+        out.push_str(access_text(access));
+    }
+    out
+}
+
+fn access_text(access: SiteAccess) -> &'static str {
+    match access {
+        SiteAccess::Write => "write",
+        SiteAccess::ReadWrite => "read-write",
+        SiteAccess::Read => "read",
+    }
+}
+
+/// ` · writes 2, read-writes 1, reads 5, unclassified 0` after the label counts of a `Sites:`
+/// line, when the report splits its sites by access.
+fn access_counts_text(counts: Option<&AccessCounts>) -> String {
+    match counts {
+        Some(counts) => format!(
+            " · writes {}, read-writes {}, reads {}, unclassified {}",
+            counts.writes, counts.read_writes, counts.reads, counts.unclassified
+        ),
+        None => String::new(),
+    }
 }
 
 /// `; 2 args` after the basis, left out when the basis already starts with the count.
@@ -3237,12 +3276,19 @@ fn edit_site_row(site: &EditSite) -> String {
     } else {
         format!("`{}`", site.caller)
     };
+    let access = site
+        .access
+        .map(|access| format!("  {}", access_text(access)))
+        .unwrap_or_default();
     let note = site
         .note
         .as_deref()
         .map(|note| format!("  {note}"))
         .unwrap_or_default();
-    format!("      {}:{}  {caller}{note}\n", site.path, site.line)
+    format!(
+        "      {}:{}  {caller}{access}{note}\n",
+        site.path, site.line
+    )
 }
 
 /// The warning for the symbols where the walk stopped because no indexed code calls them: the
@@ -5257,6 +5303,7 @@ mod tests {
             basis: "import".into(),
             end_line: None,
             arg_count: None,
+            access: None,
         }
     }
 
@@ -5291,6 +5338,7 @@ mod tests {
             ],
             unchecked: 0,
             cannot_see: Vec::new(),
+            access_counts: None,
         });
         slice.tests = vec![sample_test(1)];
         slice.open_ends = vec![OpenEnd {
@@ -5342,6 +5390,7 @@ mod tests {
             sites: vec![sample_site("run", SiteLabel::Proven, 7)],
             unchecked: 2,
             cannot_see: Vec::new(),
+            access_counts: None,
         });
 
         let text = format_context_slice(&slice);
@@ -5384,6 +5433,7 @@ mod tests {
                 "calls through getattr() or names built at runtime".into(),
                 "calls inside macro bodies".into(),
             ],
+            access_counts: None,
         });
 
         let silent = format_context_slice(&silent);
@@ -6238,6 +6288,7 @@ mod tests {
             basis: basis.into(),
             end_line: None,
             arg_count: None,
+            access: None,
         }
     }
 
@@ -6281,6 +6332,7 @@ mod tests {
             registrations: Vec::new(),
             tests: Vec::new(),
             coverage_gap: None,
+            access_counts: None,
         }
     }
 

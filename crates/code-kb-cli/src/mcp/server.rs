@@ -483,7 +483,7 @@ impl McpServer {
             },
             Tool {
                 name: "find_references".to_string(),
-                description: "Callers of a symbol: every indexed site with its name, each labeled proven, likely, unresolved, or excluded by its evidence, plus a whole-word text count that accounts for every line of the name. Use instead of rg or grep on a name. Callees: the calls a symbol makes. Pass file_path or a qualified name for a common name. Text reports support bounded per-section pages; each call reads the current index, keep the same project_root and filter, and restart at offset 0 after index changes. Page limit is at most 200; offset may extend beyond 200.".to_string(),
+                description: "Callers of a symbol: every indexed site with its name, each labeled proven, likely, unresolved, or excluded by its evidence, plus a whole-word text count that accounts for every line of the name. A field, property, variable, or constant lists its writes first. Use instead of rg or grep on a name. Callees: the calls a symbol makes. Pass file_path or a qualified name for a common name. Text reports support bounded per-section pages; each call reads the current index, keep the same project_root and filter, and restart at offset 0 after index changes. Page limit is at most 200; offset may extend beyond 200.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
