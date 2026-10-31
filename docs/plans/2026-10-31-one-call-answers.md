@@ -184,6 +184,39 @@ Owner files: `scripts/julie-pins.json`, `sync.rs`, `queries.rs`, `formatters.rs`
   writes first for a removed or retyped field. Languages without the fact keep the
   single list.
 
+### 6. `guidance-alignment`: skills and razorback match 2.12.0
+
+Run after tasks 1-4 merge and before the 2.12.0 measurement, since agents follow this
+text in the study cases. Run it again, scoped to the new sections, after task 5.
+
+code-kb owner files: `skills/code-kb/SKILL.md` and its reference files,
+`skills/code-kb-telemetry/`, `skills/report-issue/`, README, `docs/` pages that teach
+tool use.
+
+razorback owner files (`~/source/razorback`, its own branch and PR): every file that
+names code-kb tools. `grep -rlE 'code-kb|file_skeleton|get_symbol_context'` outside
+`.git`, `node_modules`, and `.memories` finds them: the `using-razorback` skill and its
+toolchain table, `agents/code-reviewer.md`, `skills/architecture-quality/`, the
+per-harness rule files (`.clinerules/`, `.cursor/rules/`, `.windsurf/rules/`,
+`.kiro/steering/`, `.github/copilot-instructions.md`), the INSTALL and README pages,
+`CLAUDE.md`, and `docs/site/index.html`. Leave `.memories/` and dated plans as history.
+
+- Read each file against the 2.12.0 answers: `get_symbol_context` carries callers,
+  tests to run, open ends, and return types; a unique short `lookup_symbol` carries the
+  body; `file_skeleton` takes `public_only`; `lookup_symbol` finds routes and config
+  keys; Read the file you will edit.
+- Fix each place that tells an agent to make a call the answer now makes for it (a
+  `find_references` or `blast_radius` right after `get_symbol_context`, a
+  `get_symbol_body` right after a unique lookup, a `file_skeleton` before every Read).
+  Keep `find_references` and `blast_radius` as drill-downs for the full list.
+- Keep one wording across code-kb's routing block, its skill, and razorback's toolchain
+  table, so the harnesses do not teach different chains.
+- Each skill change runs the repo's own skill checks (razorback `writing-skills`
+  pressure scenarios for a changed rule; the plugin tests in both repos).
+- Tests: a check in each repo that fails when a file tells an agent to call
+  `file_skeleton` before every Read, or to follow `get_symbol_context` with
+  `find_references` and `blast_radius` as required steps.
+
 ## Measurement
 
 Run after tasks 1-3 land in one branch, before the release:
@@ -196,12 +229,13 @@ Run after tasks 1-3 land in one branch, before the release:
 
 ## Release order
 
-1. Tasks 1-4 to `main` through PRs; measurement; release code-kb 2.12.0.
+1. Tasks 1-4 to `main` through PRs; task 6 in code-kb and razorback; measurement;
+   release code-kb 2.12.0 and razorback with it.
 2. julie 3.11.0 release (separate session, its own plan).
-3. Task 5; release code-kb 2.13.0.
+3. Task 5; task 6 again for the new sections; release code-kb 2.13.0.
 
 ## Effort
 
-For an agent: tasks 1-3 one session each, task 4 one session, the measurement one
+For an agent: tasks 1-3 one session each, task 4 one session, task 6 one session per repo, the measurement one
 session, task 5 one session after the julie release. Human time: the measurement
 verdict, the pin bump approval, and the three release approvals.
