@@ -184,7 +184,7 @@ fn fts_content_is_missing(conn: &Connection, table: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn fts_index_is_ready(conn: &Connection) -> bool {
+pub(crate) fn fts_index_is_ready(conn: &Connection) -> bool {
     stored_fts_rule(conn).as_deref() == Some(FTS_RULE)
         && !fts_content_is_missing(conn, "symbols_fts")
         && !fts_content_is_missing(conn, "symbol_names_tri")
@@ -387,7 +387,7 @@ pub fn link_impl_owners(conn: &Connection) -> rusqlite::Result<()> {
     let unlinked: Vec<(String, String, String, String)> = conn
         .prepare(&format!(
             "SELECT symbol_id, path, language, json_extract(metadata_json, '$.impl_type_name')
-             FROM symbols
+             FROM symbols INDEXED BY idx_symbols_unlinked_impl
              WHERE {UNLINKED} AND json_valid(metadata_json)
                AND json_extract(metadata_json, '$.impl_type_name') IS NOT NULL"
         ))?
@@ -499,7 +499,7 @@ fn go_receiver_links(conn: &Connection) -> rusqlite::Result<Vec<(String, String)
     let unlinked: Vec<(String, String, String)> = conn
         .prepare(&format!(
             "SELECT symbol_id, path, json_extract(metadata_json, '$.receiver_type')
-             FROM symbols
+             FROM symbols INDEXED BY idx_symbols_unlinked_go_method
              WHERE {UNLINKED} AND json_valid(metadata_json)
                AND json_extract(metadata_json, '$.receiver_type') IS NOT NULL"
         ))?
@@ -724,6 +724,67 @@ mod tests {
         assert_eq!(go_receiver_type_name("Pair[K, V]"), "Pair");
         assert_eq!(go_receiver_type_name("(*Command)"), "Command");
         assert_eq!(go_receiver_type_name("Name"), "Name");
+    }
+
+    #[test]
+    fn link_impl_owners_ignores_unrelated_parentless_symbols() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol_id TEXT PRIMARY KEY,
+                path TEXT,
+                name TEXT,
+                kind TEXT,
+                language TEXT,
+                parent_symbol_id TEXT,
+                metadata_json TEXT
+            );
+            CREATE INDEX idx_symbols_parent ON symbols(parent_symbol_id);
+            CREATE INDEX idx_symbols_name_kind ON symbols(name, kind);",
+        )
+        .unwrap();
+        link_impl_owners(&conn).unwrap();
+
+        let count_steps = |conn: &Connection| {
+            let steps = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let progress = std::sync::Arc::clone(&steps);
+            conn.progress_handler(
+                1,
+                Some(move || {
+                    progress.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    false
+                }),
+            )
+            .unwrap();
+            link_impl_owners(conn).unwrap();
+            conn.progress_handler(0, None::<fn() -> bool>).unwrap();
+            steps.load(std::sync::atomic::Ordering::Relaxed)
+        };
+
+        let empty_steps = count_steps(&conn);
+        let tx = conn.transaction().unwrap();
+        {
+            let mut insert = tx
+                .prepare(
+                    "INSERT INTO symbols
+                     (symbol_id, path, name, kind, language, parent_symbol_id, metadata_json)
+                     VALUES (?1, ?2, ?3, 'function', 'rust', NULL, '{}')",
+                )
+                .unwrap();
+            for index in 0..4096 {
+                let id = format!("noise-{index}");
+                let path = format!("noise/{index}.rs");
+                let name = format!("noise_{index}");
+                insert.execute(rusqlite::params![id, path, name]).unwrap();
+            }
+        }
+        tx.commit().unwrap();
+
+        let noisy_steps = count_steps(&conn);
+        assert!(
+            noisy_steps <= empty_steps + 128,
+            "unrelated parentless symbols increased linking work from {empty_steps} to {noisy_steps} SQLite VM steps"
+        );
     }
 
     #[test]

@@ -14,6 +14,8 @@ Use raw pending-row chains, caller language, and source positions for this proof
 
 The judge can reuse computed evidence without repeatedly compiling nested owner and ancestry programs. Fixed prepared statements live only for one report. This adds a private adapter between shared proof queries and report classification; it changes no MCP/CLI schema.
 
+Owner evidence is independent of the selected target. One report may reuse its most recent owner-evidence chunk when the ordered pending-row IDs match exactly. Keep only one chunk, no larger than the existing judge chunk, and discard it before computing a different one. Preserve its unknown owners and incomplete-ancestry marker. Target status and judging still run separately for each target, including a removed target; do not reuse a subset, combine chunks, or retain evidence beyond the report's read snapshot.
+
 Do not replace the report's claim/rival ordering, hydrate repository graphs, register SQL functions, write temporary tables, cache repository data globally, or increase deadlines to hide query expansion.
 
 ## Graph and callee preparation

@@ -1,0 +1,526 @@
+{
+  "kind": "receiver-live-memory-before-after",
+  "created_utc": "2026-10-31",
+  "code_kb_checkout": {
+    "path": "/home/murphy/source/code-kb",
+    "branch": "main",
+    "head": "1fc6a1a7b86ba66094e0e8373880f3454d0d8140",
+    "shared_worktree_dirty": true
+  },
+  "target_corpus": {
+    "project_root": "/home/murphy/source/aspnetcore",
+    "git_head": "7a1c5c1f848413dda7ec17fbeeb948f30cc6b5f4",
+    "tracked_source_changes_during_probe": false,
+    "preexisting_untracked_paths": [
+      ".julieignore",
+      ".miller/"
+    ],
+    "original_db": {
+      "path": "/home/murphy/source/aspnetcore/.code-kb/artifact.db",
+      "size_bytes": 2232598528,
+      "mtime": "2026-10-30 11:54:38.373235532 -0500",
+      "sha256_before_and_after": "dd547d77d2815d2f22e55377bb7e3fb1dbbb009ec5aa904a263902819414d9cc",
+      "wal_bytes_before_and_after": 0,
+      "shm_sidecar": "32 KiB; its mtime advanced during the probe interval, but artifact.db bytes/hash/mtime and WAL remained unchanged"
+    },
+    "pinned_db_copy": {
+      "path": "/home/murphy/.cache/code-kb-rss-aspnetcore/artifact.db",
+      "copied_with": "cp --reflink=auto --preserve=mode,timestamps",
+      "size_bytes": 2232598528,
+      "sha256_before_and_after": "dd547d77d2815d2f22e55377bb7e3fb1dbbb009ec5aa904a263902819414d9cc",
+      "wal_bytes_after_each_probe": 0
+    }
+  },
+  "request": {
+    "transport": "live MCP server over stdio",
+    "tool": "find_references",
+    "arguments": {
+      "project_root": "/home/murphy/source/aspnetcore",
+      "file_path": "src/Http/Http.Abstractions/src/HttpResponse.cs",
+      "symbol_id": "df091962119b0c9572b3979e10b2e7ce",
+      "direction": "callers",
+      "limit": 20
+    },
+    "selected_symbol": "method OnCompleted at line 110",
+    "ambiguous_name_note": "A name plus file-path request found two OnCompleted overloads. The measured request uses line 110 symbol_id, matching the original profile target.",
+    "pinned_db_launch": "The serve --help option says --db is an explicit SQLite artifact database; launch root and each request project_root were both /home/murphy/source/aspnetcore."
+  },
+  "harness": {
+    "source": "/tmp/code-kb-findref-rss.py",
+    "method": "One live serve process per build; one warm-up then three measured calls. /proc/<pid>/status sampled every 5 ms during each call.",
+    "command_template": "CODE_KB_RSS_ROOT=/home/murphy/source/aspnetcore CODE_KB_RSS_DB=/home/murphy/.cache/code-kb-rss-aspnetcore/artifact.db CODE_KB_RSS_BINARY=<binary> CODE_KB_RSS_CAPTURE=<capture.json> CODE_KB_RSS_SYMBOL_ID=df091962119b0c9572b3979e10b2e7ce python3 /tmp/code-kb-findref-rss.py"
+  },
+  "before": {
+    "binary": {
+      "path": "/home/murphy/source/code-kb/target/release/code-kb",
+      "version": "code-kb 2.11.2",
+      "sha256": "b2a5b51992a713ca4ebcd3220825cbb637ddffe02c133b126de75ab734bcfc83",
+      "size_bytes": 9827512,
+      "mtime": "2026-10-30 23:50:28.502783915 -0500"
+    },
+    "serve_command": [
+      "/home/murphy/source/code-kb/target/release/code-kb",
+      "serve",
+      "--root",
+      "/home/murphy/source/aspnetcore",
+      "--db",
+      "/home/murphy/.cache/code-kb-rss-aspnetcore/artifact.db"
+    ],
+    "sampling": {
+      "source": "/proc/<pid>/status",
+      "interval_ms": 5,
+      "rss_fields": [
+        "VmRSS",
+        "RssAnon",
+        "RssFile",
+        "RssShmem"
+      ]
+    },
+    "warmup_plus_three_runs": [
+      {
+        "position": "warmup",
+        "elapsed_ms": 4158.937,
+        "sample_count": 803,
+        "rss_kib": {
+          "before": {
+            "VmRSS": 11640,
+            "RssAnon": 4552,
+            "RssFile": 7088,
+            "RssShmem": 0
+          },
+          "peak": {
+            "VmRSS": 211364,
+            "RssAnon": 36052,
+            "RssFile": 175760,
+            "RssShmem": 0
+          },
+          "after": {
+            "VmRSS": 26752,
+            "RssAnon": 15952,
+            "RssFile": 10800,
+            "RssShmem": 0
+          }
+        },
+        "peak_rssanon_delta_kib": 31500,
+        "retained_after_call_rssanon_kib": 15952,
+        "output": {
+          "text_bytes": 9260,
+          "text_sha256": "bffc01c465e2611219cca5bf693e91a91e43d3d80466e95676cdbfd8e57387b3",
+          "reference_counts": {
+            "sites": 46,
+            "proven": 3,
+            "likely": 0,
+            "unresolved": 17,
+            "excluded": 26
+          },
+          "text_scan_summary": "`OnCompleted` is on 146 lines: 46 sites, 55 definitions, 0 imports, 45 text only.",
+          "not_checked_within_site_time_limit": {
+            "sites": 9,
+            "total_sites": 46,
+            "budget_seconds": 3.0
+          },
+          "header": "References to method `HttpResponse.OnCompleted` (src/Http/Http.Abstractions/src/HttpResponse.cs:110)"
+        }
+      },
+      {
+        "position": "request_1",
+        "elapsed_ms": 3762.594,
+        "sample_count": 717,
+        "rss_kib": {
+          "before": {
+            "VmRSS": 26752,
+            "RssAnon": 15952,
+            "RssFile": 10800,
+            "RssShmem": 0
+          },
+          "peak": {
+            "VmRSS": 212668,
+            "RssAnon": 36780,
+            "RssFile": 175888,
+            "RssShmem": 0
+          },
+          "after": {
+            "VmRSS": 28076,
+            "RssAnon": 17276,
+            "RssFile": 10800,
+            "RssShmem": 0
+          }
+        },
+        "peak_rssanon_delta_kib": 20828,
+        "retained_after_call_rssanon_kib": 17276,
+        "output": {
+          "text_bytes": 9260,
+          "text_sha256": "bffc01c465e2611219cca5bf693e91a91e43d3d80466e95676cdbfd8e57387b3",
+          "reference_counts": {
+            "sites": 46,
+            "proven": 3,
+            "likely": 0,
+            "unresolved": 17,
+            "excluded": 26
+          },
+          "text_scan_summary": "`OnCompleted` is on 146 lines: 46 sites, 55 definitions, 0 imports, 45 text only.",
+          "not_checked_within_site_time_limit": {
+            "sites": 9,
+            "total_sites": 46,
+            "budget_seconds": 3.0
+          },
+          "header": "References to method `HttpResponse.OnCompleted` (src/Http/Http.Abstractions/src/HttpResponse.cs:110)"
+        }
+      },
+      {
+        "position": "request_2",
+        "elapsed_ms": 3099.6,
+        "sample_count": 592,
+        "rss_kib": {
+          "before": {
+            "VmRSS": 28076,
+            "RssAnon": 17276,
+            "RssFile": 10800,
+            "RssShmem": 0
+          },
+          "peak": {
+            "VmRSS": 213140,
+            "RssAnon": 37316,
+            "RssFile": 175824,
+            "RssShmem": 0
+          },
+          "after": {
+            "VmRSS": 30372,
+            "RssAnon": 19572,
+            "RssFile": 10800,
+            "RssShmem": 0
+          }
+        },
+        "peak_rssanon_delta_kib": 20040,
+        "retained_after_call_rssanon_kib": 19572,
+        "output": {
+          "text_bytes": 9382,
+          "text_sha256": "5b2b9cddbb3cab2a20455609c273889230e15c320098b12282876a9a62c5d1eb",
+          "reference_counts": {
+            "sites": 46,
+            "proven": 3,
+            "likely": 0,
+            "unresolved": 18,
+            "excluded": 25
+          },
+          "text_scan_summary": "`OnCompleted` is on 146 lines: 46 sites, 55 definitions, 0 imports, 45 text only.",
+          "not_checked_within_site_time_limit": {
+            "sites": 10,
+            "total_sites": 46,
+            "budget_seconds": 3.0
+          },
+          "header": "References to method `HttpResponse.OnCompleted` (src/Http/Http.Abstractions/src/HttpResponse.cs:110)"
+        }
+      },
+      {
+        "position": "request_3",
+        "elapsed_ms": 3612.238,
+        "sample_count": 693,
+        "rss_kib": {
+          "before": {
+            "VmRSS": 30372,
+            "RssAnon": 19572,
+            "RssFile": 10800,
+            "RssShmem": 0
+          },
+          "peak": {
+            "VmRSS": 215444,
+            "RssAnon": 39556,
+            "RssFile": 175888,
+            "RssShmem": 0
+          },
+          "after": {
+            "VmRSS": 31988,
+            "RssAnon": 21188,
+            "RssFile": 10800,
+            "RssShmem": 0
+          }
+        },
+        "peak_rssanon_delta_kib": 19984,
+        "retained_after_call_rssanon_kib": 21188,
+        "output": {
+          "text_bytes": 9260,
+          "text_sha256": "bffc01c465e2611219cca5bf693e91a91e43d3d80466e95676cdbfd8e57387b3",
+          "reference_counts": {
+            "sites": 46,
+            "proven": 3,
+            "likely": 0,
+            "unresolved": 17,
+            "excluded": 26
+          },
+          "text_scan_summary": "`OnCompleted` is on 146 lines: 46 sites, 55 definitions, 0 imports, 45 text only.",
+          "not_checked_within_site_time_limit": {
+            "sites": 9,
+            "total_sites": 46,
+            "budget_seconds": 3.0
+          },
+          "header": "References to method `HttpResponse.OnCompleted` (src/Http/Http.Abstractions/src/HttpResponse.cs:110)"
+        }
+      }
+    ],
+    "capture_file": {
+      "path": "/tmp/code-kb-aspnetcore-findref-baseline-df091962.json",
+      "sha256": "b560c6cc0d13f427420dc131b2b335d8e1be21aa75ab7e046c0ab690ac0db1bb"
+    }
+  },
+  "after": {
+    "binary": {
+      "path": "/home/murphy/source/code-kb/target/release/code-kb",
+      "version": "code-kb 2.11.2",
+      "sha256": "425d6dabe169d359084927b45f27b5079f95f1c124b9aa1f4def7eb502daee91",
+      "size_bytes": 9830456,
+      "mtime": "2026-10-31 09:25:28.305252770 -0500"
+    },
+    "serve_command": [
+      "/home/murphy/source/code-kb/target/release/code-kb",
+      "serve",
+      "--root",
+      "/home/murphy/source/aspnetcore",
+      "--db",
+      "/home/murphy/.cache/code-kb-rss-aspnetcore/artifact.db"
+    ],
+    "sampling": {
+      "source": "/proc/<pid>/status",
+      "interval_ms": 5,
+      "rss_fields": [
+        "VmRSS",
+        "RssAnon",
+        "RssFile",
+        "RssShmem"
+      ]
+    },
+    "warmup_plus_three_runs": [
+      {
+        "position": "warmup",
+        "elapsed_ms": 1722.294,
+        "sample_count": 334,
+        "rss_kib": {
+          "before": {
+            "VmRSS": 11748,
+            "RssAnon": 4552,
+            "RssFile": 7196,
+            "RssShmem": 0
+          },
+          "peak": {
+            "VmRSS": 238824,
+            "RssAnon": 34540,
+            "RssFile": 204348,
+            "RssShmem": 0
+          },
+          "after": {
+            "VmRSS": 26100,
+            "RssAnon": 15384,
+            "RssFile": 10716,
+            "RssShmem": 0
+          }
+        },
+        "peak_rssanon_delta_kib": 29988,
+        "retained_after_call_rssanon_kib": 15384,
+        "output": {
+          "text_bytes": 8846,
+          "text_sha256": "ea47ede3f9089aaae8e30bd552bfd9e5d6934a9ea7da7cc048d46833ac62aeeb",
+          "reference_counts": {
+            "sites": 46,
+            "proven": 3,
+            "likely": 0,
+            "unresolved": 16,
+            "excluded": 27
+          },
+          "text_scan_summary": "`OnCompleted` is on 146 lines: 46 sites, 55 definitions, 0 imports, 45 text only.",
+          "not_checked_within_site_time_limit": null,
+          "header": "References to method `HttpResponse.OnCompleted` (src/Http/Http.Abstractions/src/HttpResponse.cs:110)"
+        }
+      },
+      {
+        "position": "request_1",
+        "elapsed_ms": 874.244,
+        "sample_count": 168,
+        "rss_kib": {
+          "before": {
+            "VmRSS": 26100,
+            "RssAnon": 15384,
+            "RssFile": 10716,
+            "RssShmem": 0
+          },
+          "peak": {
+            "VmRSS": 240960,
+            "RssAnon": 36548,
+            "RssFile": 204412,
+            "RssShmem": 0
+          },
+          "after": {
+            "VmRSS": 29928,
+            "RssAnon": 19212,
+            "RssFile": 10716,
+            "RssShmem": 0
+          }
+        },
+        "peak_rssanon_delta_kib": 21164,
+        "retained_after_call_rssanon_kib": 19212,
+        "output": {
+          "text_bytes": 8846,
+          "text_sha256": "ea47ede3f9089aaae8e30bd552bfd9e5d6934a9ea7da7cc048d46833ac62aeeb",
+          "reference_counts": {
+            "sites": 46,
+            "proven": 3,
+            "likely": 0,
+            "unresolved": 16,
+            "excluded": 27
+          },
+          "text_scan_summary": "`OnCompleted` is on 146 lines: 46 sites, 55 definitions, 0 imports, 45 text only.",
+          "not_checked_within_site_time_limit": null,
+          "header": "References to method `HttpResponse.OnCompleted` (src/Http/Http.Abstractions/src/HttpResponse.cs:110)"
+        }
+      },
+      {
+        "position": "request_2",
+        "elapsed_ms": 867.209,
+        "sample_count": 166,
+        "rss_kib": {
+          "before": {
+            "VmRSS": 29928,
+            "RssAnon": 19212,
+            "RssFile": 10716,
+            "RssShmem": 0
+          },
+          "peak": {
+            "VmRSS": 242960,
+            "RssAnon": 38548,
+            "RssFile": 204412,
+            "RssShmem": 0
+          },
+          "after": {
+            "VmRSS": 32264,
+            "RssAnon": 21548,
+            "RssFile": 10716,
+            "RssShmem": 0
+          }
+        },
+        "peak_rssanon_delta_kib": 19336,
+        "retained_after_call_rssanon_kib": 21548,
+        "output": {
+          "text_bytes": 8846,
+          "text_sha256": "ea47ede3f9089aaae8e30bd552bfd9e5d6934a9ea7da7cc048d46833ac62aeeb",
+          "reference_counts": {
+            "sites": 46,
+            "proven": 3,
+            "likely": 0,
+            "unresolved": 16,
+            "excluded": 27
+          },
+          "text_scan_summary": "`OnCompleted` is on 146 lines: 46 sites, 55 definitions, 0 imports, 45 text only.",
+          "not_checked_within_site_time_limit": null,
+          "header": "References to method `HttpResponse.OnCompleted` (src/Http/Http.Abstractions/src/HttpResponse.cs:110)"
+        }
+      },
+      {
+        "position": "request_3",
+        "elapsed_ms": 893.355,
+        "sample_count": 172,
+        "rss_kib": {
+          "before": {
+            "VmRSS": 32264,
+            "RssAnon": 21548,
+            "RssFile": 10716,
+            "RssShmem": 0
+          },
+          "peak": {
+            "VmRSS": 244184,
+            "RssAnon": 39772,
+            "RssFile": 204412,
+            "RssShmem": 0
+          },
+          "after": {
+            "VmRSS": 32148,
+            "RssAnon": 21432,
+            "RssFile": 10716,
+            "RssShmem": 0
+          }
+        },
+        "peak_rssanon_delta_kib": 18224,
+        "retained_after_call_rssanon_kib": 21432,
+        "output": {
+          "text_bytes": 8846,
+          "text_sha256": "ea47ede3f9089aaae8e30bd552bfd9e5d6934a9ea7da7cc048d46833ac62aeeb",
+          "reference_counts": {
+            "sites": 46,
+            "proven": 3,
+            "likely": 0,
+            "unresolved": 16,
+            "excluded": 27
+          },
+          "text_scan_summary": "`OnCompleted` is on 146 lines: 46 sites, 55 definitions, 0 imports, 45 text only.",
+          "not_checked_within_site_time_limit": null,
+          "header": "References to method `HttpResponse.OnCompleted` (src/Http/Http.Abstractions/src/HttpResponse.cs:110)"
+        }
+      }
+    ],
+    "capture_file": {
+      "path": "/tmp/code-kb-aspnetcore-findref-after-df091962.json",
+      "sha256": "f7b595ff5d1c16e358d9b8db31bb6643421dddd67a8e0f3e0c45e0fba23ac389"
+    }
+  },
+  "comparison": {
+    "median_elapsed_ms": {
+      "before": 3612.238,
+      "after": 874.244
+    },
+    "median_speedup": 4.131841911411459,
+    "three_run_peak_rssanon_delta_kib": {
+      "before": [
+        20828,
+        20040,
+        19984
+      ],
+      "after": [
+        21164,
+        19336,
+        18224
+      ]
+    },
+    "max_peak_rssanon_delta_kib": {
+      "before": 20828,
+      "after": 21164
+    },
+    "median_peak_rssanon_delta_kib": {
+      "before": 20040,
+      "after": 19336
+    },
+    "post_call_retained_rssanon_kib": {
+      "before": [
+        15952,
+        17276,
+        19572,
+        21188
+      ],
+      "after": [
+        15384,
+        19212,
+        21548,
+        21432
+      ],
+      "before_range": [
+        15952,
+        21188
+      ],
+      "after_range": [
+        15384,
+        21548
+      ]
+    },
+    "max_peak_rssfile_kib": {
+      "before": 175888,
+      "after": 204412
+    },
+    "max_peak_vmrss_kib": {
+      "before": 215444,
+      "after": 244184
+    },
+    "interpretation": "RssAnon request growth is roughly 18–21 MiB across both builds. The timing and output coverage improved; these runs do not show a material anonymous-RSS reduction. VmRSS includes RssFile, which peaked differently as SQLite mapped file pages were touched, so total RSS is not attributed to heap."
+  },
+  "caveats": [
+    "Baseline calls hit the existing 3-second per-site time limit; result counts vary slightly across repeated calls. All after calls returned the same output without a per-site timeout.",
+    "Peak VmRSS includes file-backed mappings. RssAnon is reported separately and is the measure used for request heap growth.",
+    "RssAnon is measured process-level anonymous memory, not a measurement of CallerWalk or receiver cache allocations alone."
+  ]
+}

@@ -1,0 +1,214 @@
+{
+  "same_site_keys": true,
+  "all_previously_checked_sites_unchanged": false,
+  "changed_sites": [
+    {
+      "key": [
+        "src/Http/Http/test/Internal/DefaultHttpResponseTests.cs",
+        102,
+        35,
+        "c1121d7d12fe915bc5a56bcdb97e12ba",
+        "calls"
+      ],
+      "before_label": "unresolved",
+      "after_label": "unresolved",
+      "before_basis": "56 definitions; not checked within the time limit",
+      "after_basis": "56 definitions"
+    },
+    {
+      "key": [
+        "src/Security/Authentication/Negotiate/src/NegotiateHandler.cs",
+        415,
+        34,
+        "759c2388e4f4510cd6476fd0e33dfd50",
+        "calls"
+      ],
+      "before_label": "unresolved",
+      "after_label": "unresolved",
+      "before_basis": "56 definitions; not checked within the time limit",
+      "after_basis": "56 definitions"
+    },
+    {
+      "key": [
+        "src/Servers/HttpSys/src/AsyncAcceptContext.cs",
+        285,
+        15,
+        "e18def375f6abd9dfe89b6f74bdd4dc4",
+        "calls"
+      ],
+      "before_label": "excluded",
+      "after_label": "excluded",
+      "before_basis": "4 args; `OnCompleted` takes 1-2",
+      "after_basis": "receiver `_mrvts` has type `ManualResetValueTaskSourceCore`"
+    },
+    {
+      "key": [
+        "src/Servers/IIS/IIS/src/Core/NativeSafeHandle.cs",
+        46,
+        14,
+        "cba8da9521fa2f38ff6f082ad7561bea",
+        "calls"
+      ],
+      "before_label": "excluded",
+      "after_label": "excluded",
+      "before_basis": "4 args; `OnCompleted` takes 1-2",
+      "after_basis": "receiver `_core` has type `ManualResetValueTaskSourceCore`"
+    },
+    {
+      "key": [
+        "src/Servers/Kestrel/Core/test/ConnectionDispatcherTests.cs",
+        87,
+        24,
+        "ab561813620c2a5139be04c0cf8458f8",
+        "calls"
+      ],
+      "before_label": "unresolved",
+      "after_label": "unresolved",
+      "before_basis": "56 definitions; not checked within the time limit",
+      "after_basis": "56 definitions"
+    },
+    {
+      "key": [
+        "src/Servers/Kestrel/Core/test/ConnectionDispatcherTests.cs",
+        108,
+        24,
+        "a18182dc215d40e90ee0f6e83e016240",
+        "calls"
+      ],
+      "before_label": "unresolved",
+      "after_label": "unresolved",
+      "before_basis": "56 definitions; not checked within the time limit",
+      "after_basis": "56 definitions"
+    },
+    {
+      "key": [
+        "src/Servers/Kestrel/test/InMemory.FunctionalTests/ResponseTests.cs",
+        2886,
+        21,
+        "23da48185bdfecc2cd54ac325acf537c",
+        "calls"
+      ],
+      "before_label": "unresolved",
+      "after_label": "unresolved",
+      "before_basis": "56 definitions; not checked within the time limit",
+      "after_basis": "56 definitions"
+    },
+    {
+      "key": [
+        "src/Servers/Kestrel/test/InMemory.FunctionalTests/ResponseTests.cs",
+        2888,
+        25,
+        "23da48185bdfecc2cd54ac325acf537c",
+        "calls"
+      ],
+      "before_label": "unresolved",
+      "after_label": "unresolved",
+      "before_basis": "56 definitions; not checked within the time limit",
+      "after_basis": "56 definitions"
+    },
+    {
+      "key": [
+        "src/Servers/Kestrel/test/InMemory.FunctionalTests/ResponseTests.cs",
+        2936,
+        21,
+        "7c2bf335b3f93b5a3a20cb651b836860",
+        "calls"
+      ],
+      "before_label": "unresolved",
+      "after_label": "unresolved",
+      "before_basis": "56 definitions; not checked within the time limit",
+      "after_basis": "56 definitions"
+    },
+    {
+      "key": [
+        "src/Servers/Kestrel/test/InMemory.FunctionalTests/ResponseTests.cs",
+        2941,
+        21,
+        "7c2bf335b3f93b5a3a20cb651b836860",
+        "calls"
+      ],
+      "before_label": "unresolved",
+      "after_label": "unresolved",
+      "before_basis": "56 definitions; not checked within the time limit",
+      "after_basis": "56 definitions"
+    },
+    {
+      "key": [
+        "src/Shared/ObjectMethodExecutor/AwaitableInfo.cs",
+        17,
+        132,
+        "706f7e3f793edce36662ac6752004c51",
+        "member_access"
+      ],
+      "before_label": "unresolved",
+      "after_label": "excluded",
+      "before_basis": "56 definitions; not checked within the time limit",
+      "after_basis": "receiver `INotifyCompletion` has type `INotifyCompletion`"
+    },
+    {
+      "key": [
+        "src/Shared/ServerInfrastructure/ManualResetValueTaskSource.cs",
+        24,
+        134,
+        "3783fbd946f58d208954ad0470e2b069",
+        "calls"
+      ],
+      "before_label": "excluded",
+      "after_label": "excluded",
+      "before_basis": "4 args; `OnCompleted` takes 1-2",
+      "after_basis": "receiver `_core` has type `ManualResetValueTaskSourceCore`"
+    }
+  ],
+  "other_changed_fields": [
+    "cannot_see",
+    "counts",
+    "text_scan"
+  ],
+  "before_counts": {
+    "definition_lines": 55,
+    "excluded": 26,
+    "import_lines": 0,
+    "likely": 0,
+    "proven": 3,
+    "site_lines": 46,
+    "sites": 46,
+    "text_lines": 146,
+    "text_only_lines": 45,
+    "unresolved": 17
+  },
+  "after_counts": {
+    "definition_lines": 55,
+    "excluded": 27,
+    "import_lines": 0,
+    "likely": 0,
+    "proven": 3,
+    "site_lines": 46,
+    "sites": 46,
+    "text_lines": 146,
+    "text_only_lines": 45,
+    "unresolved": 16
+  },
+  "before_cannot_see": [
+    "calls through reflection or dependency injection",
+    "52 other definitions with this name were not checked",
+    "9 of 46 sites were not checked within the 3 s time limit"
+  ],
+  "after_cannot_see": [
+    "calls through reflection or dependency injection",
+    "43 other definitions with this name were not checked"
+  ],
+  "all_previously_checked_labels_unchanged": true,
+  "all_previously_proven_sites_unchanged": true,
+  "note": "Three already-excluded sites gain receiver-type evidence in place of arity evidence; their labels stay excluded. Eight previously unchecked sites remain unresolved, one becomes excluded. The other-definition cap still limits coverage.",
+  "before_source": {
+    "file": "/tmp/code-kb-perf-20261031/refs-oncompleted-before.jsonl",
+    "run": 3,
+    "result_sha256": "8870e9ee4b2f7d8b4198cb7edf1e3734a931637e9e0b77fd0c1cec03c031bd92"
+  },
+  "after_source": {
+    "file": "/tmp/code-kb-perf-20261031/refs-oncompleted-after.jsonl",
+    "run": 3,
+    "result_sha256": "238f67d1b6e5ed634aed5587079907088e4fa4f15a158d44fd57e45bb59779bf"
+  },
+  "comparison_scope": "Saved final measured core-probe before/after pair. Timed baseline coverage can vary across runs; live MCP baseline hashes differ."
+}

@@ -1799,6 +1799,8 @@ struct Accounting<'a> {
     judge_plain_stmt: RefCell<Option<Statement<'a>>>,
     judge_chain_stmt: RefCell<Option<Statement<'a>>>,
     receiver_chain_owner_stmt: RefCell<Option<Statement<'a>>>,
+    receiver_chain_owner_evidence_cache:
+        RefCell<Option<(Vec<String>, Rc<ReceiverChainOwnerEvidence>)>>,
     receiver_chain_pending_base_stmt: RefCell<Option<Statement<'a>>>,
     receiver_chain_target_stmt: RefCell<Option<Statement<'a>>>,
     /// The target when the index no longer holds it, and the judge that reads its columns from
@@ -1832,6 +1834,7 @@ impl<'a> Accounting<'a> {
             judge_plain_stmt: RefCell::new(None),
             judge_chain_stmt: RefCell::new(None),
             receiver_chain_owner_stmt: RefCell::new(None),
+            receiver_chain_owner_evidence_cache: RefCell::new(None),
             receiver_chain_pending_base_stmt: RefCell::new(None),
             receiver_chain_target_stmt: RefCell::new(None),
             absent: None,
@@ -1883,7 +1886,17 @@ impl<'a> Accounting<'a> {
     fn receiver_chain_owner_evidence(
         &self,
         pending_ids: &[String],
-    ) -> Result<ReceiverChainOwnerEvidence, QueryError> {
+    ) -> Result<Rc<ReceiverChainOwnerEvidence>, QueryError> {
+        let cacheable = !pending_ids.is_empty() && pending_ids.len() <= JUDGE_CHUNK;
+        if cacheable
+            && let Some((cached_ids, evidence)) =
+                self.receiver_chain_owner_evidence_cache.borrow().as_ref()
+            && cached_ids == pending_ids
+        {
+            return Ok(Rc::clone(evidence));
+        }
+        self.receiver_chain_owner_evidence_cache.borrow_mut().take();
+
         let mut evidence = ReceiverChainOwnerEvidence {
             owners: HashMap::new(),
             type_rooted: HashSet::new(),
@@ -1893,7 +1906,7 @@ impl<'a> Accounting<'a> {
             edge_rows_examined: 0,
         };
         if pending_ids.is_empty() || !crate::queries::has_typed_receiver_chain_support(self.conn) {
-            return Ok(evidence);
+            return Ok(Rc::new(evidence));
         }
         let pending_json = serde_json::to_string(pending_ids).unwrap_or_else(|_| "[]".to_string());
         let mut owner_slot = self.receiver_chain_owner_stmt.borrow_mut();
@@ -1924,6 +1937,11 @@ impl<'a> Accounting<'a> {
             evidence.owners.insert(row_key, Some(owner_id.to_string()));
         }
         self.extend_receiver_chain_ancestry(&mut evidence, ReceiverChainLimits::DEFAULT)?;
+        let evidence = Rc::new(evidence);
+        if cacheable {
+            *self.receiver_chain_owner_evidence_cache.borrow_mut() =
+                Some((pending_ids.to_vec(), Rc::clone(&evidence)));
+        }
         Ok(evidence)
     }
 
@@ -5989,6 +6007,213 @@ mod tests {
             .unwrap();
 
         assert_eq!(evidence.incomplete, Some(ReceiverChainLimit::Owners));
+    }
+
+    fn receiver_chain_owner_vm_steps(accounting: &Accounting<'_>) -> i32 {
+        accounting
+            .receiver_chain_owner_stmt
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .get_status(rusqlite::StatementStatus::VmStep)
+    }
+
+    fn receiver_chain_resolved_base_vm_steps(accounting: &Accounting<'_>) -> i32 {
+        accounting
+            .statements
+            .borrow()
+            .get(crate::queries::typed_receiver_chain_resolved_base_rows_sql())
+            .unwrap()
+            .get_status(rusqlite::StatementStatus::VmStep)
+    }
+
+    fn receiver_chain_target(symbol_id: &str, name: &str) -> Symbol {
+        Symbol {
+            symbol_id: symbol_id.to_owned(),
+            file_id: String::new(),
+            path: "caller.go".to_owned(),
+            language: "go".to_owned(),
+            name: name.to_owned(),
+            kind: "class".to_owned(),
+            signature: None,
+            doc_comment: None,
+            visibility: None,
+            parent_symbol_id: None,
+            start_line: 1,
+            start_column: 0,
+            end_line: 1,
+            end_column: 0,
+            start_byte: 0,
+            end_byte: 0,
+            body_start_line: None,
+            body_start_column: None,
+            body_end_line: None,
+            body_end_column: None,
+            body_start_byte: None,
+            body_end_byte: None,
+            body_hash: None,
+            semantic_group: None,
+            is_test: false,
+            test_container: false,
+        }
+    }
+
+    #[test]
+    fn receiver_chain_owner_evidence_reuses_only_the_latest_exact_bounded_key() {
+        let conn = Connection::open_in_memory().unwrap();
+        let mut accounting = receiver_chain_accounting(&conn);
+        conn.execute_batch(
+            "INSERT INTO symbols VALUES
+                ('caller', 'caller.go', 'go', 'Caller', 'function', NULL, 1, NULL, NULL, NULL),
+                ('binding', 'caller.go', 'go', 'group', 'variable', 'caller', 1, NULL, NULL, NULL),
+                ('target-a', 'caller.go', 'go', 'TargetA', 'class', NULL, 1, NULL, NULL, NULL),
+                ('target-b', 'caller.go', 'go', 'TargetB', 'class', NULL, 1, NULL, NULL, NULL);
+            INSERT INTO pending_relationships VALUES
+                ('caller', 'Send', 'calls', 'caller.go', 10, NULL, 'service', '[\"group\"]'),
+                ('caller', 'Send', 'calls', 'caller.go', 11, NULL, 'service', '[\"group\"]');",
+        )
+        .unwrap();
+        let pending_ids = ["1", "2"].map(str::to_string);
+
+        let first = accounting
+            .receiver_chain_owner_evidence(&pending_ids)
+            .unwrap();
+        assert!(first.owners.get("P:1").is_some_and(|owner| owner.is_none()));
+        let first_owner_steps = receiver_chain_owner_vm_steps(&accounting);
+        let repeated = accounting
+            .receiver_chain_owner_evidence(&pending_ids)
+            .unwrap();
+        assert!(
+            repeated
+                .owners
+                .get("P:2")
+                .is_some_and(|owner| owner.is_none())
+        );
+        assert_eq!(
+            receiver_chain_owner_vm_steps(&accounting),
+            first_owner_steps
+        );
+
+        let target_a = accounting
+            .receiver_chain_target_statuses("target-a", &first)
+            .unwrap();
+        assert!(target_a.get("P:1").is_some_and(|status| status.is_none()));
+        let first_target_steps = accounting
+            .receiver_chain_target_stmt
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .get_status(rusqlite::StatementStatus::VmStep);
+        let target_b = accounting
+            .receiver_chain_target_statuses("target-b", &repeated)
+            .unwrap();
+        assert!(target_b.get("P:1").is_some_and(|status| status.is_none()));
+        let second_target_steps = accounting
+            .receiver_chain_target_stmt
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .get_status(rusqlite::StatementStatus::VmStep);
+        assert!(second_target_steps > first_target_steps);
+
+        accounting.absent = Some(receiver_chain_target("removed-target", "TargetA"));
+        let removed = accounting
+            .receiver_chain_target_statuses("removed-target", &repeated)
+            .unwrap();
+        assert!(removed.get("P:1").is_some_and(|status| status.is_none()));
+
+        let reversed_ids = ["2", "1"].map(str::to_string);
+        let reversed = accounting
+            .receiver_chain_owner_evidence(&reversed_ids)
+            .unwrap();
+        let reversed_owner_steps = receiver_chain_owner_vm_steps(&accounting);
+        assert!(reversed_owner_steps > first_owner_steps);
+        assert!(
+            reversed
+                .owners
+                .get("P:1")
+                .is_some_and(|owner| owner.is_none())
+        );
+
+        let first_again = accounting
+            .receiver_chain_owner_evidence(&pending_ids)
+            .unwrap();
+        let first_again_steps = receiver_chain_owner_vm_steps(&accounting);
+        assert!(first_again_steps > reversed_owner_steps);
+        assert!(
+            first_again
+                .owners
+                .get("P:1")
+                .is_some_and(|owner| owner.is_none())
+        );
+
+        let oversized_ids = (1..=JUDGE_CHUNK + 1)
+            .map(|id| id.to_string())
+            .collect::<Vec<_>>();
+        accounting
+            .receiver_chain_owner_evidence(&oversized_ids)
+            .unwrap();
+        let first_oversized_steps = receiver_chain_owner_vm_steps(&accounting);
+        accounting
+            .receiver_chain_owner_evidence(&oversized_ids)
+            .unwrap();
+        assert!(receiver_chain_owner_vm_steps(&accounting) > first_oversized_steps);
+    }
+
+    #[test]
+    fn receiver_chain_owner_evidence_caches_incomplete_evidence_as_unknown() {
+        let conn = Connection::open_in_memory().unwrap();
+        let mut accounting = receiver_chain_accounting(&conn);
+        conn.execute_batch(
+            "INSERT INTO symbols VALUES
+                ('caller', 'caller.go', 'go', 'Caller', 'function', NULL, 1, NULL, NULL, NULL),
+                ('binding', 'caller.go', 'go', 'group', 'variable', 'caller', 1, NULL, NULL, NULL),
+                ('root', 'caller.go', 'go', 'Root', 'class', NULL, 1, NULL, NULL, NULL),
+                ('service', 'caller.go', 'go', 'service', 'field', 'root', 1, NULL, NULL, NULL),
+                ('target', 'caller.go', 'go', 'Target', 'class', NULL, 1, NULL, NULL, NULL);
+            INSERT INTO type_facts VALUES
+                ('binding', 'Root', 'go'),
+                ('service', 'Target', 'go');
+            INSERT INTO pending_relationships VALUES
+                ('caller', 'Send', 'calls', 'caller.go', 10, NULL, 'service', '[\"group\"]');
+            WITH RECURSIVE edges(row_number) AS (
+                VALUES (1)
+                UNION ALL
+                SELECT row_number + 1 FROM edges WHERE row_number < 8193
+            )
+            INSERT INTO relationships
+            SELECT 'target', 'base-' || row_number, 'extends' FROM edges;",
+        )
+        .unwrap();
+        let pending_ids = ["1".to_owned()];
+
+        let first = accounting
+            .receiver_chain_owner_evidence(&pending_ids)
+            .unwrap();
+        assert_eq!(first.incomplete, Some(ReceiverChainLimit::Edges));
+        assert_eq!(first.owners.get("P:1"), Some(&Some("target".to_owned())));
+        let first_owner_steps = receiver_chain_owner_vm_steps(&accounting);
+        let first_ancestry_steps = receiver_chain_resolved_base_vm_steps(&accounting);
+
+        let repeated = accounting
+            .receiver_chain_owner_evidence(&pending_ids)
+            .unwrap();
+        assert_eq!(repeated.incomplete, Some(ReceiverChainLimit::Edges));
+        assert_eq!(repeated.owners.get("P:1"), Some(&Some("target".to_owned())));
+        assert_eq!(
+            receiver_chain_owner_vm_steps(&accounting),
+            first_owner_steps
+        );
+        assert_eq!(
+            receiver_chain_resolved_base_vm_steps(&accounting),
+            first_ancestry_steps
+        );
+
+        accounting.absent = Some(receiver_chain_target("removed-target", "Target"));
+        let statuses = accounting
+            .receiver_chain_target_statuses("removed-target", &repeated)
+            .unwrap();
+        assert!(statuses.get("P:1").is_some_and(|status| status.is_none()));
     }
 
     #[test]

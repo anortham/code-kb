@@ -1,0 +1,9 @@
+{
+  "source": "/tmp/code-kb-perf-20261031/walked-tests-dedupe.rs",
+  "command": "rustc -O /tmp/code-kb-perf-20261031/walked-tests-dedupe.rs -o /tmp/code-kb-perf-20261031/walked-tests-dedupe",
+  "runtime_command": "/tmp/code-kb-perf-20261031/walked-tests-dedupe > /tmp/code-kb-perf-20261031/walked-tests-dedupe-after.json",
+  "compiler": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+  "method": "One warmup batch per arm, then five independent batches per arm, alternating measurement order. Reported mean and p95 are across each arm's per-operation batch times. Output equality, including stable first-200 callers and seeds_cut, is asserted before timing.",
+  "scope": "Synthetic caller IDs after the proven/likely, nonempty, non-target filter; measures only seed deduplication. This does not measure report construction, SQL, graph traversal, tests_at, or end-to-end edit_check.",
+  "input_note": "2,000 and 5,000 are stress cardinalities, not source caps. RESOLVER_ROW_CAP=5,000 caps only identifier resolver evidence in Accounting::claims; load_rows and report.sites have no matching cap."
+}

@@ -1,0 +1,9 @@
+{
+  "description": "Diagnostic rowid-fix-only run; expanded tail of each receiver-owner SQL call. Diagnostic expansion excluded from timed before/after runs.",
+  "root": "/home/murphy/source/aspnetcore",
+  "query": "OnCompleted",
+  "path": "src/Http/Http.Abstractions/src/HttpResponse.cs",
+  "owner_query_calls": 5,
+  "identical_inputs": true,
+  "expanded_input_tail": " IN (SELECT CAST(value AS INTEGER) FROM json_each('[\"130299\",\"349881\",\"353948\",\"353962\",\"353976\",\"368277\",\"368330\",\"368549\",\"405938\",\"405946\",\"405954\",\"405963\",\"405975\",\"405986\",\"406572\",\"406668\",\"406677\",\"406686\",\"407524\",\"407527\"]'))\n           AND pending.kind != 'imports'\n           AND json_array_length(json_insert(\n        CASE WHEN json_valid(pending.target_namespace_json)\n                   AND json_type(pending.target_namespace_json) = 'array'\n             THEN pending.target_namespace_json ELSE '[]' END,\n        '$[#]', pending.target_receiver\n    )) > 1\n           AND pending.target_receiver IS NOT NULL AND pending.target_receiver != ''"
+}

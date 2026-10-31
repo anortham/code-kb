@@ -1,0 +1,3065 @@
+{
+  "source_commit": "1fc6a1a7b86ba66094e0e8373880f3454d0d8140",
+  "measurement": "Release-mode core API with rusqlite trace_v2; includes JSON value construction, excludes CLI startup and index reconciliation; first of four calls discarded; p95 is maximum of three warm samples. Statement totals include SQLite internal FTS queries.",
+  "workloads": {
+    "lookup-hermes": {
+      "root": "/home/murphy/source/hermes-agent",
+      "mode": "lookup",
+      "query": "AIAgent",
+      "path": null,
+      "before": [
+        {
+          "run": 0,
+          "warmup": true,
+          "wall_ms": 404.70401499999997,
+          "statements": 24,
+          "steps": 23900866,
+          "fullscan_steps": 3953788,
+          "result_sha256": "7114fcce1aaa4894974dfd3e9a82102857a49008c909d517607a2b49fb8aa757",
+          "result_rows": 459,
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 99.0,
+              "steps": 5981112,
+              "fullscan_steps": 988409,
+              "sql_sha256": "2ed088a6117b36c73092b93c17ae99dcf9da88b464551a6bd6dce865e83388d0",
+              "sql_prefix": "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,\n                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,\n                start_byte, end_byte, body_start_line, body_start_column, body_end_line"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 98.0,
+              "steps": 5973801,
+              "fullscan_steps": 988409,
+              "sql_sha256": "41f482e821bfe704301c792080d991aee465c97489392b837fddcf5c751c9acc",
+              "sql_prefix": "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,\n                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,\n                start_byte, end_byte, body_start_line, body_start_column, body_end_line"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 98.0,
+              "steps": 5965321,
+              "fullscan_steps": 988409,
+              "sql_sha256": "ce3e16eadee572d6f3eb016599b898c5901ed418af30d4cb10be5be16983a7bc",
+              "sql_prefix": "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,\n                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,\n                start_byte, end_byte, body_start_line, body_start_column, body_end_line"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 104.0,
+              "steps": 5961081,
+              "fullscan_steps": 988409,
+              "sql_sha256": "c7ba1e42120248f5ce399cc6322e0bcb1a20531d93096003920f71d85f1bf593",
+              "sql_prefix": "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,\n                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,\n                start_byte, end_byte, body_start_line, body_start_column, body_end_line"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 2.0,
+              "steps": 17583,
+              "fullscan_steps": 0,
+              "sql_sha256": "c9c1ac0fc131e8095bd5245798e78771c5bec18e36f81a13a8e72560106c3f42",
+              "sql_prefix": "SELECT s.symbol_id FROM symbols s\n         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND ((CASE WHEN s.kind = 'property' AND s.parent_symbol_id IS NOT NULL\n          AND (s.signature LIKE 'self.%' OR s.signature LIKE 'this.%' OR s.signature LIKE '"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 0.0,
+              "steps": 856,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 8,
+              "sql_ms": 0.0,
+              "steps": 712,
+              "fullscan_steps": 152,
+              "sql_sha256": "b578ccebca0f779c8920be1a5dade15ec0e2ebcff5eb51ec64c5e378d5c312ab",
+              "sql_prefix": "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 0.0,
+              "steps": 400,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            }
+          ]
+        },
+        {
+          "run": 1,
+          "warmup": false,
+          "wall_ms": 403.123913,
+          "statements": 24,
+          "steps": 23900866,
+          "fullscan_steps": 3953788,
+          "result_sha256": "7114fcce1aaa4894974dfd3e9a82102857a49008c909d517607a2b49fb8aa757",
+          "result_rows": 459,
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 99.0,
+              "steps": 5981112,
+              "fullscan_steps": 988409,
+              "sql_sha256": "2ed088a6117b36c73092b93c17ae99dcf9da88b464551a6bd6dce865e83388d0",
+              "sql_prefix": "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,\n                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,\n                start_byte, end_byte, body_start_line, body_start_column, body_end_line"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 99.0,
+              "steps": 5973801,
+              "fullscan_steps": 988409,
+              "sql_sha256": "41f482e821bfe704301c792080d991aee465c97489392b837fddcf5c751c9acc",
+              "sql_prefix": "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,\n                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,\n                start_byte, end_byte, body_start_line, body_start_column, body_end_line"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 100.0,
+              "steps": 5965321,
+              "fullscan_steps": 988409,
+              "sql_sha256": "ce3e16eadee572d6f3eb016599b898c5901ed418af30d4cb10be5be16983a7bc",
+              "sql_prefix": "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,\n                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,\n                start_byte, end_byte, body_start_line, body_start_column, body_end_line"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 100.0,
+              "steps": 5961081,
+              "fullscan_steps": 988409,
+              "sql_sha256": "c7ba1e42120248f5ce399cc6322e0bcb1a20531d93096003920f71d85f1bf593",
+              "sql_prefix": "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,\n                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,\n                start_byte, end_byte, body_start_line, body_start_column, body_end_line"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 1.0,
+              "steps": 17583,
+              "fullscan_steps": 0,
+              "sql_sha256": "c9c1ac0fc131e8095bd5245798e78771c5bec18e36f81a13a8e72560106c3f42",
+              "sql_prefix": "SELECT s.symbol_id FROM symbols s\n         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND ((CASE WHEN s.kind = 'property' AND s.parent_symbol_id IS NOT NULL\n          AND (s.signature LIKE 'self.%' OR s.signature LIKE 'this.%' OR s.signature LIKE '"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 0.0,
+              "steps": 856,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 8,
+              "sql_ms": 0.0,
+              "steps": 712,
+              "fullscan_steps": 152,
+              "sql_sha256": "b578ccebca0f779c8920be1a5dade15ec0e2ebcff5eb51ec64c5e378d5c312ab",
+              "sql_prefix": "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 0.0,
+              "steps": 400,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            }
+          ]
+        },
+        {
+          "run": 2,
+          "warmup": false,
+          "wall_ms": 404.17405499999995,
+          "statements": 24,
+          "steps": 23900866,
+          "fullscan_steps": 3953788,
+          "result_sha256": "7114fcce1aaa4894974dfd3e9a82102857a49008c909d517607a2b49fb8aa757",
+          "result_rows": 459,
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 100.0,
+              "steps": 5981112,
+              "fullscan_steps": 988409,
+              "sql_sha256": "2ed088a6117b36c73092b93c17ae99dcf9da88b464551a6bd6dce865e83388d0",
+              "sql_prefix": "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,\n                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,\n                start_byte, end_byte, body_start_line, body_start_column, body_end_line"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 102.0,
+              "steps": 5973801,
+              "fullscan_steps": 988409,
+              "sql_sha256": "41f482e821bfe704301c792080d991aee465c97489392b837fddcf5c751c9acc",
+              "sql_prefix": "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,\n                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,\n                start_byte, end_byte, body_start_line, body_start_column, body_end_line"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 99.0,
+              "steps": 5965321,
+              "fullscan_steps": 988409,
+              "sql_sha256": "ce3e16eadee572d6f3eb016599b898c5901ed418af30d4cb10be5be16983a7bc",
+              "sql_prefix": "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,\n                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,\n                start_byte, end_byte, body_start_line, body_start_column, body_end_line"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 98.0,
+              "steps": 5961081,
+              "fullscan_steps": 988409,
+              "sql_sha256": "c7ba1e42120248f5ce399cc6322e0bcb1a20531d93096003920f71d85f1bf593",
+              "sql_prefix": "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,\n                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,\n                start_byte, end_byte, body_start_line, body_start_column, body_end_line"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 2.0,
+              "steps": 17583,
+              "fullscan_steps": 0,
+              "sql_sha256": "c9c1ac0fc131e8095bd5245798e78771c5bec18e36f81a13a8e72560106c3f42",
+              "sql_prefix": "SELECT s.symbol_id FROM symbols s\n         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND ((CASE WHEN s.kind = 'property' AND s.parent_symbol_id IS NOT NULL\n          AND (s.signature LIKE 'self.%' OR s.signature LIKE 'this.%' OR s.signature LIKE '"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 0.0,
+              "steps": 856,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 8,
+              "sql_ms": 0.0,
+              "steps": 712,
+              "fullscan_steps": 152,
+              "sql_sha256": "b578ccebca0f779c8920be1a5dade15ec0e2ebcff5eb51ec64c5e378d5c312ab",
+              "sql_prefix": "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 0.0,
+              "steps": 400,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            }
+          ]
+        },
+        {
+          "run": 3,
+          "warmup": false,
+          "wall_ms": 406.737484,
+          "statements": 24,
+          "steps": 23900866,
+          "fullscan_steps": 3953788,
+          "result_sha256": "7114fcce1aaa4894974dfd3e9a82102857a49008c909d517607a2b49fb8aa757",
+          "result_rows": 459,
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 100.0,
+              "steps": 5981112,
+              "fullscan_steps": 988409,
+              "sql_sha256": "2ed088a6117b36c73092b93c17ae99dcf9da88b464551a6bd6dce865e83388d0",
+              "sql_prefix": "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,\n                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,\n                start_byte, end_byte, body_start_line, body_start_column, body_end_line"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 103.0,
+              "steps": 5973801,
+              "fullscan_steps": 988409,
+              "sql_sha256": "41f482e821bfe704301c792080d991aee465c97489392b837fddcf5c751c9acc",
+              "sql_prefix": "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,\n                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,\n                start_byte, end_byte, body_start_line, body_start_column, body_end_line"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 100.0,
+              "steps": 5965321,
+              "fullscan_steps": 988409,
+              "sql_sha256": "ce3e16eadee572d6f3eb016599b898c5901ed418af30d4cb10be5be16983a7bc",
+              "sql_prefix": "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,\n                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,\n                start_byte, end_byte, body_start_line, body_start_column, body_end_line"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 99.0,
+              "steps": 5961081,
+              "fullscan_steps": 988409,
+              "sql_sha256": "c7ba1e42120248f5ce399cc6322e0bcb1a20531d93096003920f71d85f1bf593",
+              "sql_prefix": "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,\n                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,\n                start_byte, end_byte, body_start_line, body_start_column, body_end_line"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 4.0,
+              "steps": 17583,
+              "fullscan_steps": 0,
+              "sql_sha256": "c9c1ac0fc131e8095bd5245798e78771c5bec18e36f81a13a8e72560106c3f42",
+              "sql_prefix": "SELECT s.symbol_id FROM symbols s\n         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND ((CASE WHEN s.kind = 'property' AND s.parent_symbol_id IS NOT NULL\n          AND (s.signature LIKE 'self.%' OR s.signature LIKE 'this.%' OR s.signature LIKE '"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 0.0,
+              "steps": 856,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 8,
+              "sql_ms": 0.0,
+              "steps": 712,
+              "fullscan_steps": 152,
+              "sql_sha256": "b578ccebca0f779c8920be1a5dade15ec0e2ebcff5eb51ec64c5e378d5c312ab",
+              "sql_prefix": "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 0.0,
+              "steps": 400,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            }
+          ]
+        }
+      ],
+      "database_state_at_audit": {
+        "size_bytes": 2577477632,
+        "mtime_ns": 1793379815994430203,
+        "wal_bytes": 0
+      },
+      "repository_commit": "8706517544bcc3f41f3b6521725f80b349ead3c7",
+      "after": [
+        {
+          "run": 0,
+          "warmup": true,
+          "wall_ms": 16.908439,
+          "statements": 198,
+          "steps": 196297,
+          "fullscan_steps": 353,
+          "result_sha256": "7114fcce1aaa4894974dfd3e9a82102857a49008c909d517607a2b49fb8aa757",
+          "result_rows": 459,
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 3.0,
+              "steps": 54205,
+              "fullscan_steps": 0,
+              "sql_sha256": "ec3d4f69f59fd34f9032de0e6d20b110cdd39ea237ee9ebde70918d12ab2c2e9",
+              "sql_prefix": "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,\n                s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,\n                s.start_byte, s.end_byt"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 3.0,
+              "steps": 46894,
+              "fullscan_steps": 0,
+              "sql_sha256": "5614b3cbcb3d694a2897997967e2640ed025e91f5b2d436621f1a84ff833335b",
+              "sql_prefix": "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,\n                s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,\n                s.start_byte, s.end_byt"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 1.0,
+              "steps": 38414,
+              "fullscan_steps": 0,
+              "sql_sha256": "f77364b879a3a5be4e49152c7e1c2bab1f9304f4259ddc9a4250edeaf6eadf35",
+              "sql_prefix": "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,\n                s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,\n                s.start_byte, s.end_byt"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 5.0,
+              "steps": 34174,
+              "fullscan_steps": 0,
+              "sql_sha256": "9d233308f1ed501af0ae425f00e91d3d6f733bda0b5587fa7d772e82e4c9ee0e",
+              "sql_prefix": "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,\n                s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,\n                s.start_byte, s.end_byt"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 2.0,
+              "steps": 17583,
+              "fullscan_steps": 0,
+              "sql_sha256": "c9c1ac0fc131e8095bd5245798e78771c5bec18e36f81a13a8e72560106c3f42",
+              "sql_prefix": "SELECT s.symbol_id FROM symbols s\n         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND ((CASE WHEN s.kind = 'property' AND s.parent_symbol_id IS NOT NULL\n          AND (s.signature LIKE 'self.%' OR s.signature LIKE 'this.%' O"
+            },
+            {
+              "calls": 160,
+              "sql_ms": 0.0,
+              "steps": 2240,
+              "fullscan_steps": 0,
+              "sql_sha256": "cfd8a742b33d1334bfb82fcb940f90ba47a4295fdc4f235b46b6e517b6ce3e1c",
+              "sql_prefix": "SELECT pgno FROM 'main'.'symbol_names_tri_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 0.0,
+              "steps": 856,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 727,
+              "fullscan_steps": 201,
+              "sql_sha256": "9b1962bae681dcef3dd8c4ffcf5a97f85943e82c4b8c687028ee8ae5e32b6cc3",
+              "sql_prefix": "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1"
+            }
+          ]
+        },
+        {
+          "run": 1,
+          "warmup": false,
+          "wall_ms": 10.598404,
+          "statements": 195,
+          "steps": 196271,
+          "fullscan_steps": 353,
+          "result_sha256": "7114fcce1aaa4894974dfd3e9a82102857a49008c909d517607a2b49fb8aa757",
+          "result_rows": 459,
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 2.0,
+              "steps": 54205,
+              "fullscan_steps": 0,
+              "sql_sha256": "ec3d4f69f59fd34f9032de0e6d20b110cdd39ea237ee9ebde70918d12ab2c2e9",
+              "sql_prefix": "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,\n                s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,\n                s.start_byte, s.end_byt"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 2.0,
+              "steps": 46894,
+              "fullscan_steps": 0,
+              "sql_sha256": "5614b3cbcb3d694a2897997967e2640ed025e91f5b2d436621f1a84ff833335b",
+              "sql_prefix": "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,\n                s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,\n                s.start_byte, s.end_byt"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 1.0,
+              "steps": 38414,
+              "fullscan_steps": 0,
+              "sql_sha256": "f77364b879a3a5be4e49152c7e1c2bab1f9304f4259ddc9a4250edeaf6eadf35",
+              "sql_prefix": "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,\n                s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,\n                s.start_byte, s.end_byt"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 1.0,
+              "steps": 34174,
+              "fullscan_steps": 0,
+              "sql_sha256": "9d233308f1ed501af0ae425f00e91d3d6f733bda0b5587fa7d772e82e4c9ee0e",
+              "sql_prefix": "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,\n                s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,\n                s.start_byte, s.end_byt"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 1.0,
+              "steps": 17583,
+              "fullscan_steps": 0,
+              "sql_sha256": "c9c1ac0fc131e8095bd5245798e78771c5bec18e36f81a13a8e72560106c3f42",
+              "sql_prefix": "SELECT s.symbol_id FROM symbols s\n         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND ((CASE WHEN s.kind = 'property' AND s.parent_symbol_id IS NOT NULL\n          AND (s.signature LIKE 'self.%' OR s.signature LIKE 'this.%' O"
+            },
+            {
+              "calls": 160,
+              "sql_ms": 0.0,
+              "steps": 2240,
+              "fullscan_steps": 0,
+              "sql_sha256": "cfd8a742b33d1334bfb82fcb940f90ba47a4295fdc4f235b46b6e517b6ce3e1c",
+              "sql_prefix": "SELECT pgno FROM 'main'.'symbol_names_tri_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 0.0,
+              "steps": 856,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 727,
+              "fullscan_steps": 201,
+              "sql_sha256": "9b1962bae681dcef3dd8c4ffcf5a97f85943e82c4b8c687028ee8ae5e32b6cc3",
+              "sql_prefix": "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1"
+            }
+          ]
+        },
+        {
+          "run": 2,
+          "warmup": false,
+          "wall_ms": 10.954112,
+          "statements": 195,
+          "steps": 196271,
+          "fullscan_steps": 353,
+          "result_sha256": "7114fcce1aaa4894974dfd3e9a82102857a49008c909d517607a2b49fb8aa757",
+          "result_rows": 459,
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 2.0,
+              "steps": 54205,
+              "fullscan_steps": 0,
+              "sql_sha256": "ec3d4f69f59fd34f9032de0e6d20b110cdd39ea237ee9ebde70918d12ab2c2e9",
+              "sql_prefix": "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,\n                s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,\n                s.start_byte, s.end_byt"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 2.0,
+              "steps": 46894,
+              "fullscan_steps": 0,
+              "sql_sha256": "5614b3cbcb3d694a2897997967e2640ed025e91f5b2d436621f1a84ff833335b",
+              "sql_prefix": "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,\n                s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,\n                s.start_byte, s.end_byt"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 1.0,
+              "steps": 38414,
+              "fullscan_steps": 0,
+              "sql_sha256": "f77364b879a3a5be4e49152c7e1c2bab1f9304f4259ddc9a4250edeaf6eadf35",
+              "sql_prefix": "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,\n                s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,\n                s.start_byte, s.end_byt"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 1.0,
+              "steps": 34174,
+              "fullscan_steps": 0,
+              "sql_sha256": "9d233308f1ed501af0ae425f00e91d3d6f733bda0b5587fa7d772e82e4c9ee0e",
+              "sql_prefix": "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,\n                s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,\n                s.start_byte, s.end_byt"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 0.0,
+              "steps": 17583,
+              "fullscan_steps": 0,
+              "sql_sha256": "c9c1ac0fc131e8095bd5245798e78771c5bec18e36f81a13a8e72560106c3f42",
+              "sql_prefix": "SELECT s.symbol_id FROM symbols s\n         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND ((CASE WHEN s.kind = 'property' AND s.parent_symbol_id IS NOT NULL\n          AND (s.signature LIKE 'self.%' OR s.signature LIKE 'this.%' O"
+            },
+            {
+              "calls": 160,
+              "sql_ms": 0.0,
+              "steps": 2240,
+              "fullscan_steps": 0,
+              "sql_sha256": "cfd8a742b33d1334bfb82fcb940f90ba47a4295fdc4f235b46b6e517b6ce3e1c",
+              "sql_prefix": "SELECT pgno FROM 'main'.'symbol_names_tri_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 0.0,
+              "steps": 856,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 727,
+              "fullscan_steps": 201,
+              "sql_sha256": "9b1962bae681dcef3dd8c4ffcf5a97f85943e82c4b8c687028ee8ae5e32b6cc3",
+              "sql_prefix": "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1"
+            }
+          ]
+        },
+        {
+          "run": 3,
+          "warmup": false,
+          "wall_ms": 11.552710000000001,
+          "statements": 195,
+          "steps": 196271,
+          "fullscan_steps": 353,
+          "result_sha256": "7114fcce1aaa4894974dfd3e9a82102857a49008c909d517607a2b49fb8aa757",
+          "result_rows": 459,
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 3.0,
+              "steps": 54205,
+              "fullscan_steps": 0,
+              "sql_sha256": "ec3d4f69f59fd34f9032de0e6d20b110cdd39ea237ee9ebde70918d12ab2c2e9",
+              "sql_prefix": "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,\n                s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,\n                s.start_byte, s.end_byt"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 2.0,
+              "steps": 46894,
+              "fullscan_steps": 0,
+              "sql_sha256": "5614b3cbcb3d694a2897997967e2640ed025e91f5b2d436621f1a84ff833335b",
+              "sql_prefix": "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,\n                s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,\n                s.start_byte, s.end_byt"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 1.0,
+              "steps": 38414,
+              "fullscan_steps": 0,
+              "sql_sha256": "f77364b879a3a5be4e49152c7e1c2bab1f9304f4259ddc9a4250edeaf6eadf35",
+              "sql_prefix": "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,\n                s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,\n                s.start_byte, s.end_byt"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 1.0,
+              "steps": 34174,
+              "fullscan_steps": 0,
+              "sql_sha256": "9d233308f1ed501af0ae425f00e91d3d6f733bda0b5587fa7d772e82e4c9ee0e",
+              "sql_prefix": "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,\n                s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,\n                s.start_byte, s.end_byt"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 3.0,
+              "steps": 17583,
+              "fullscan_steps": 0,
+              "sql_sha256": "c9c1ac0fc131e8095bd5245798e78771c5bec18e36f81a13a8e72560106c3f42",
+              "sql_prefix": "SELECT s.symbol_id FROM symbols s\n         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND ((CASE WHEN s.kind = 'property' AND s.parent_symbol_id IS NOT NULL\n          AND (s.signature LIKE 'self.%' OR s.signature LIKE 'this.%' O"
+            },
+            {
+              "calls": 160,
+              "sql_ms": 0.0,
+              "steps": 2240,
+              "fullscan_steps": 0,
+              "sql_sha256": "cfd8a742b33d1334bfb82fcb940f90ba47a4295fdc4f235b46b6e517b6ce3e1c",
+              "sql_prefix": "SELECT pgno FROM 'main'.'symbol_names_tri_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 0.0,
+              "steps": 856,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 727,
+              "fullscan_steps": 201,
+              "sql_sha256": "9b1962bae681dcef3dd8c4ffcf5a97f85943e82c4b8c687028ee8ae5e32b6cc3",
+              "sql_prefix": "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1"
+            }
+          ]
+        }
+      ],
+      "exact_output_equal": true,
+      "database_state_after": {
+        "size_bytes": 2577477632,
+        "mtime_ns": 1793379815994430203,
+        "wal_bytes": 0
+      },
+      "database_state_unchanged": true
+    },
+    "lookup-imports": {
+      "root": "/home/murphy/.cache/code-kb-accuracy/phase3/repos/newtonsoft-json",
+      "mode": "lookup",
+      "query": "System",
+      "path": null,
+      "before": [
+        {
+          "run": 0,
+          "warmup": true,
+          "wall_ms": 10.089821,
+          "statements": 6,
+          "steps": 272788,
+          "fullscan_steps": 38823,
+          "result_sha256": "8d1b98415c6197ad9b5b41d95808ec211f34b611b7f1528fe114634d36a8e707",
+          "result_rows": 20,
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 9.0,
+              "steps": 270871,
+              "fullscan_steps": 38785,
+              "sql_sha256": "c7ba1e42120248f5ce399cc6322e0bcb1a20531d93096003920f71d85f1bf593",
+              "sql_prefix": "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,\n                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,\n                start_byte, end_byte, body_start_line, body_start_column, body_end_line"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 1.0,
+              "steps": 1425,
+              "fullscan_steps": 0,
+              "sql_sha256": "c9c1ac0fc131e8095bd5245798e78771c5bec18e36f81a13a8e72560106c3f42",
+              "sql_prefix": "SELECT s.symbol_id FROM symbols s\n         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND ((CASE WHEN s.kind = 'property' AND s.parent_symbol_id IS NOT NULL\n          AND (s.signature LIKE 'self.%' OR s.signature LIKE 'this.%' OR s.signature LIKE '"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 214,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 178,
+              "fullscan_steps": 38,
+              "sql_sha256": "b578ccebca0f779c8920be1a5dade15ec0e2ebcff5eb51ec64c5e378d5c312ab",
+              "sql_prefix": "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 100,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            }
+          ]
+        },
+        {
+          "run": 1,
+          "warmup": false,
+          "wall_ms": 5.2737870000000004,
+          "statements": 6,
+          "steps": 272788,
+          "fullscan_steps": 38823,
+          "result_sha256": "8d1b98415c6197ad9b5b41d95808ec211f34b611b7f1528fe114634d36a8e707",
+          "result_rows": 20,
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 5.0,
+              "steps": 270871,
+              "fullscan_steps": 38785,
+              "sql_sha256": "c7ba1e42120248f5ce399cc6322e0bcb1a20531d93096003920f71d85f1bf593",
+              "sql_prefix": "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,\n                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,\n                start_byte, end_byte, body_start_line, body_start_column, body_end_line"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 1425,
+              "fullscan_steps": 0,
+              "sql_sha256": "c9c1ac0fc131e8095bd5245798e78771c5bec18e36f81a13a8e72560106c3f42",
+              "sql_prefix": "SELECT s.symbol_id FROM symbols s\n         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND ((CASE WHEN s.kind = 'property' AND s.parent_symbol_id IS NOT NULL\n          AND (s.signature LIKE 'self.%' OR s.signature LIKE 'this.%' OR s.signature LIKE '"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 214,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 178,
+              "fullscan_steps": 38,
+              "sql_sha256": "b578ccebca0f779c8920be1a5dade15ec0e2ebcff5eb51ec64c5e378d5c312ab",
+              "sql_prefix": "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 100,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            }
+          ]
+        },
+        {
+          "run": 2,
+          "warmup": false,
+          "wall_ms": 4.282684,
+          "statements": 6,
+          "steps": 272788,
+          "fullscan_steps": 38823,
+          "result_sha256": "8d1b98415c6197ad9b5b41d95808ec211f34b611b7f1528fe114634d36a8e707",
+          "result_rows": 20,
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 3.0,
+              "steps": 270871,
+              "fullscan_steps": 38785,
+              "sql_sha256": "c7ba1e42120248f5ce399cc6322e0bcb1a20531d93096003920f71d85f1bf593",
+              "sql_prefix": "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,\n                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,\n                start_byte, end_byte, body_start_line, body_start_column, body_end_line"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 1.0,
+              "steps": 1425,
+              "fullscan_steps": 0,
+              "sql_sha256": "c9c1ac0fc131e8095bd5245798e78771c5bec18e36f81a13a8e72560106c3f42",
+              "sql_prefix": "SELECT s.symbol_id FROM symbols s\n         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND ((CASE WHEN s.kind = 'property' AND s.parent_symbol_id IS NOT NULL\n          AND (s.signature LIKE 'self.%' OR s.signature LIKE 'this.%' OR s.signature LIKE '"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 214,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 178,
+              "fullscan_steps": 38,
+              "sql_sha256": "b578ccebca0f779c8920be1a5dade15ec0e2ebcff5eb51ec64c5e378d5c312ab",
+              "sql_prefix": "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 100,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            }
+          ]
+        },
+        {
+          "run": 3,
+          "warmup": false,
+          "wall_ms": 3.9807449999999998,
+          "statements": 6,
+          "steps": 272788,
+          "fullscan_steps": 38823,
+          "result_sha256": "8d1b98415c6197ad9b5b41d95808ec211f34b611b7f1528fe114634d36a8e707",
+          "result_rows": 20,
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 3.0,
+              "steps": 270871,
+              "fullscan_steps": 38785,
+              "sql_sha256": "c7ba1e42120248f5ce399cc6322e0bcb1a20531d93096003920f71d85f1bf593",
+              "sql_prefix": "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,\n                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,\n                start_byte, end_byte, body_start_line, body_start_column, body_end_line"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 1425,
+              "fullscan_steps": 0,
+              "sql_sha256": "c9c1ac0fc131e8095bd5245798e78771c5bec18e36f81a13a8e72560106c3f42",
+              "sql_prefix": "SELECT s.symbol_id FROM symbols s\n         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND ((CASE WHEN s.kind = 'property' AND s.parent_symbol_id IS NOT NULL\n          AND (s.signature LIKE 'self.%' OR s.signature LIKE 'this.%' OR s.signature LIKE '"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 214,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 178,
+              "fullscan_steps": 38,
+              "sql_sha256": "b578ccebca0f779c8920be1a5dade15ec0e2ebcff5eb51ec64c5e378d5c312ab",
+              "sql_prefix": "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 100,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            }
+          ]
+        }
+      ],
+      "database_state_at_audit": {
+        "size_bytes": 167399424,
+        "mtime_ns": 1792677569133433243,
+        "wal_bytes": 0
+      },
+      "repository_commit": "95a6eb3ac50eaa599018a97265725e135197159c",
+      "after": [
+        {
+          "run": 0,
+          "warmup": true,
+          "wall_ms": 4.145961,
+          "statements": 21,
+          "steps": 45378,
+          "fullscan_steps": 239,
+          "result_sha256": "8d1b98415c6197ad9b5b41d95808ec211f34b611b7f1528fe114634d36a8e707",
+          "result_rows": 20,
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 2.0,
+              "steps": 42604,
+              "fullscan_steps": 0,
+              "sql_sha256": "9d233308f1ed501af0ae425f00e91d3d6f733bda0b5587fa7d772e82e4c9ee0e",
+              "sql_prefix": "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,\n                s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,\n                s.start_byte, s.end_byt"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 1.0,
+              "steps": 1425,
+              "fullscan_steps": 0,
+              "sql_sha256": "c9c1ac0fc131e8095bd5245798e78771c5bec18e36f81a13a8e72560106c3f42",
+              "sql_prefix": "SELECT s.symbol_id FROM symbols s\n         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND ((CASE WHEN s.kind = 'property' AND s.parent_symbol_id IS NOT NULL\n          AND (s.signature LIKE 'self.%' OR s.signature LIKE 'this.%' O"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 727,
+              "fullscan_steps": 201,
+              "sql_sha256": "9b1962bae681dcef3dd8c4ffcf5a97f85943e82c4b8c687028ee8ae5e32b6cc3",
+              "sql_prefix": "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 214,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 178,
+              "fullscan_steps": 38,
+              "sql_sha256": "b578ccebca0f779c8920be1a5dade15ec0e2ebcff5eb51ec64c5e378d5c312ab",
+              "sql_prefix": "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 100,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 0.0,
+              "steps": 56,
+              "fullscan_steps": 0,
+              "sql_sha256": "cfd8a742b33d1334bfb82fcb940f90ba47a4295fdc4f235b46b6e517b6ce3e1c",
+              "sql_prefix": "SELECT pgno FROM 'main'.'symbol_names_tri_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 20,
+              "fullscan_steps": 0,
+              "sql_sha256": "d9c8d25bb7962d82b7de36d1e4089d4ddbd7dc72a1e25b0c241551b280af4cbf",
+              "sql_prefix": "SELECT k, v FROM 'main'.'symbol_names_tri_config'"
+            }
+          ]
+        },
+        {
+          "run": 1,
+          "warmup": false,
+          "wall_ms": 1.628706,
+          "statements": 18,
+          "steps": 45352,
+          "fullscan_steps": 239,
+          "result_sha256": "8d1b98415c6197ad9b5b41d95808ec211f34b611b7f1528fe114634d36a8e707",
+          "result_rows": 20,
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 1.0,
+              "steps": 42604,
+              "fullscan_steps": 0,
+              "sql_sha256": "9d233308f1ed501af0ae425f00e91d3d6f733bda0b5587fa7d772e82e4c9ee0e",
+              "sql_prefix": "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,\n                s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,\n                s.start_byte, s.end_byt"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 1425,
+              "fullscan_steps": 0,
+              "sql_sha256": "c9c1ac0fc131e8095bd5245798e78771c5bec18e36f81a13a8e72560106c3f42",
+              "sql_prefix": "SELECT s.symbol_id FROM symbols s\n         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND ((CASE WHEN s.kind = 'property' AND s.parent_symbol_id IS NOT NULL\n          AND (s.signature LIKE 'self.%' OR s.signature LIKE 'this.%' O"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 727,
+              "fullscan_steps": 201,
+              "sql_sha256": "9b1962bae681dcef3dd8c4ffcf5a97f85943e82c4b8c687028ee8ae5e32b6cc3",
+              "sql_prefix": "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 214,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 178,
+              "fullscan_steps": 38,
+              "sql_sha256": "b578ccebca0f779c8920be1a5dade15ec0e2ebcff5eb51ec64c5e378d5c312ab",
+              "sql_prefix": "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 100,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 0.0,
+              "steps": 56,
+              "fullscan_steps": 0,
+              "sql_sha256": "cfd8a742b33d1334bfb82fcb940f90ba47a4295fdc4f235b46b6e517b6ce3e1c",
+              "sql_prefix": "SELECT pgno FROM 'main'.'symbol_names_tri_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 16,
+              "fullscan_steps": 0,
+              "sql_sha256": "8b71441cd83b6cf168f811d44ee244922b03fb374dbe3b581997716a73ba4571",
+              "sql_prefix": "SELECT 1 FROM symbols LIMIT 1"
+            }
+          ]
+        },
+        {
+          "run": 2,
+          "warmup": false,
+          "wall_ms": 1.4976720000000001,
+          "statements": 18,
+          "steps": 45352,
+          "fullscan_steps": 239,
+          "result_sha256": "8d1b98415c6197ad9b5b41d95808ec211f34b611b7f1528fe114634d36a8e707",
+          "result_rows": 20,
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 1.0,
+              "steps": 42604,
+              "fullscan_steps": 0,
+              "sql_sha256": "9d233308f1ed501af0ae425f00e91d3d6f733bda0b5587fa7d772e82e4c9ee0e",
+              "sql_prefix": "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,\n                s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,\n                s.start_byte, s.end_byt"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 1425,
+              "fullscan_steps": 0,
+              "sql_sha256": "c9c1ac0fc131e8095bd5245798e78771c5bec18e36f81a13a8e72560106c3f42",
+              "sql_prefix": "SELECT s.symbol_id FROM symbols s\n         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND ((CASE WHEN s.kind = 'property' AND s.parent_symbol_id IS NOT NULL\n          AND (s.signature LIKE 'self.%' OR s.signature LIKE 'this.%' O"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 727,
+              "fullscan_steps": 201,
+              "sql_sha256": "9b1962bae681dcef3dd8c4ffcf5a97f85943e82c4b8c687028ee8ae5e32b6cc3",
+              "sql_prefix": "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 214,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 178,
+              "fullscan_steps": 38,
+              "sql_sha256": "b578ccebca0f779c8920be1a5dade15ec0e2ebcff5eb51ec64c5e378d5c312ab",
+              "sql_prefix": "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 100,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 0.0,
+              "steps": 56,
+              "fullscan_steps": 0,
+              "sql_sha256": "cfd8a742b33d1334bfb82fcb940f90ba47a4295fdc4f235b46b6e517b6ce3e1c",
+              "sql_prefix": "SELECT pgno FROM 'main'.'symbol_names_tri_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 16,
+              "fullscan_steps": 0,
+              "sql_sha256": "8b71441cd83b6cf168f811d44ee244922b03fb374dbe3b581997716a73ba4571",
+              "sql_prefix": "SELECT 1 FROM symbols LIMIT 1"
+            }
+          ]
+        },
+        {
+          "run": 3,
+          "warmup": false,
+          "wall_ms": 1.54609,
+          "statements": 18,
+          "steps": 45352,
+          "fullscan_steps": 239,
+          "result_sha256": "8d1b98415c6197ad9b5b41d95808ec211f34b611b7f1528fe114634d36a8e707",
+          "result_rows": 20,
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 42604,
+              "fullscan_steps": 0,
+              "sql_sha256": "9d233308f1ed501af0ae425f00e91d3d6f733bda0b5587fa7d772e82e4c9ee0e",
+              "sql_prefix": "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,\n                s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,\n                s.start_byte, s.end_byt"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 1425,
+              "fullscan_steps": 0,
+              "sql_sha256": "c9c1ac0fc131e8095bd5245798e78771c5bec18e36f81a13a8e72560106c3f42",
+              "sql_prefix": "SELECT s.symbol_id FROM symbols s\n         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND ((CASE WHEN s.kind = 'property' AND s.parent_symbol_id IS NOT NULL\n          AND (s.signature LIKE 'self.%' OR s.signature LIKE 'this.%' O"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 727,
+              "fullscan_steps": 201,
+              "sql_sha256": "9b1962bae681dcef3dd8c4ffcf5a97f85943e82c4b8c687028ee8ae5e32b6cc3",
+              "sql_prefix": "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 214,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 178,
+              "fullscan_steps": 38,
+              "sql_sha256": "b578ccebca0f779c8920be1a5dade15ec0e2ebcff5eb51ec64c5e378d5c312ab",
+              "sql_prefix": "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 100,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 0.0,
+              "steps": 56,
+              "fullscan_steps": 0,
+              "sql_sha256": "cfd8a742b33d1334bfb82fcb940f90ba47a4295fdc4f235b46b6e517b6ce3e1c",
+              "sql_prefix": "SELECT pgno FROM 'main'.'symbol_names_tri_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 16,
+              "fullscan_steps": 0,
+              "sql_sha256": "8b71441cd83b6cf168f811d44ee244922b03fb374dbe3b581997716a73ba4571",
+              "sql_prefix": "SELECT 1 FROM symbols LIMIT 1"
+            }
+          ]
+        }
+      ],
+      "exact_output_equal": true,
+      "database_state_after": {
+        "size_bytes": 167399424,
+        "mtime_ns": 1792677569133433243,
+        "wal_bytes": 0
+      },
+      "database_state_unchanged": true
+    },
+    "lookup-self": {
+      "root": "/home/murphy/source/code-kb",
+      "mode": "lookup",
+      "query": "open_read_only",
+      "path": null,
+      "before": [
+        {
+          "run": 0,
+          "warmup": true,
+          "wall_ms": 27.046876,
+          "statements": 6,
+          "steps": 1045223,
+          "fullscan_steps": 173244,
+          "result_sha256": "bdf0de9a30b7fd89c578f8e0a2ec1961c80d7e0d2e9691f9b798c713ef5e5cf1",
+          "result_rows": 41,
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 26.0,
+              "steps": 1043969,
+              "fullscan_steps": 173206,
+              "sql_sha256": "c7ba1e42120248f5ce399cc6322e0bcb1a20531d93096003920f71d85f1bf593",
+              "sql_prefix": "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,\n                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,\n                start_byte, end_byte, body_start_line, body_start_column, body_end_line"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 762,
+              "fullscan_steps": 0,
+              "sql_sha256": "c9c1ac0fc131e8095bd5245798e78771c5bec18e36f81a13a8e72560106c3f42",
+              "sql_prefix": "SELECT s.symbol_id FROM symbols s\n         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND ((CASE WHEN s.kind = 'property' AND s.parent_symbol_id IS NOT NULL\n          AND (s.signature LIKE 'self.%' OR s.signature LIKE 'this.%' OR s.signature LIKE '"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 214,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 178,
+              "fullscan_steps": 38,
+              "sql_sha256": "b578ccebca0f779c8920be1a5dade15ec0e2ebcff5eb51ec64c5e378d5c312ab",
+              "sql_prefix": "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 100,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            }
+          ]
+        },
+        {
+          "run": 1,
+          "warmup": false,
+          "wall_ms": 13.540757000000001,
+          "statements": 6,
+          "steps": 1045223,
+          "fullscan_steps": 173244,
+          "result_sha256": "bdf0de9a30b7fd89c578f8e0a2ec1961c80d7e0d2e9691f9b798c713ef5e5cf1",
+          "result_rows": 41,
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 13.0,
+              "steps": 1043969,
+              "fullscan_steps": 173206,
+              "sql_sha256": "c7ba1e42120248f5ce399cc6322e0bcb1a20531d93096003920f71d85f1bf593",
+              "sql_prefix": "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,\n                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,\n                start_byte, end_byte, body_start_line, body_start_column, body_end_line"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 762,
+              "fullscan_steps": 0,
+              "sql_sha256": "c9c1ac0fc131e8095bd5245798e78771c5bec18e36f81a13a8e72560106c3f42",
+              "sql_prefix": "SELECT s.symbol_id FROM symbols s\n         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND ((CASE WHEN s.kind = 'property' AND s.parent_symbol_id IS NOT NULL\n          AND (s.signature LIKE 'self.%' OR s.signature LIKE 'this.%' OR s.signature LIKE '"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 214,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 178,
+              "fullscan_steps": 38,
+              "sql_sha256": "b578ccebca0f779c8920be1a5dade15ec0e2ebcff5eb51ec64c5e378d5c312ab",
+              "sql_prefix": "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 100,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            }
+          ]
+        },
+        {
+          "run": 2,
+          "warmup": false,
+          "wall_ms": 14.243101,
+          "statements": 6,
+          "steps": 1045223,
+          "fullscan_steps": 173244,
+          "result_sha256": "bdf0de9a30b7fd89c578f8e0a2ec1961c80d7e0d2e9691f9b798c713ef5e5cf1",
+          "result_rows": 41,
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 13.0,
+              "steps": 1043969,
+              "fullscan_steps": 173206,
+              "sql_sha256": "c7ba1e42120248f5ce399cc6322e0bcb1a20531d93096003920f71d85f1bf593",
+              "sql_prefix": "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,\n                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,\n                start_byte, end_byte, body_start_line, body_start_column, body_end_line"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 762,
+              "fullscan_steps": 0,
+              "sql_sha256": "c9c1ac0fc131e8095bd5245798e78771c5bec18e36f81a13a8e72560106c3f42",
+              "sql_prefix": "SELECT s.symbol_id FROM symbols s\n         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND ((CASE WHEN s.kind = 'property' AND s.parent_symbol_id IS NOT NULL\n          AND (s.signature LIKE 'self.%' OR s.signature LIKE 'this.%' OR s.signature LIKE '"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 214,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 178,
+              "fullscan_steps": 38,
+              "sql_sha256": "b578ccebca0f779c8920be1a5dade15ec0e2ebcff5eb51ec64c5e378d5c312ab",
+              "sql_prefix": "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 100,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            }
+          ]
+        },
+        {
+          "run": 3,
+          "warmup": false,
+          "wall_ms": 13.145816,
+          "statements": 6,
+          "steps": 1045223,
+          "fullscan_steps": 173244,
+          "result_sha256": "bdf0de9a30b7fd89c578f8e0a2ec1961c80d7e0d2e9691f9b798c713ef5e5cf1",
+          "result_rows": 41,
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 13.0,
+              "steps": 1043969,
+              "fullscan_steps": 173206,
+              "sql_sha256": "c7ba1e42120248f5ce399cc6322e0bcb1a20531d93096003920f71d85f1bf593",
+              "sql_prefix": "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,\n                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,\n                start_byte, end_byte, body_start_line, body_start_column, body_end_line"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 762,
+              "fullscan_steps": 0,
+              "sql_sha256": "c9c1ac0fc131e8095bd5245798e78771c5bec18e36f81a13a8e72560106c3f42",
+              "sql_prefix": "SELECT s.symbol_id FROM symbols s\n         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND ((CASE WHEN s.kind = 'property' AND s.parent_symbol_id IS NOT NULL\n          AND (s.signature LIKE 'self.%' OR s.signature LIKE 'this.%' OR s.signature LIKE '"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 214,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 178,
+              "fullscan_steps": 38,
+              "sql_sha256": "b578ccebca0f779c8920be1a5dade15ec0e2ebcff5eb51ec64c5e378d5c312ab",
+              "sql_prefix": "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 0.0,
+              "steps": 100,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            }
+          ]
+        }
+      ],
+      "database_state_at_audit": {
+        "size_bytes": 422682624,
+        "mtime_ns": 1793455694655446524,
+        "wal_bytes": 0
+      },
+      "repository_commit": "1fc6a1a7b86ba66094e0e8373880f3454d0d8140",
+      "comparison_note": "Baseline only; this workspace index changed during implementation and is excluded from before/after claims."
+    },
+    "refs-oncompleted": {
+      "root": "/home/murphy/source/aspnetcore",
+      "mode": "refs",
+      "query": "OnCompleted",
+      "path": "src/Http/Http.Abstractions/src/HttpResponse.cs",
+      "before": [
+        {
+          "run": 0,
+          "warmup": true,
+          "wall_ms": 3411.057731,
+          "statements": 2670,
+          "steps": 89031213,
+          "fullscan_steps": 1973792,
+          "result_sha256": "d5458788d4d5a46f8aa8bddcda6b30c286b8f2e150a36c8977b8f70b51eaca30",
+          "result_rows": null,
+          "top_queries": [
+            {
+              "calls": 4,
+              "sql_ms": 3287.0,
+              "steps": 88080608,
+              "fullscan_steps": 1953912,
+              "sql_sha256": "07e8c0d2592c21e610bb71c8205c8d60bfee512850fbc37860a5d63ee841a828",
+              "sql_prefix": "SELECT 'P:' || CAST(pending.rowid AS TEXT), (WITH RECURSIVE segments(position, name) AS (\n             SELECT CAST(key AS INTEGER), value\n             FROM json_each(CASE WHEN json_valid(json_insert(\n        CASE WHEN json_valid(pending.target_namespace_json)\n"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 7.0,
+              "steps": 291300,
+              "fullscan_steps": 0,
+              "sql_sha256": "78cbd67c6e65b8dcc1e18c0c81a7d6223704a7e45563bc51d21571c079be78b1",
+              "sql_prefix": "SELECT sf.structural_fact_id, sf.pattern_id, sf.path, sf.start_line, sf.end_line,\n         json_extract(CASE WHEN json_valid(sf.metadata_json) THEN sf.metadata_json ELSE '{}' END, '$.verb'),\n         COALESCE(json_extract(CASE WHEN json_valid(sf.metadata_json)"
+            },
+            {
+              "calls": 5,
+              "sql_ms": 11.0,
+              "steps": 277674,
+              "fullscan_steps": 110,
+              "sql_sha256": "26d59695ee1701c99240fd2cecbdbe9d2e7ce094ab7cc0a6d1d0c1cab3f50549",
+              "sql_prefix": "SELECT p.src, p.row_id,\n                CASE WHEN p.src = 'I' AND p.kind IN ('type_usage', 'member_access')\n                     THEN COALESCE((CASE WHEN json_array_length(json_insert(\n        CASE WHEN json_valid(p.target_namespace_json)\n                   AN"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 3.0,
+              "steps": 162272,
+              "fullscan_steps": 16470,
+              "sql_sha256": "fba81e47c0a29b583704156e2d342a8e18e7b6597fec6728ef464487aa2f3eb0",
+              "sql_prefix": "SELECT path FROM files\n     WHERE path LIKE '%.csproj' OR path LIKE '%.props' OR path LIKE '%.targets'"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 1.0,
+              "steps": 40835,
+              "fullscan_steps": 0,
+              "sql_sha256": "f26660f995b4f66807fd16252befd485ec4924e592e837f0b7cd84b8ee442c1c",
+              "sql_prefix": "SELECT p.src, p.row_id,\n                CASE WHEN p.src = 'I' AND p.kind IN ('type_usage', 'member_access')\n                     THEN COALESCE((CASE WHEN json_array_length(json_insert(\n        CASE WHEN json_valid(p.target_namespace_json)\n                   AN"
+            },
+            {
+              "calls": 1114,
+              "sql_ms": 4.0,
+              "steps": 36079,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            },
+            {
+              "calls": 431,
+              "sql_ms": 0.0,
+              "steps": 33028,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 318,
+              "sql_ms": 0.0,
+              "steps": 19150,
+              "fullscan_steps": 0,
+              "sql_sha256": "c8565319d9b4e9c69c444f1e18d9481fc64cac7395f013a89da86abcd381fa51",
+              "sql_prefix": "PRAGMA table_info='pending_relationships'"
+            }
+          ]
+        },
+        {
+          "run": 1,
+          "warmup": false,
+          "wall_ms": 3410.649821,
+          "statements": 2667,
+          "steps": 89031187,
+          "fullscan_steps": 1973792,
+          "result_sha256": "690a6645f9c43f82afbdac79fdc252ed569c3d3854c8eaa17337c52e6a676757",
+          "result_rows": null,
+          "top_queries": [
+            {
+              "calls": 4,
+              "sql_ms": 3289.0,
+              "steps": 88080608,
+              "fullscan_steps": 1953912,
+              "sql_sha256": "07e8c0d2592c21e610bb71c8205c8d60bfee512850fbc37860a5d63ee841a828",
+              "sql_prefix": "SELECT 'P:' || CAST(pending.rowid AS TEXT), (WITH RECURSIVE segments(position, name) AS (\n             SELECT CAST(key AS INTEGER), value\n             FROM json_each(CASE WHEN json_valid(json_insert(\n        CASE WHEN json_valid(pending.target_namespace_json)\n"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 6.0,
+              "steps": 291300,
+              "fullscan_steps": 0,
+              "sql_sha256": "78cbd67c6e65b8dcc1e18c0c81a7d6223704a7e45563bc51d21571c079be78b1",
+              "sql_prefix": "SELECT sf.structural_fact_id, sf.pattern_id, sf.path, sf.start_line, sf.end_line,\n         json_extract(CASE WHEN json_valid(sf.metadata_json) THEN sf.metadata_json ELSE '{}' END, '$.verb'),\n         COALESCE(json_extract(CASE WHEN json_valid(sf.metadata_json)"
+            },
+            {
+              "calls": 5,
+              "sql_ms": 11.0,
+              "steps": 277674,
+              "fullscan_steps": 110,
+              "sql_sha256": "26d59695ee1701c99240fd2cecbdbe9d2e7ce094ab7cc0a6d1d0c1cab3f50549",
+              "sql_prefix": "SELECT p.src, p.row_id,\n                CASE WHEN p.src = 'I' AND p.kind IN ('type_usage', 'member_access')\n                     THEN COALESCE((CASE WHEN json_array_length(json_insert(\n        CASE WHEN json_valid(p.target_namespace_json)\n                   AN"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 3.0,
+              "steps": 162272,
+              "fullscan_steps": 16470,
+              "sql_sha256": "fba81e47c0a29b583704156e2d342a8e18e7b6597fec6728ef464487aa2f3eb0",
+              "sql_prefix": "SELECT path FROM files\n     WHERE path LIKE '%.csproj' OR path LIKE '%.props' OR path LIKE '%.targets'"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 2.0,
+              "steps": 40835,
+              "fullscan_steps": 0,
+              "sql_sha256": "f26660f995b4f66807fd16252befd485ec4924e592e837f0b7cd84b8ee442c1c",
+              "sql_prefix": "SELECT p.src, p.row_id,\n                CASE WHEN p.src = 'I' AND p.kind IN ('type_usage', 'member_access')\n                     THEN COALESCE((CASE WHEN json_array_length(json_insert(\n        CASE WHEN json_valid(p.target_namespace_json)\n                   AN"
+            },
+            {
+              "calls": 1114,
+              "sql_ms": 7.0,
+              "steps": 36079,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            },
+            {
+              "calls": 431,
+              "sql_ms": 0.0,
+              "steps": 33028,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 318,
+              "sql_ms": 1.0,
+              "steps": 19150,
+              "fullscan_steps": 0,
+              "sql_sha256": "c8565319d9b4e9c69c444f1e18d9481fc64cac7395f013a89da86abcd381fa51",
+              "sql_prefix": "PRAGMA table_info='pending_relationships'"
+            }
+          ]
+        },
+        {
+          "run": 2,
+          "warmup": false,
+          "wall_ms": 3133.702534,
+          "statements": 2667,
+          "steps": 89031187,
+          "fullscan_steps": 1973792,
+          "result_sha256": "8fb8b6247795fc80ebe61cbdbd6246c54f645eddbd0663bcbf7b45a3a29bfdda",
+          "result_rows": null,
+          "top_queries": [
+            {
+              "calls": 4,
+              "sql_ms": 3014.0,
+              "steps": 88080608,
+              "fullscan_steps": 1953912,
+              "sql_sha256": "07e8c0d2592c21e610bb71c8205c8d60bfee512850fbc37860a5d63ee841a828",
+              "sql_prefix": "SELECT 'P:' || CAST(pending.rowid AS TEXT), (WITH RECURSIVE segments(position, name) AS (\n             SELECT CAST(key AS INTEGER), value\n             FROM json_each(CASE WHEN json_valid(json_insert(\n        CASE WHEN json_valid(pending.target_namespace_json)\n"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 7.0,
+              "steps": 291300,
+              "fullscan_steps": 0,
+              "sql_sha256": "78cbd67c6e65b8dcc1e18c0c81a7d6223704a7e45563bc51d21571c079be78b1",
+              "sql_prefix": "SELECT sf.structural_fact_id, sf.pattern_id, sf.path, sf.start_line, sf.end_line,\n         json_extract(CASE WHEN json_valid(sf.metadata_json) THEN sf.metadata_json ELSE '{}' END, '$.verb'),\n         COALESCE(json_extract(CASE WHEN json_valid(sf.metadata_json)"
+            },
+            {
+              "calls": 5,
+              "sql_ms": 10.0,
+              "steps": 277674,
+              "fullscan_steps": 110,
+              "sql_sha256": "26d59695ee1701c99240fd2cecbdbe9d2e7ce094ab7cc0a6d1d0c1cab3f50549",
+              "sql_prefix": "SELECT p.src, p.row_id,\n                CASE WHEN p.src = 'I' AND p.kind IN ('type_usage', 'member_access')\n                     THEN COALESCE((CASE WHEN json_array_length(json_insert(\n        CASE WHEN json_valid(p.target_namespace_json)\n                   AN"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 3.0,
+              "steps": 162272,
+              "fullscan_steps": 16470,
+              "sql_sha256": "fba81e47c0a29b583704156e2d342a8e18e7b6597fec6728ef464487aa2f3eb0",
+              "sql_prefix": "SELECT path FROM files\n     WHERE path LIKE '%.csproj' OR path LIKE '%.props' OR path LIKE '%.targets'"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 2.0,
+              "steps": 40835,
+              "fullscan_steps": 0,
+              "sql_sha256": "f26660f995b4f66807fd16252befd485ec4924e592e837f0b7cd84b8ee442c1c",
+              "sql_prefix": "SELECT p.src, p.row_id,\n                CASE WHEN p.src = 'I' AND p.kind IN ('type_usage', 'member_access')\n                     THEN COALESCE((CASE WHEN json_array_length(json_insert(\n        CASE WHEN json_valid(p.target_namespace_json)\n                   AN"
+            },
+            {
+              "calls": 1114,
+              "sql_ms": 4.0,
+              "steps": 36079,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            },
+            {
+              "calls": 431,
+              "sql_ms": 0.0,
+              "steps": 33028,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 318,
+              "sql_ms": 0.0,
+              "steps": 19150,
+              "fullscan_steps": 0,
+              "sql_sha256": "c8565319d9b4e9c69c444f1e18d9481fc64cac7395f013a89da86abcd381fa51",
+              "sql_prefix": "PRAGMA table_info='pending_relationships'"
+            }
+          ]
+        },
+        {
+          "run": 3,
+          "warmup": false,
+          "wall_ms": 4079.48794,
+          "statements": 2667,
+          "steps": 89031187,
+          "fullscan_steps": 1973792,
+          "result_sha256": "8870e9ee4b2f7d8b4198cb7edf1e3734a931637e9e0b77fd0c1cec03c031bd92",
+          "result_rows": null,
+          "top_queries": [
+            {
+              "calls": 4,
+              "sql_ms": 3954.0,
+              "steps": 88080608,
+              "fullscan_steps": 1953912,
+              "sql_sha256": "07e8c0d2592c21e610bb71c8205c8d60bfee512850fbc37860a5d63ee841a828",
+              "sql_prefix": "SELECT 'P:' || CAST(pending.rowid AS TEXT), (WITH RECURSIVE segments(position, name) AS (\n             SELECT CAST(key AS INTEGER), value\n             FROM json_each(CASE WHEN json_valid(json_insert(\n        CASE WHEN json_valid(pending.target_namespace_json)\n"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 7.0,
+              "steps": 291300,
+              "fullscan_steps": 0,
+              "sql_sha256": "78cbd67c6e65b8dcc1e18c0c81a7d6223704a7e45563bc51d21571c079be78b1",
+              "sql_prefix": "SELECT sf.structural_fact_id, sf.pattern_id, sf.path, sf.start_line, sf.end_line,\n         json_extract(CASE WHEN json_valid(sf.metadata_json) THEN sf.metadata_json ELSE '{}' END, '$.verb'),\n         COALESCE(json_extract(CASE WHEN json_valid(sf.metadata_json)"
+            },
+            {
+              "calls": 5,
+              "sql_ms": 13.0,
+              "steps": 277674,
+              "fullscan_steps": 110,
+              "sql_sha256": "26d59695ee1701c99240fd2cecbdbe9d2e7ce094ab7cc0a6d1d0c1cab3f50549",
+              "sql_prefix": "SELECT p.src, p.row_id,\n                CASE WHEN p.src = 'I' AND p.kind IN ('type_usage', 'member_access')\n                     THEN COALESCE((CASE WHEN json_array_length(json_insert(\n        CASE WHEN json_valid(p.target_namespace_json)\n                   AN"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 2.0,
+              "steps": 162272,
+              "fullscan_steps": 16470,
+              "sql_sha256": "fba81e47c0a29b583704156e2d342a8e18e7b6597fec6728ef464487aa2f3eb0",
+              "sql_prefix": "SELECT path FROM files\n     WHERE path LIKE '%.csproj' OR path LIKE '%.props' OR path LIKE '%.targets'"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 1.0,
+              "steps": 40835,
+              "fullscan_steps": 0,
+              "sql_sha256": "f26660f995b4f66807fd16252befd485ec4924e592e837f0b7cd84b8ee442c1c",
+              "sql_prefix": "SELECT p.src, p.row_id,\n                CASE WHEN p.src = 'I' AND p.kind IN ('type_usage', 'member_access')\n                     THEN COALESCE((CASE WHEN json_array_length(json_insert(\n        CASE WHEN json_valid(p.target_namespace_json)\n                   AN"
+            },
+            {
+              "calls": 1114,
+              "sql_ms": 6.0,
+              "steps": 36079,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            },
+            {
+              "calls": 431,
+              "sql_ms": 0.0,
+              "steps": 33028,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 318,
+              "sql_ms": 1.0,
+              "steps": 19150,
+              "fullscan_steps": 0,
+              "sql_sha256": "c8565319d9b4e9c69c444f1e18d9481fc64cac7395f013a89da86abcd381fa51",
+              "sql_prefix": "PRAGMA table_info='pending_relationships'"
+            }
+          ]
+        }
+      ],
+      "database_state_at_audit": {
+        "size_bytes": 2232598528,
+        "mtime_ns": 1793379278373235532,
+        "wal_bytes": 0
+      },
+      "repository_commit": "7a1c5c1f848413dda7ec17fbeeb948f30cc6b5f4",
+      "rowid_only_intermediate": [
+        {
+          "run": 0,
+          "warmup": true,
+          "wall_ms": 3555.070317,
+          "statements": 2781,
+          "steps": 86999042,
+          "fullscan_steps": 52403,
+          "result_sha256": "8a9e2bae8fe53ca63b180040d4ecda4e2f6caeedc02dea6a5bd5eb0aa5643905",
+          "result_rows": null,
+          "top_queries": [
+            {
+              "calls": 5,
+              "sql_ms": 3427.0,
+              "steps": 86000870,
+              "fullscan_steps": 32365,
+              "sql_sha256": "e610c7ca24053c9e4a11c2dba81cbcc78268fddcbb463c2d0ac8e300e2d1fb90",
+              "sql_prefix": "SELECT 'P:' || CAST(pending.rowid AS TEXT), (WITH RECURSIVE segments(position, name) AS (\n             SELECT CAST(key AS INTEGER), value\n             FROM json_each(CASE WHEN json_valid(json_insert(\n        CASE WHEN json_valid(pending.tar"
+            },
+            {
+              "calls": 6,
+              "sql_ms": 13.0,
+              "steps": 320346,
+              "fullscan_steps": 132,
+              "sql_sha256": "26d59695ee1701c99240fd2cecbdbe9d2e7ce094ab7cc0a6d1d0c1cab3f50549",
+              "sql_prefix": "SELECT p.src, p.row_id,\n                CASE WHEN p.src = 'I' AND p.kind IN ('type_usage', 'member_access')\n                     THEN COALESCE((CASE WHEN json_array_length(json_insert(\n        CASE WHEN json_valid(p.target_namespace_json)\n "
+            },
+            {
+              "calls": 1,
+              "sql_ms": 7.0,
+              "steps": 291300,
+              "fullscan_steps": 0,
+              "sql_sha256": "78cbd67c6e65b8dcc1e18c0c81a7d6223704a7e45563bc51d21571c079be78b1",
+              "sql_prefix": "SELECT sf.structural_fact_id, sf.pattern_id, sf.path, sf.start_line, sf.end_line,\n         json_extract(CASE WHEN json_valid(sf.metadata_json) THEN sf.metadata_json ELSE '{}' END, '$.verb'),\n         COALESCE(json_extract(CASE WHEN json_val"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 3.0,
+              "steps": 162272,
+              "fullscan_steps": 16470,
+              "sql_sha256": "fba81e47c0a29b583704156e2d342a8e18e7b6597fec6728ef464487aa2f3eb0",
+              "sql_prefix": "SELECT path FROM files\n     WHERE path LIKE '%.csproj' OR path LIKE '%.props' OR path LIKE '%.targets'"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 1.0,
+              "steps": 40835,
+              "fullscan_steps": 0,
+              "sql_sha256": "f26660f995b4f66807fd16252befd485ec4924e592e837f0b7cd84b8ee442c1c",
+              "sql_prefix": "SELECT p.src, p.row_id,\n                CASE WHEN p.src = 'I' AND p.kind IN ('type_usage', 'member_access')\n                     THEN COALESCE((CASE WHEN json_array_length(json_insert(\n        CASE WHEN json_valid(p.target_namespace_json)\n "
+            },
+            {
+              "calls": 1164,
+              "sql_ms": 4.0,
+              "steps": 37587,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            },
+            {
+              "calls": 449,
+              "sql_ms": 0.0,
+              "steps": 34178,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 334,
+              "sql_ms": 1.0,
+              "steps": 20110,
+              "fullscan_steps": 0,
+              "sql_sha256": "c8565319d9b4e9c69c444f1e18d9481fc64cac7395f013a89da86abcd381fa51",
+              "sql_prefix": "PRAGMA table_info='pending_relationships'"
+            }
+          ]
+        },
+        {
+          "run": 1,
+          "warmup": false,
+          "wall_ms": 3610.512182,
+          "statements": 2778,
+          "steps": 86999016,
+          "fullscan_steps": 52403,
+          "result_sha256": "7d279e82fc7261e990a02aabd1e803998ac657c0d20c1bb19cc0ba3e95019a31",
+          "result_rows": null,
+          "top_queries": [
+            {
+              "calls": 5,
+              "sql_ms": 3483.0,
+              "steps": 86000870,
+              "fullscan_steps": 32365,
+              "sql_sha256": "e610c7ca24053c9e4a11c2dba81cbcc78268fddcbb463c2d0ac8e300e2d1fb90",
+              "sql_prefix": "SELECT 'P:' || CAST(pending.rowid AS TEXT), (WITH RECURSIVE segments(position, name) AS (\n             SELECT CAST(key AS INTEGER), value\n             FROM json_each(CASE WHEN json_valid(json_insert(\n        CASE WHEN json_valid(pending.tar"
+            },
+            {
+              "calls": 6,
+              "sql_ms": 11.0,
+              "steps": 320346,
+              "fullscan_steps": 132,
+              "sql_sha256": "26d59695ee1701c99240fd2cecbdbe9d2e7ce094ab7cc0a6d1d0c1cab3f50549",
+              "sql_prefix": "SELECT p.src, p.row_id,\n                CASE WHEN p.src = 'I' AND p.kind IN ('type_usage', 'member_access')\n                     THEN COALESCE((CASE WHEN json_array_length(json_insert(\n        CASE WHEN json_valid(p.target_namespace_json)\n "
+            },
+            {
+              "calls": 1,
+              "sql_ms": 7.0,
+              "steps": 291300,
+              "fullscan_steps": 0,
+              "sql_sha256": "78cbd67c6e65b8dcc1e18c0c81a7d6223704a7e45563bc51d21571c079be78b1",
+              "sql_prefix": "SELECT sf.structural_fact_id, sf.pattern_id, sf.path, sf.start_line, sf.end_line,\n         json_extract(CASE WHEN json_valid(sf.metadata_json) THEN sf.metadata_json ELSE '{}' END, '$.verb'),\n         COALESCE(json_extract(CASE WHEN json_val"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 3.0,
+              "steps": 162272,
+              "fullscan_steps": 16470,
+              "sql_sha256": "fba81e47c0a29b583704156e2d342a8e18e7b6597fec6728ef464487aa2f3eb0",
+              "sql_prefix": "SELECT path FROM files\n     WHERE path LIKE '%.csproj' OR path LIKE '%.props' OR path LIKE '%.targets'"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 2.0,
+              "steps": 40835,
+              "fullscan_steps": 0,
+              "sql_sha256": "f26660f995b4f66807fd16252befd485ec4924e592e837f0b7cd84b8ee442c1c",
+              "sql_prefix": "SELECT p.src, p.row_id,\n                CASE WHEN p.src = 'I' AND p.kind IN ('type_usage', 'member_access')\n                     THEN COALESCE((CASE WHEN json_array_length(json_insert(\n        CASE WHEN json_valid(p.target_namespace_json)\n "
+            },
+            {
+              "calls": 1164,
+              "sql_ms": 4.0,
+              "steps": 37587,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            },
+            {
+              "calls": 449,
+              "sql_ms": 2.0,
+              "steps": 34178,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 334,
+              "sql_ms": 1.0,
+              "steps": 20110,
+              "fullscan_steps": 0,
+              "sql_sha256": "c8565319d9b4e9c69c444f1e18d9481fc64cac7395f013a89da86abcd381fa51",
+              "sql_prefix": "PRAGMA table_info='pending_relationships'"
+            }
+          ]
+        },
+        {
+          "run": 2,
+          "warmup": false,
+          "wall_ms": 3669.880311,
+          "statements": 2778,
+          "steps": 86999016,
+          "fullscan_steps": 52403,
+          "result_sha256": "ed5f19fd91526e0a6407349e1bab3d02e11661df735b2e41b7b3c068e4c9a8dc",
+          "result_rows": null,
+          "top_queries": [
+            {
+              "calls": 5,
+              "sql_ms": 3543.0,
+              "steps": 86000870,
+              "fullscan_steps": 32365,
+              "sql_sha256": "e610c7ca24053c9e4a11c2dba81cbcc78268fddcbb463c2d0ac8e300e2d1fb90",
+              "sql_prefix": "SELECT 'P:' || CAST(pending.rowid AS TEXT), (WITH RECURSIVE segments(position, name) AS (\n             SELECT CAST(key AS INTEGER), value\n             FROM json_each(CASE WHEN json_valid(json_insert(\n        CASE WHEN json_valid(pending.tar"
+            },
+            {
+              "calls": 6,
+              "sql_ms": 11.0,
+              "steps": 320346,
+              "fullscan_steps": 132,
+              "sql_sha256": "26d59695ee1701c99240fd2cecbdbe9d2e7ce094ab7cc0a6d1d0c1cab3f50549",
+              "sql_prefix": "SELECT p.src, p.row_id,\n                CASE WHEN p.src = 'I' AND p.kind IN ('type_usage', 'member_access')\n                     THEN COALESCE((CASE WHEN json_array_length(json_insert(\n        CASE WHEN json_valid(p.target_namespace_json)\n "
+            },
+            {
+              "calls": 1,
+              "sql_ms": 7.0,
+              "steps": 291300,
+              "fullscan_steps": 0,
+              "sql_sha256": "78cbd67c6e65b8dcc1e18c0c81a7d6223704a7e45563bc51d21571c079be78b1",
+              "sql_prefix": "SELECT sf.structural_fact_id, sf.pattern_id, sf.path, sf.start_line, sf.end_line,\n         json_extract(CASE WHEN json_valid(sf.metadata_json) THEN sf.metadata_json ELSE '{}' END, '$.verb'),\n         COALESCE(json_extract(CASE WHEN json_val"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 2.0,
+              "steps": 162272,
+              "fullscan_steps": 16470,
+              "sql_sha256": "fba81e47c0a29b583704156e2d342a8e18e7b6597fec6728ef464487aa2f3eb0",
+              "sql_prefix": "SELECT path FROM files\n     WHERE path LIKE '%.csproj' OR path LIKE '%.props' OR path LIKE '%.targets'"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 1.0,
+              "steps": 40835,
+              "fullscan_steps": 0,
+              "sql_sha256": "f26660f995b4f66807fd16252befd485ec4924e592e837f0b7cd84b8ee442c1c",
+              "sql_prefix": "SELECT p.src, p.row_id,\n                CASE WHEN p.src = 'I' AND p.kind IN ('type_usage', 'member_access')\n                     THEN COALESCE((CASE WHEN json_array_length(json_insert(\n        CASE WHEN json_valid(p.target_namespace_json)\n "
+            },
+            {
+              "calls": 1164,
+              "sql_ms": 11.0,
+              "steps": 37587,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            },
+            {
+              "calls": 449,
+              "sql_ms": 1.0,
+              "steps": 34178,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 334,
+              "sql_ms": 0.0,
+              "steps": 20110,
+              "fullscan_steps": 0,
+              "sql_sha256": "c8565319d9b4e9c69c444f1e18d9481fc64cac7395f013a89da86abcd381fa51",
+              "sql_prefix": "PRAGMA table_info='pending_relationships'"
+            }
+          ]
+        },
+        {
+          "run": 3,
+          "warmup": false,
+          "wall_ms": 3630.913251,
+          "statements": 2778,
+          "steps": 86999016,
+          "fullscan_steps": 52403,
+          "result_sha256": "dfa70f4cb1b5d1a100d613bc692f46044541b1e3ad9b9884d1d87b3443e811ed",
+          "result_rows": null,
+          "top_queries": [
+            {
+              "calls": 5,
+              "sql_ms": 3504.0,
+              "steps": 86000870,
+              "fullscan_steps": 32365,
+              "sql_sha256": "e610c7ca24053c9e4a11c2dba81cbcc78268fddcbb463c2d0ac8e300e2d1fb90",
+              "sql_prefix": "SELECT 'P:' || CAST(pending.rowid AS TEXT), (WITH RECURSIVE segments(position, name) AS (\n             SELECT CAST(key AS INTEGER), value\n             FROM json_each(CASE WHEN json_valid(json_insert(\n        CASE WHEN json_valid(pending.tar"
+            },
+            {
+              "calls": 6,
+              "sql_ms": 14.0,
+              "steps": 320346,
+              "fullscan_steps": 132,
+              "sql_sha256": "26d59695ee1701c99240fd2cecbdbe9d2e7ce094ab7cc0a6d1d0c1cab3f50549",
+              "sql_prefix": "SELECT p.src, p.row_id,\n                CASE WHEN p.src = 'I' AND p.kind IN ('type_usage', 'member_access')\n                     THEN COALESCE((CASE WHEN json_array_length(json_insert(\n        CASE WHEN json_valid(p.target_namespace_json)\n "
+            },
+            {
+              "calls": 1,
+              "sql_ms": 7.0,
+              "steps": 291300,
+              "fullscan_steps": 0,
+              "sql_sha256": "78cbd67c6e65b8dcc1e18c0c81a7d6223704a7e45563bc51d21571c079be78b1",
+              "sql_prefix": "SELECT sf.structural_fact_id, sf.pattern_id, sf.path, sf.start_line, sf.end_line,\n         json_extract(CASE WHEN json_valid(sf.metadata_json) THEN sf.metadata_json ELSE '{}' END, '$.verb'),\n         COALESCE(json_extract(CASE WHEN json_val"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 3.0,
+              "steps": 162272,
+              "fullscan_steps": 16470,
+              "sql_sha256": "fba81e47c0a29b583704156e2d342a8e18e7b6597fec6728ef464487aa2f3eb0",
+              "sql_prefix": "SELECT path FROM files\n     WHERE path LIKE '%.csproj' OR path LIKE '%.props' OR path LIKE '%.targets'"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 2.0,
+              "steps": 40835,
+              "fullscan_steps": 0,
+              "sql_sha256": "f26660f995b4f66807fd16252befd485ec4924e592e837f0b7cd84b8ee442c1c",
+              "sql_prefix": "SELECT p.src, p.row_id,\n                CASE WHEN p.src = 'I' AND p.kind IN ('type_usage', 'member_access')\n                     THEN COALESCE((CASE WHEN json_array_length(json_insert(\n        CASE WHEN json_valid(p.target_namespace_json)\n "
+            },
+            {
+              "calls": 1164,
+              "sql_ms": 4.0,
+              "steps": 37587,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            },
+            {
+              "calls": 449,
+              "sql_ms": 0.0,
+              "steps": 34178,
+              "fullscan_steps": 0,
+              "sql_sha256": "1245c9de6031d9b0412fbd5ba78b63a31953f8a5512b333dca976b04b706e1d4",
+              "sql_prefix": "PRAGMA table_info='symbols'"
+            },
+            {
+              "calls": 334,
+              "sql_ms": 1.0,
+              "steps": 20110,
+              "fullscan_steps": 0,
+              "sql_sha256": "c8565319d9b4e9c69c444f1e18d9481fc64cac7395f013a89da86abcd381fa51",
+              "sql_prefix": "PRAGMA table_info='pending_relationships'"
+            }
+          ]
+        }
+      ],
+      "database_state_after": {
+        "size_bytes": 2232598528,
+        "mtime_ns": 1793379278373235532,
+        "wal_bytes": 0
+      },
+      "database_state_unchanged": true,
+      "selected_target": {
+        "definitions_with_name": 57,
+        "display_name": "HttpResponse.OnCompleted",
+        "kind": "method",
+        "line": 110,
+        "name": "OnCompleted",
+        "path": "src/Http/Http.Abstractions/src/HttpResponse.cs",
+        "symbol_id": "df091962119b0c9572b3979e10b2e7ce"
+      },
+      "after": [
+        {
+          "run": 0,
+          "warmup": true,
+          "wall_ms": 877.432384,
+          "statements": 3049,
+          "steps": 18776062,
+          "fullscan_steps": 26959,
+          "result_sha256": "238f67d1b6e5ed634aed5587079907088e4fa4f15a158d44fd57e45bb59779bf",
+          "counts": {
+            "definition_lines": 55,
+            "excluded": 27,
+            "import_lines": 0,
+            "likely": 0,
+            "proven": 3,
+            "site_lines": 46,
+            "sites": 46,
+            "text_lines": 146,
+            "text_only_lines": 45,
+            "unresolved": 16
+          },
+          "cannot_see": [
+            "calls through reflection or dependency injection",
+            "43 other definitions with this name were not checked"
+          ],
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 716.0,
+              "steps": 17200174,
+              "fullscan_steps": 6473,
+              "sql_sha256": "e610c7ca24053c9e4a11c2dba81cbcc78268fddcbb463c2d0ac8e300e2d1fb90",
+              "sql_prefix": "SELECT 'P:' || CAST(pending.rowid AS TEXT), (WITH RECURSIVE segments(position, name) AS (\n             SELECT CAST(key AS INTEGER), value\n             FROM json_each(CASE WHEN json_valid(json_insert(\n        CASE WHEN json_valid(pending.tar"
+            },
+            {
+              "calls": 14,
+              "sql_ms": 21.0,
+              "steps": 665446,
+              "fullscan_steps": 308,
+              "sql_sha256": "26d59695ee1701c99240fd2cecbdbe9d2e7ce094ab7cc0a6d1d0c1cab3f50549",
+              "sql_prefix": "SELECT p.src, p.row_id,\n                CASE WHEN p.src = 'I' AND p.kind IN ('type_usage', 'member_access')\n                     THEN COALESCE((CASE WHEN json_array_length(json_insert(\n        CASE WHEN json_valid(p.target_namespace_json)\n "
+            },
+            {
+              "calls": 1,
+              "sql_ms": 7.0,
+              "steps": 291300,
+              "fullscan_steps": 0,
+              "sql_sha256": "78cbd67c6e65b8dcc1e18c0c81a7d6223704a7e45563bc51d21571c079be78b1",
+              "sql_prefix": "SELECT sf.structural_fact_id, sf.pattern_id, sf.path, sf.start_line, sf.end_line,\n         json_extract(CASE WHEN json_valid(sf.metadata_json) THEN sf.metadata_json ELSE '{}' END, '$.verb'),\n         COALESCE(json_extract(CASE WHEN json_val"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 3.0,
+              "steps": 162272,
+              "fullscan_steps": 16470,
+              "sql_sha256": "fba81e47c0a29b583704156e2d342a8e18e7b6597fec6728ef464487aa2f3eb0",
+              "sql_prefix": "SELECT path FROM files\n     WHERE path LIKE '%.csproj' OR path LIKE '%.props' OR path LIKE '%.targets'"
+            },
+            {
+              "calls": 12,
+              "sql_ms": 6.0,
+              "steps": 154480,
+              "fullscan_steps": 0,
+              "sql_sha256": "faeed5dfc9ac966a3776123b00743686c7dae8944fd0edc1e687c691289135f6",
+              "sql_prefix": "WITH RECURSIVE chain(symbol_id, depth) AS (\n         SELECT ?1, 0\n         UNION ALL\n         SELECT s.parent_symbol_id, chain.depth + 1\n         FROM symbols s JOIN chain ON s.symbol_id = chain.symbol_id\n         WHERE s.parent_symbol_id I"
+            },
+            {
+              "calls": 9,
+              "sql_ms": 9.0,
+              "steps": 65331,
+              "fullscan_steps": 0,
+              "sql_sha256": "7ed9b41b254695122058be64f80421db0a9b4db7529d51a290b1fa42912ba58c",
+              "sql_prefix": "SELECT DISTINCT base.name\n     FROM symbols child\n     JOIN relationships r ON r.from_symbol_id = child.symbol_id\n          AND r.kind IN ('extends', 'implements')\n     JOIN symbols base ON base.symbol_id = r.to_symbol_id\n     WHERE child.n"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 1.0,
+              "steps": 40835,
+              "fullscan_steps": 0,
+              "sql_sha256": "f26660f995b4f66807fd16252befd485ec4924e592e837f0b7cd84b8ee442c1c",
+              "sql_prefix": "SELECT p.src, p.row_id,\n                CASE WHEN p.src = 'I' AND p.kind IN ('type_usage', 'member_access')\n                     THEN COALESCE((CASE WHEN json_array_length(json_insert(\n        CASE WHEN json_valid(p.target_namespace_json)\n "
+            },
+            {
+              "calls": 1264,
+              "sql_ms": 2.0,
+              "steps": 40603,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            }
+          ]
+        },
+        {
+          "run": 1,
+          "warmup": false,
+          "wall_ms": 876.5594249999999,
+          "statements": 3046,
+          "steps": 18776036,
+          "fullscan_steps": 26959,
+          "result_sha256": "d0e41a43bfc56114445df38e3682ea84735399760c560a23008cf616c84d07f5",
+          "counts": {
+            "definition_lines": 55,
+            "excluded": 27,
+            "import_lines": 0,
+            "likely": 0,
+            "proven": 3,
+            "site_lines": 46,
+            "sites": 46,
+            "text_lines": 146,
+            "text_only_lines": 45,
+            "unresolved": 16
+          },
+          "cannot_see": [
+            "calls through reflection or dependency injection",
+            "43 other definitions with this name were not checked"
+          ],
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 718.0,
+              "steps": 17200174,
+              "fullscan_steps": 6473,
+              "sql_sha256": "e610c7ca24053c9e4a11c2dba81cbcc78268fddcbb463c2d0ac8e300e2d1fb90",
+              "sql_prefix": "SELECT 'P:' || CAST(pending.rowid AS TEXT), (WITH RECURSIVE segments(position, name) AS (\n             SELECT CAST(key AS INTEGER), value\n             FROM json_each(CASE WHEN json_valid(json_insert(\n        CASE WHEN json_valid(pending.tar"
+            },
+            {
+              "calls": 14,
+              "sql_ms": 24.0,
+              "steps": 665446,
+              "fullscan_steps": 308,
+              "sql_sha256": "26d59695ee1701c99240fd2cecbdbe9d2e7ce094ab7cc0a6d1d0c1cab3f50549",
+              "sql_prefix": "SELECT p.src, p.row_id,\n                CASE WHEN p.src = 'I' AND p.kind IN ('type_usage', 'member_access')\n                     THEN COALESCE((CASE WHEN json_array_length(json_insert(\n        CASE WHEN json_valid(p.target_namespace_json)\n "
+            },
+            {
+              "calls": 1,
+              "sql_ms": 8.0,
+              "steps": 291300,
+              "fullscan_steps": 0,
+              "sql_sha256": "78cbd67c6e65b8dcc1e18c0c81a7d6223704a7e45563bc51d21571c079be78b1",
+              "sql_prefix": "SELECT sf.structural_fact_id, sf.pattern_id, sf.path, sf.start_line, sf.end_line,\n         json_extract(CASE WHEN json_valid(sf.metadata_json) THEN sf.metadata_json ELSE '{}' END, '$.verb'),\n         COALESCE(json_extract(CASE WHEN json_val"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 3.0,
+              "steps": 162272,
+              "fullscan_steps": 16470,
+              "sql_sha256": "fba81e47c0a29b583704156e2d342a8e18e7b6597fec6728ef464487aa2f3eb0",
+              "sql_prefix": "SELECT path FROM files\n     WHERE path LIKE '%.csproj' OR path LIKE '%.props' OR path LIKE '%.targets'"
+            },
+            {
+              "calls": 12,
+              "sql_ms": 7.0,
+              "steps": 154480,
+              "fullscan_steps": 0,
+              "sql_sha256": "faeed5dfc9ac966a3776123b00743686c7dae8944fd0edc1e687c691289135f6",
+              "sql_prefix": "WITH RECURSIVE chain(symbol_id, depth) AS (\n         SELECT ?1, 0\n         UNION ALL\n         SELECT s.parent_symbol_id, chain.depth + 1\n         FROM symbols s JOIN chain ON s.symbol_id = chain.symbol_id\n         WHERE s.parent_symbol_id I"
+            },
+            {
+              "calls": 9,
+              "sql_ms": 8.0,
+              "steps": 65331,
+              "fullscan_steps": 0,
+              "sql_sha256": "7ed9b41b254695122058be64f80421db0a9b4db7529d51a290b1fa42912ba58c",
+              "sql_prefix": "SELECT DISTINCT base.name\n     FROM symbols child\n     JOIN relationships r ON r.from_symbol_id = child.symbol_id\n          AND r.kind IN ('extends', 'implements')\n     JOIN symbols base ON base.symbol_id = r.to_symbol_id\n     WHERE child.n"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 3.0,
+              "steps": 40835,
+              "fullscan_steps": 0,
+              "sql_sha256": "f26660f995b4f66807fd16252befd485ec4924e592e837f0b7cd84b8ee442c1c",
+              "sql_prefix": "SELECT p.src, p.row_id,\n                CASE WHEN p.src = 'I' AND p.kind IN ('type_usage', 'member_access')\n                     THEN COALESCE((CASE WHEN json_array_length(json_insert(\n        CASE WHEN json_valid(p.target_namespace_json)\n "
+            },
+            {
+              "calls": 1264,
+              "sql_ms": 3.0,
+              "steps": 40603,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            }
+          ]
+        },
+        {
+          "run": 2,
+          "warmup": false,
+          "wall_ms": 897.3067219999999,
+          "statements": 3046,
+          "steps": 18776036,
+          "fullscan_steps": 26959,
+          "result_sha256": "d0e41a43bfc56114445df38e3682ea84735399760c560a23008cf616c84d07f5",
+          "counts": {
+            "definition_lines": 55,
+            "excluded": 27,
+            "import_lines": 0,
+            "likely": 0,
+            "proven": 3,
+            "site_lines": 46,
+            "sites": 46,
+            "text_lines": 146,
+            "text_only_lines": 45,
+            "unresolved": 16
+          },
+          "cannot_see": [
+            "calls through reflection or dependency injection",
+            "43 other definitions with this name were not checked"
+          ],
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 743.0,
+              "steps": 17200174,
+              "fullscan_steps": 6473,
+              "sql_sha256": "e610c7ca24053c9e4a11c2dba81cbcc78268fddcbb463c2d0ac8e300e2d1fb90",
+              "sql_prefix": "SELECT 'P:' || CAST(pending.rowid AS TEXT), (WITH RECURSIVE segments(position, name) AS (\n             SELECT CAST(key AS INTEGER), value\n             FROM json_each(CASE WHEN json_valid(json_insert(\n        CASE WHEN json_valid(pending.tar"
+            },
+            {
+              "calls": 14,
+              "sql_ms": 21.0,
+              "steps": 665446,
+              "fullscan_steps": 308,
+              "sql_sha256": "26d59695ee1701c99240fd2cecbdbe9d2e7ce094ab7cc0a6d1d0c1cab3f50549",
+              "sql_prefix": "SELECT p.src, p.row_id,\n                CASE WHEN p.src = 'I' AND p.kind IN ('type_usage', 'member_access')\n                     THEN COALESCE((CASE WHEN json_array_length(json_insert(\n        CASE WHEN json_valid(p.target_namespace_json)\n "
+            },
+            {
+              "calls": 1,
+              "sql_ms": 7.0,
+              "steps": 291300,
+              "fullscan_steps": 0,
+              "sql_sha256": "78cbd67c6e65b8dcc1e18c0c81a7d6223704a7e45563bc51d21571c079be78b1",
+              "sql_prefix": "SELECT sf.structural_fact_id, sf.pattern_id, sf.path, sf.start_line, sf.end_line,\n         json_extract(CASE WHEN json_valid(sf.metadata_json) THEN sf.metadata_json ELSE '{}' END, '$.verb'),\n         COALESCE(json_extract(CASE WHEN json_val"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 3.0,
+              "steps": 162272,
+              "fullscan_steps": 16470,
+              "sql_sha256": "fba81e47c0a29b583704156e2d342a8e18e7b6597fec6728ef464487aa2f3eb0",
+              "sql_prefix": "SELECT path FROM files\n     WHERE path LIKE '%.csproj' OR path LIKE '%.props' OR path LIKE '%.targets'"
+            },
+            {
+              "calls": 12,
+              "sql_ms": 6.0,
+              "steps": 154480,
+              "fullscan_steps": 0,
+              "sql_sha256": "faeed5dfc9ac966a3776123b00743686c7dae8944fd0edc1e687c691289135f6",
+              "sql_prefix": "WITH RECURSIVE chain(symbol_id, depth) AS (\n         SELECT ?1, 0\n         UNION ALL\n         SELECT s.parent_symbol_id, chain.depth + 1\n         FROM symbols s JOIN chain ON s.symbol_id = chain.symbol_id\n         WHERE s.parent_symbol_id I"
+            },
+            {
+              "calls": 9,
+              "sql_ms": 7.0,
+              "steps": 65331,
+              "fullscan_steps": 0,
+              "sql_sha256": "7ed9b41b254695122058be64f80421db0a9b4db7529d51a290b1fa42912ba58c",
+              "sql_prefix": "SELECT DISTINCT base.name\n     FROM symbols child\n     JOIN relationships r ON r.from_symbol_id = child.symbol_id\n          AND r.kind IN ('extends', 'implements')\n     JOIN symbols base ON base.symbol_id = r.to_symbol_id\n     WHERE child.n"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 1.0,
+              "steps": 40835,
+              "fullscan_steps": 0,
+              "sql_sha256": "f26660f995b4f66807fd16252befd485ec4924e592e837f0b7cd84b8ee442c1c",
+              "sql_prefix": "SELECT p.src, p.row_id,\n                CASE WHEN p.src = 'I' AND p.kind IN ('type_usage', 'member_access')\n                     THEN COALESCE((CASE WHEN json_array_length(json_insert(\n        CASE WHEN json_valid(p.target_namespace_json)\n "
+            },
+            {
+              "calls": 1264,
+              "sql_ms": 4.0,
+              "steps": 40603,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            }
+          ]
+        },
+        {
+          "run": 3,
+          "warmup": false,
+          "wall_ms": 945.495987,
+          "statements": 3046,
+          "steps": 18776036,
+          "fullscan_steps": 26959,
+          "result_sha256": "238f67d1b6e5ed634aed5587079907088e4fa4f15a158d44fd57e45bb59779bf",
+          "counts": {
+            "definition_lines": 55,
+            "excluded": 27,
+            "import_lines": 0,
+            "likely": 0,
+            "proven": 3,
+            "site_lines": 46,
+            "sites": 46,
+            "text_lines": 146,
+            "text_only_lines": 45,
+            "unresolved": 16
+          },
+          "cannot_see": [
+            "calls through reflection or dependency injection",
+            "43 other definitions with this name were not checked"
+          ],
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 787.0,
+              "steps": 17200174,
+              "fullscan_steps": 6473,
+              "sql_sha256": "e610c7ca24053c9e4a11c2dba81cbcc78268fddcbb463c2d0ac8e300e2d1fb90",
+              "sql_prefix": "SELECT 'P:' || CAST(pending.rowid AS TEXT), (WITH RECURSIVE segments(position, name) AS (\n             SELECT CAST(key AS INTEGER), value\n             FROM json_each(CASE WHEN json_valid(json_insert(\n        CASE WHEN json_valid(pending.tar"
+            },
+            {
+              "calls": 14,
+              "sql_ms": 21.0,
+              "steps": 665446,
+              "fullscan_steps": 308,
+              "sql_sha256": "26d59695ee1701c99240fd2cecbdbe9d2e7ce094ab7cc0a6d1d0c1cab3f50549",
+              "sql_prefix": "SELECT p.src, p.row_id,\n                CASE WHEN p.src = 'I' AND p.kind IN ('type_usage', 'member_access')\n                     THEN COALESCE((CASE WHEN json_array_length(json_insert(\n        CASE WHEN json_valid(p.target_namespace_json)\n "
+            },
+            {
+              "calls": 1,
+              "sql_ms": 7.0,
+              "steps": 291300,
+              "fullscan_steps": 0,
+              "sql_sha256": "78cbd67c6e65b8dcc1e18c0c81a7d6223704a7e45563bc51d21571c079be78b1",
+              "sql_prefix": "SELECT sf.structural_fact_id, sf.pattern_id, sf.path, sf.start_line, sf.end_line,\n         json_extract(CASE WHEN json_valid(sf.metadata_json) THEN sf.metadata_json ELSE '{}' END, '$.verb'),\n         COALESCE(json_extract(CASE WHEN json_val"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 3.0,
+              "steps": 162272,
+              "fullscan_steps": 16470,
+              "sql_sha256": "fba81e47c0a29b583704156e2d342a8e18e7b6597fec6728ef464487aa2f3eb0",
+              "sql_prefix": "SELECT path FROM files\n     WHERE path LIKE '%.csproj' OR path LIKE '%.props' OR path LIKE '%.targets'"
+            },
+            {
+              "calls": 12,
+              "sql_ms": 6.0,
+              "steps": 154480,
+              "fullscan_steps": 0,
+              "sql_sha256": "faeed5dfc9ac966a3776123b00743686c7dae8944fd0edc1e687c691289135f6",
+              "sql_prefix": "WITH RECURSIVE chain(symbol_id, depth) AS (\n         SELECT ?1, 0\n         UNION ALL\n         SELECT s.parent_symbol_id, chain.depth + 1\n         FROM symbols s JOIN chain ON s.symbol_id = chain.symbol_id\n         WHERE s.parent_symbol_id I"
+            },
+            {
+              "calls": 9,
+              "sql_ms": 8.0,
+              "steps": 65331,
+              "fullscan_steps": 0,
+              "sql_sha256": "7ed9b41b254695122058be64f80421db0a9b4db7529d51a290b1fa42912ba58c",
+              "sql_prefix": "SELECT DISTINCT base.name\n     FROM symbols child\n     JOIN relationships r ON r.from_symbol_id = child.symbol_id\n          AND r.kind IN ('extends', 'implements')\n     JOIN symbols base ON base.symbol_id = r.to_symbol_id\n     WHERE child.n"
+            },
+            {
+              "calls": 4,
+              "sql_ms": 1.0,
+              "steps": 40835,
+              "fullscan_steps": 0,
+              "sql_sha256": "f26660f995b4f66807fd16252befd485ec4924e592e837f0b7cd84b8ee442c1c",
+              "sql_prefix": "SELECT p.src, p.row_id,\n                CASE WHEN p.src = 'I' AND p.kind IN ('type_usage', 'member_access')\n                     THEN COALESCE((CASE WHEN json_array_length(json_insert(\n        CASE WHEN json_valid(p.target_namespace_json)\n "
+            },
+            {
+              "calls": 1264,
+              "sql_ms": 4.0,
+              "steps": 40603,
+              "fullscan_steps": 0,
+              "sql_sha256": "0116a5fd30e9215a75f610536af15ebb9a0211d41940210e17422088df3c7781",
+              "sql_prefix": "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2"
+            }
+          ]
+        }
+      ],
+      "output_comparison": "receiver-output-comparison.json; all 46 sites retained, prior checked labels preserved; additional evidence improves one formerly unchecked unresolved site to excluded."
+    },
+    "search-wide": {
+      "root": "/home/murphy/.cache/code-kb-accuracy/phase3/repos/newtonsoft-json",
+      "mode": "search",
+      "query": "json writer",
+      "path": null,
+      "before": [
+        {
+          "run": 0,
+          "warmup": true,
+          "wall_ms": 109.23140500000001,
+          "statements": 5188,
+          "steps": 958227,
+          "fullscan_steps": 277,
+          "result_sha256": "b5279137433d6fc56faf8f806bc472514dd19b08e397560a756e0fba0f40f809",
+          "result_rows": 20,
+          "top_queries": [
+            {
+              "calls": 2,
+              "sql_ms": 68.0,
+              "steps": 636700,
+              "fullscan_steps": 0,
+              "sql_sha256": "b1fa5550aa8a4d01c92eb9b3905eb5507e45dc2ed28029f624eff189573f6146",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.start_byte, s.end_byte"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 23.0,
+              "steps": 213037,
+              "fullscan_steps": 0,
+              "sql_sha256": "98069c908a1863be947a9a72e8357688ea727aa34fb0e42a4b4bd6d64c1c202d",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.start_byte, s.end_byte"
+            },
+            {
+              "calls": 3329,
+              "sql_ms": 0.0,
+              "steps": 26632,
+              "fullscan_steps": 0,
+              "sql_sha256": "8068773479cb1118e2feb49d442707057b278c04874cd455930c3e35d69e9a08",
+              "sql_prefix": "SELECT sz FROM 'main'.'symbols_fts_docsize' WHERE id=?"
+            },
+            {
+              "calls": 3,
+              "sql_ms": 1.0,
+              "steps": 26058,
+              "fullscan_steps": 0,
+              "sql_sha256": "3f1394fa8f7435aa029ec326947c0ad3973e9222b88a9d7afef5d2fc0cb1b8a3",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.start_byte, s.end_byte"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 19886,
+              "fullscan_steps": 0,
+              "sql_sha256": "a784e84476a54e3f1b100a1f954bceeb92dff59e8003bbea58f55b5abe69298e",
+              "sql_prefix": "SELECT count(*) FROM (SELECT rowid FROM symbols_fts WHERE symbols_fts MATCH ?1 LIMIT 20000)"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 2.0,
+              "steps": 13193,
+              "fullscan_steps": 0,
+              "sql_sha256": "2cea8f5a6d5bfc3cb3cabc80a5e1c823724844f448cdba0fec9fd666bee302d5",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.start_byte, s.end_byte"
+            },
+            {
+              "calls": 1288,
+              "sql_ms": 1.0,
+              "steps": 10304,
+              "fullscan_steps": 0,
+              "sql_sha256": "3e7d3340c03d4824f1c52bcf5aed4cc13ca50ce871994f7fed0e8dd61b975f28",
+              "sql_prefix": "SELECT sz FROM 'main'.'symbol_names_tri_docsize' WHERE id=?"
+            },
+            {
+              "calls": 473,
+              "sql_ms": 66.0,
+              "steps": 5203,
+              "fullscan_steps": 0,
+              "sql_sha256": "01ab88d8609a189af33af2f94be6d766e0d5604607ff02b72e57fff6c4edb31c",
+              "sql_prefix": "SELECT T.'rowid', T.'name', T.'signature', T.'doc_comment' FROM 'main'.'symbols' T WHERE T.'rowid'=?"
+            }
+          ]
+        },
+        {
+          "run": 1,
+          "warmup": false,
+          "wall_ms": 89.481789,
+          "statements": 5182,
+          "steps": 958175,
+          "fullscan_steps": 277,
+          "result_sha256": "b5279137433d6fc56faf8f806bc472514dd19b08e397560a756e0fba0f40f809",
+          "result_rows": 20,
+          "top_queries": [
+            {
+              "calls": 2,
+              "sql_ms": 60.0,
+              "steps": 636700,
+              "fullscan_steps": 0,
+              "sql_sha256": "b1fa5550aa8a4d01c92eb9b3905eb5507e45dc2ed28029f624eff189573f6146",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.start_byte, s.end_byte"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 23.0,
+              "steps": 213037,
+              "fullscan_steps": 0,
+              "sql_sha256": "98069c908a1863be947a9a72e8357688ea727aa34fb0e42a4b4bd6d64c1c202d",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.start_byte, s.end_byte"
+            },
+            {
+              "calls": 3329,
+              "sql_ms": 1.0,
+              "steps": 26632,
+              "fullscan_steps": 0,
+              "sql_sha256": "8068773479cb1118e2feb49d442707057b278c04874cd455930c3e35d69e9a08",
+              "sql_prefix": "SELECT sz FROM 'main'.'symbols_fts_docsize' WHERE id=?"
+            },
+            {
+              "calls": 3,
+              "sql_ms": 2.0,
+              "steps": 26058,
+              "fullscan_steps": 0,
+              "sql_sha256": "3f1394fa8f7435aa029ec326947c0ad3973e9222b88a9d7afef5d2fc0cb1b8a3",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.start_byte, s.end_byte"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 1.0,
+              "steps": 19886,
+              "fullscan_steps": 0,
+              "sql_sha256": "a784e84476a54e3f1b100a1f954bceeb92dff59e8003bbea58f55b5abe69298e",
+              "sql_prefix": "SELECT count(*) FROM (SELECT rowid FROM symbols_fts WHERE symbols_fts MATCH ?1 LIMIT 20000)"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 1.0,
+              "steps": 13193,
+              "fullscan_steps": 0,
+              "sql_sha256": "2cea8f5a6d5bfc3cb3cabc80a5e1c823724844f448cdba0fec9fd666bee302d5",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.start_byte, s.end_byte"
+            },
+            {
+              "calls": 1288,
+              "sql_ms": 1.0,
+              "steps": 10304,
+              "fullscan_steps": 0,
+              "sql_sha256": "3e7d3340c03d4824f1c52bcf5aed4cc13ca50ce871994f7fed0e8dd61b975f28",
+              "sql_prefix": "SELECT sz FROM 'main'.'symbol_names_tri_docsize' WHERE id=?"
+            },
+            {
+              "calls": 473,
+              "sql_ms": 58.0,
+              "steps": 5203,
+              "fullscan_steps": 0,
+              "sql_sha256": "01ab88d8609a189af33af2f94be6d766e0d5604607ff02b72e57fff6c4edb31c",
+              "sql_prefix": "SELECT T.'rowid', T.'name', T.'signature', T.'doc_comment' FROM 'main'.'symbols' T WHERE T.'rowid'=?"
+            }
+          ]
+        },
+        {
+          "run": 2,
+          "warmup": false,
+          "wall_ms": 94.852372,
+          "statements": 5182,
+          "steps": 958175,
+          "fullscan_steps": 277,
+          "result_sha256": "b5279137433d6fc56faf8f806bc472514dd19b08e397560a756e0fba0f40f809",
+          "result_rows": 20,
+          "top_queries": [
+            {
+              "calls": 2,
+              "sql_ms": 63.0,
+              "steps": 636700,
+              "fullscan_steps": 0,
+              "sql_sha256": "b1fa5550aa8a4d01c92eb9b3905eb5507e45dc2ed28029f624eff189573f6146",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.start_byte, s.end_byte"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 25.0,
+              "steps": 213037,
+              "fullscan_steps": 0,
+              "sql_sha256": "98069c908a1863be947a9a72e8357688ea727aa34fb0e42a4b4bd6d64c1c202d",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.start_byte, s.end_byte"
+            },
+            {
+              "calls": 3329,
+              "sql_ms": 1.0,
+              "steps": 26632,
+              "fullscan_steps": 0,
+              "sql_sha256": "8068773479cb1118e2feb49d442707057b278c04874cd455930c3e35d69e9a08",
+              "sql_prefix": "SELECT sz FROM 'main'.'symbols_fts_docsize' WHERE id=?"
+            },
+            {
+              "calls": 3,
+              "sql_ms": 2.0,
+              "steps": 26058,
+              "fullscan_steps": 0,
+              "sql_sha256": "3f1394fa8f7435aa029ec326947c0ad3973e9222b88a9d7afef5d2fc0cb1b8a3",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.start_byte, s.end_byte"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 1.0,
+              "steps": 19886,
+              "fullscan_steps": 0,
+              "sql_sha256": "a784e84476a54e3f1b100a1f954bceeb92dff59e8003bbea58f55b5abe69298e",
+              "sql_prefix": "SELECT count(*) FROM (SELECT rowid FROM symbols_fts WHERE symbols_fts MATCH ?1 LIMIT 20000)"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 1.0,
+              "steps": 13193,
+              "fullscan_steps": 0,
+              "sql_sha256": "2cea8f5a6d5bfc3cb3cabc80a5e1c823724844f448cdba0fec9fd666bee302d5",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.start_byte, s.end_byte"
+            },
+            {
+              "calls": 1288,
+              "sql_ms": 1.0,
+              "steps": 10304,
+              "fullscan_steps": 0,
+              "sql_sha256": "3e7d3340c03d4824f1c52bcf5aed4cc13ca50ce871994f7fed0e8dd61b975f28",
+              "sql_prefix": "SELECT sz FROM 'main'.'symbol_names_tri_docsize' WHERE id=?"
+            },
+            {
+              "calls": 473,
+              "sql_ms": 62.0,
+              "steps": 5203,
+              "fullscan_steps": 0,
+              "sql_sha256": "01ab88d8609a189af33af2f94be6d766e0d5604607ff02b72e57fff6c4edb31c",
+              "sql_prefix": "SELECT T.'rowid', T.'name', T.'signature', T.'doc_comment' FROM 'main'.'symbols' T WHERE T.'rowid'=?"
+            }
+          ]
+        },
+        {
+          "run": 3,
+          "warmup": false,
+          "wall_ms": 92.086141,
+          "statements": 5182,
+          "steps": 958175,
+          "fullscan_steps": 277,
+          "result_sha256": "b5279137433d6fc56faf8f806bc472514dd19b08e397560a756e0fba0f40f809",
+          "result_rows": 20,
+          "top_queries": [
+            {
+              "calls": 2,
+              "sql_ms": 62.0,
+              "steps": 636700,
+              "fullscan_steps": 0,
+              "sql_sha256": "b1fa5550aa8a4d01c92eb9b3905eb5507e45dc2ed28029f624eff189573f6146",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.start_byte, s.end_byte"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 24.0,
+              "steps": 213037,
+              "fullscan_steps": 0,
+              "sql_sha256": "98069c908a1863be947a9a72e8357688ea727aa34fb0e42a4b4bd6d64c1c202d",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.start_byte, s.end_byte"
+            },
+            {
+              "calls": 3329,
+              "sql_ms": 2.0,
+              "steps": 26632,
+              "fullscan_steps": 0,
+              "sql_sha256": "8068773479cb1118e2feb49d442707057b278c04874cd455930c3e35d69e9a08",
+              "sql_prefix": "SELECT sz FROM 'main'.'symbols_fts_docsize' WHERE id=?"
+            },
+            {
+              "calls": 3,
+              "sql_ms": 1.0,
+              "steps": 26058,
+              "fullscan_steps": 0,
+              "sql_sha256": "3f1394fa8f7435aa029ec326947c0ad3973e9222b88a9d7afef5d2fc0cb1b8a3",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.start_byte, s.end_byte"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 19886,
+              "fullscan_steps": 0,
+              "sql_sha256": "a784e84476a54e3f1b100a1f954bceeb92dff59e8003bbea58f55b5abe69298e",
+              "sql_prefix": "SELECT count(*) FROM (SELECT rowid FROM symbols_fts WHERE symbols_fts MATCH ?1 LIMIT 20000)"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 1.0,
+              "steps": 13193,
+              "fullscan_steps": 0,
+              "sql_sha256": "2cea8f5a6d5bfc3cb3cabc80a5e1c823724844f448cdba0fec9fd666bee302d5",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.start_byte, s.end_byte"
+            },
+            {
+              "calls": 1288,
+              "sql_ms": 0.0,
+              "steps": 10304,
+              "fullscan_steps": 0,
+              "sql_sha256": "3e7d3340c03d4824f1c52bcf5aed4cc13ca50ce871994f7fed0e8dd61b975f28",
+              "sql_prefix": "SELECT sz FROM 'main'.'symbol_names_tri_docsize' WHERE id=?"
+            },
+            {
+              "calls": 473,
+              "sql_ms": 61.0,
+              "steps": 5203,
+              "fullscan_steps": 0,
+              "sql_sha256": "01ab88d8609a189af33af2f94be6d766e0d5604607ff02b72e57fff6c4edb31c",
+              "sql_prefix": "SELECT T.'rowid', T.'name', T.'signature', T.'doc_comment' FROM 'main'.'symbols' T WHERE T.'rowid'=?"
+            }
+          ]
+        }
+      ],
+      "database_state_at_audit": {
+        "size_bytes": 167399424,
+        "mtime_ns": 1792677569133433243,
+        "wal_bytes": 0
+      },
+      "repository_commit": "95a6eb3ac50eaa599018a97265725e135197159c",
+      "after": [
+        {
+          "run": 0,
+          "warmup": true,
+          "wall_ms": 41.14271,
+          "statements": 1690,
+          "steps": 328854,
+          "fullscan_steps": 277,
+          "result_sha256": "b5279137433d6fc56faf8f806bc472514dd19b08e397560a756e0fba0f40f809",
+          "result_rows": 20,
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 26.0,
+              "steps": 213037,
+              "fullscan_steps": 0,
+              "sql_sha256": "98069c908a1863be947a9a72e8357688ea727aa34fb0e42a4b4bd6d64c1c202d",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.st"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 7.0,
+              "steps": 36354,
+              "fullscan_steps": 0,
+              "sql_sha256": "b1fa5550aa8a4d01c92eb9b3905eb5507e45dc2ed28029f624eff189573f6146",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.st"
+            },
+            {
+              "calls": 3,
+              "sql_ms": 3.0,
+              "steps": 26058,
+              "fullscan_steps": 0,
+              "sql_sha256": "3f1394fa8f7435aa029ec326947c0ad3973e9222b88a9d7afef5d2fc0cb1b8a3",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.st"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 1.0,
+              "steps": 19886,
+              "fullscan_steps": 0,
+              "sql_sha256": "a784e84476a54e3f1b100a1f954bceeb92dff59e8003bbea58f55b5abe69298e",
+              "sql_prefix": "SELECT count(*) FROM (SELECT rowid FROM symbols_fts WHERE symbols_fts MATCH ?1 LIMIT 20000)"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 2.0,
+              "steps": 13193,
+              "fullscan_steps": 0,
+              "sql_sha256": "2cea8f5a6d5bfc3cb3cabc80a5e1c823724844f448cdba0fec9fd666bee302d5",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.st"
+            },
+            {
+              "calls": 1288,
+              "sql_ms": 2.0,
+              "steps": 10304,
+              "fullscan_steps": 0,
+              "sql_sha256": "3e7d3340c03d4824f1c52bcf5aed4cc13ca50ce871994f7fed0e8dd61b975f28",
+              "sql_prefix": "SELECT sz FROM 'main'.'symbol_names_tri_docsize' WHERE id=?"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 3061,
+              "fullscan_steps": 0,
+              "sql_sha256": "c9c1ac0fc131e8095bd5245798e78771c5bec18e36f81a13a8e72560106c3f42",
+              "sql_prefix": "SELECT s.symbol_id FROM symbols s\n         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND ((CASE WHEN s.kind = 'property' AND s.parent_symbol_id IS NOT NULL\n          AND (s.signature LIKE 'self.%' OR s.signature LIKE 'this.%' O"
+            },
+            {
+              "calls": 146,
+              "sql_ms": 5.0,
+              "steps": 1606,
+              "fullscan_steps": 0,
+              "sql_sha256": "01ab88d8609a189af33af2f94be6d766e0d5604607ff02b72e57fff6c4edb31c",
+              "sql_prefix": "SELECT T.'rowid', T.'name', T.'signature', T.'doc_comment' FROM 'main'.'symbols' T WHERE T.'rowid'=?"
+            }
+          ]
+        },
+        {
+          "run": 1,
+          "warmup": false,
+          "wall_ms": 33.239426,
+          "statements": 1684,
+          "steps": 328802,
+          "fullscan_steps": 277,
+          "result_sha256": "b5279137433d6fc56faf8f806bc472514dd19b08e397560a756e0fba0f40f809",
+          "result_rows": 20,
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 23.0,
+              "steps": 213037,
+              "fullscan_steps": 0,
+              "sql_sha256": "98069c908a1863be947a9a72e8357688ea727aa34fb0e42a4b4bd6d64c1c202d",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.st"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 3.0,
+              "steps": 36354,
+              "fullscan_steps": 0,
+              "sql_sha256": "b1fa5550aa8a4d01c92eb9b3905eb5507e45dc2ed28029f624eff189573f6146",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.st"
+            },
+            {
+              "calls": 3,
+              "sql_ms": 1.0,
+              "steps": 26058,
+              "fullscan_steps": 0,
+              "sql_sha256": "3f1394fa8f7435aa029ec326947c0ad3973e9222b88a9d7afef5d2fc0cb1b8a3",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.st"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 19886,
+              "fullscan_steps": 0,
+              "sql_sha256": "a784e84476a54e3f1b100a1f954bceeb92dff59e8003bbea58f55b5abe69298e",
+              "sql_prefix": "SELECT count(*) FROM (SELECT rowid FROM symbols_fts WHERE symbols_fts MATCH ?1 LIMIT 20000)"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 1.0,
+              "steps": 13193,
+              "fullscan_steps": 0,
+              "sql_sha256": "2cea8f5a6d5bfc3cb3cabc80a5e1c823724844f448cdba0fec9fd666bee302d5",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.st"
+            },
+            {
+              "calls": 1288,
+              "sql_ms": 0.0,
+              "steps": 10304,
+              "fullscan_steps": 0,
+              "sql_sha256": "3e7d3340c03d4824f1c52bcf5aed4cc13ca50ce871994f7fed0e8dd61b975f28",
+              "sql_prefix": "SELECT sz FROM 'main'.'symbol_names_tri_docsize' WHERE id=?"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 3061,
+              "fullscan_steps": 0,
+              "sql_sha256": "c9c1ac0fc131e8095bd5245798e78771c5bec18e36f81a13a8e72560106c3f42",
+              "sql_prefix": "SELECT s.symbol_id FROM symbols s\n         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND ((CASE WHEN s.kind = 'property' AND s.parent_symbol_id IS NOT NULL\n          AND (s.signature LIKE 'self.%' OR s.signature LIKE 'this.%' O"
+            },
+            {
+              "calls": 146,
+              "sql_ms": 2.0,
+              "steps": 1606,
+              "fullscan_steps": 0,
+              "sql_sha256": "01ab88d8609a189af33af2f94be6d766e0d5604607ff02b72e57fff6c4edb31c",
+              "sql_prefix": "SELECT T.'rowid', T.'name', T.'signature', T.'doc_comment' FROM 'main'.'symbols' T WHERE T.'rowid'=?"
+            }
+          ]
+        },
+        {
+          "run": 2,
+          "warmup": false,
+          "wall_ms": 33.418428,
+          "statements": 1684,
+          "steps": 328802,
+          "fullscan_steps": 277,
+          "result_sha256": "b5279137433d6fc56faf8f806bc472514dd19b08e397560a756e0fba0f40f809",
+          "result_rows": 20,
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 24.0,
+              "steps": 213037,
+              "fullscan_steps": 0,
+              "sql_sha256": "98069c908a1863be947a9a72e8357688ea727aa34fb0e42a4b4bd6d64c1c202d",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.st"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 4.0,
+              "steps": 36354,
+              "fullscan_steps": 0,
+              "sql_sha256": "b1fa5550aa8a4d01c92eb9b3905eb5507e45dc2ed28029f624eff189573f6146",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.st"
+            },
+            {
+              "calls": 3,
+              "sql_ms": 2.0,
+              "steps": 26058,
+              "fullscan_steps": 0,
+              "sql_sha256": "3f1394fa8f7435aa029ec326947c0ad3973e9222b88a9d7afef5d2fc0cb1b8a3",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.st"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 1.0,
+              "steps": 19886,
+              "fullscan_steps": 0,
+              "sql_sha256": "a784e84476a54e3f1b100a1f954bceeb92dff59e8003bbea58f55b5abe69298e",
+              "sql_prefix": "SELECT count(*) FROM (SELECT rowid FROM symbols_fts WHERE symbols_fts MATCH ?1 LIMIT 20000)"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 13193,
+              "fullscan_steps": 0,
+              "sql_sha256": "2cea8f5a6d5bfc3cb3cabc80a5e1c823724844f448cdba0fec9fd666bee302d5",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.st"
+            },
+            {
+              "calls": 1288,
+              "sql_ms": 0.0,
+              "steps": 10304,
+              "fullscan_steps": 0,
+              "sql_sha256": "3e7d3340c03d4824f1c52bcf5aed4cc13ca50ce871994f7fed0e8dd61b975f28",
+              "sql_prefix": "SELECT sz FROM 'main'.'symbol_names_tri_docsize' WHERE id=?"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 3061,
+              "fullscan_steps": 0,
+              "sql_sha256": "c9c1ac0fc131e8095bd5245798e78771c5bec18e36f81a13a8e72560106c3f42",
+              "sql_prefix": "SELECT s.symbol_id FROM symbols s\n         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND ((CASE WHEN s.kind = 'property' AND s.parent_symbol_id IS NOT NULL\n          AND (s.signature LIKE 'self.%' OR s.signature LIKE 'this.%' O"
+            },
+            {
+              "calls": 146,
+              "sql_ms": 3.0,
+              "steps": 1606,
+              "fullscan_steps": 0,
+              "sql_sha256": "01ab88d8609a189af33af2f94be6d766e0d5604607ff02b72e57fff6c4edb31c",
+              "sql_prefix": "SELECT T.'rowid', T.'name', T.'signature', T.'doc_comment' FROM 'main'.'symbols' T WHERE T.'rowid'=?"
+            }
+          ]
+        },
+        {
+          "run": 3,
+          "warmup": false,
+          "wall_ms": 33.502235999999996,
+          "statements": 1684,
+          "steps": 328802,
+          "fullscan_steps": 277,
+          "result_sha256": "b5279137433d6fc56faf8f806bc472514dd19b08e397560a756e0fba0f40f809",
+          "result_rows": 20,
+          "top_queries": [
+            {
+              "calls": 1,
+              "sql_ms": 24.0,
+              "steps": 213037,
+              "fullscan_steps": 0,
+              "sql_sha256": "98069c908a1863be947a9a72e8357688ea727aa34fb0e42a4b4bd6d64c1c202d",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.st"
+            },
+            {
+              "calls": 1,
+              "sql_ms": 4.0,
+              "steps": 36354,
+              "fullscan_steps": 0,
+              "sql_sha256": "b1fa5550aa8a4d01c92eb9b3905eb5507e45dc2ed28029f624eff189573f6146",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.st"
+            },
+            {
+              "calls": 3,
+              "sql_ms": 2.0,
+              "steps": 26058,
+              "fullscan_steps": 0,
+              "sql_sha256": "3f1394fa8f7435aa029ec326947c0ad3973e9222b88a9d7afef5d2fc0cb1b8a3",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.st"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 19886,
+              "fullscan_steps": 0,
+              "sql_sha256": "a784e84476a54e3f1b100a1f954bceeb92dff59e8003bbea58f55b5abe69298e",
+              "sql_prefix": "SELECT count(*) FROM (SELECT rowid FROM symbols_fts WHERE symbols_fts MATCH ?1 LIMIT 20000)"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 1.0,
+              "steps": 13193,
+              "fullscan_steps": 0,
+              "sql_sha256": "2cea8f5a6d5bfc3cb3cabc80a5e1c823724844f448cdba0fec9fd666bee302d5",
+              "sql_prefix": "SELECT s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,\n                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,\n                s.start_column, s.end_line, s.end_column, s.st"
+            },
+            {
+              "calls": 1288,
+              "sql_ms": 0.0,
+              "steps": 10304,
+              "fullscan_steps": 0,
+              "sql_sha256": "3e7d3340c03d4824f1c52bcf5aed4cc13ca50ce871994f7fed0e8dd61b975f28",
+              "sql_prefix": "SELECT sz FROM 'main'.'symbol_names_tri_docsize' WHERE id=?"
+            },
+            {
+              "calls": 2,
+              "sql_ms": 0.0,
+              "steps": 3061,
+              "fullscan_steps": 0,
+              "sql_sha256": "c9c1ac0fc131e8095bd5245798e78771c5bec18e36f81a13a8e72560106c3f42",
+              "sql_prefix": "SELECT s.symbol_id FROM symbols s\n         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND ((CASE WHEN s.kind = 'property' AND s.parent_symbol_id IS NOT NULL\n          AND (s.signature LIKE 'self.%' OR s.signature LIKE 'this.%' O"
+            },
+            {
+              "calls": 146,
+              "sql_ms": 3.0,
+              "steps": 1606,
+              "fullscan_steps": 0,
+              "sql_sha256": "01ab88d8609a189af33af2f94be6d766e0d5604607ff02b72e57fff6c4edb31c",
+              "sql_prefix": "SELECT T.'rowid', T.'name', T.'signature', T.'doc_comment' FROM 'main'.'symbols' T WHERE T.'rowid'=?"
+            }
+          ]
+        }
+      ],
+      "exact_output_equal": true,
+      "database_state_after": {
+        "size_bytes": 167399424,
+        "mtime_ns": 1792677569133433243,
+        "wal_bytes": 0
+      },
+      "database_state_unchanged": true
+    }
+  },
+  "environment": {
+    "os": "Linux-7.2.13-200.fc44.x86_64-x86_64-with-glibc2.43",
+    "machine": "x86_64",
+    "logical_cpus": 24,
+    "python": "3.14.8",
+    "python_sqlite": "3.51.2",
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+    "timing_note": "Own builds/profiles were serialized; this is a shared workstation, so unrelated background activity may affect wall time. VM counts and query plans are the primary attribution evidence."
+  },
+  "after_source": {
+    "base_commit": "1fc6a1a7b86ba66094e0e8373880f3454d0d8140",
+    "source_files": {
+      "crates/code-kb-core/src/db.rs": "1e2aeb49768c386d4fac52b857ea64e75751ebfdbe7098ace683000fb3a34f27",
+      "crates/code-kb-core/src/queries.rs": "db717c2dea320323ca5a9c4cca9fae63e7111275259ee9120e3921566a303656",
+      "crates/code-kb-core/src/edit_check.rs": "d346ec4fba276ebbc5ab8c1abf141b3ca40c9e3a02b51a55b5b3af38f677d0d0",
+      "crates/code-kb-core/src/reference_report.rs": "da0f06d143c25c757de696dbb24a5c859a009fe908376d6d389667f441953496"
+    },
+    "source_diff_sha256": "1b2944a2bcf788aacadff9b443a1f49859a5053cd55d6af6475dd54f0ae51b66",
+    "release_binary_sha256": "425d6dabe169d359084927b45f27b5079f95f1c124b9aa1f4def7eb502daee91",
+    "probe_binary_sha256": "334dc45efca080a3719325a926fb645642f05810f9629c8f9a6327c92031feb3"
+  },
+  "final_source": {
+    "source_files": {
+      "crates/code-kb-core/src/db.rs": "1e2aeb49768c386d4fac52b857ea64e75751ebfdbe7098ace683000fb3a34f27",
+      "crates/code-kb-core/src/queries.rs": "be4d70812dfb32080f87e992de7a81dc1453aefef0cc6a6979e84fa04478a39e",
+      "crates/code-kb-core/src/edit_check.rs": "d346ec4fba276ebbc5ab8c1abf141b3ca40c9e3a02b51a55b5b3af38f677d0d0",
+      "crates/code-kb-core/src/reference_report.rs": "da0f06d143c25c757de696dbb24a5c859a009fe908376d6d389667f441953496"
+    },
+    "source_diff_sha256": "8cb7e50ce4e4c8f058a39e469c599afe8dea1ab756f9becadd9a9427ed79c2ea",
+    "difference_from_measured_source": "Only two cfg(test) thread-local counter initializers became const after Clippy. Production code used by the release measurements is unchanged.",
+    "release_binary_sha256": "425d6dabe169d359084927b45f27b5079f95f1c124b9aa1f4def7eb502daee91",
+    "release_binary_identical_to_measured_build": true
+  }
+}

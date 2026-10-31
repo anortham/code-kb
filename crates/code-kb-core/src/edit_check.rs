@@ -2003,6 +2003,30 @@ struct SiteLister<'a> {
     walk_tests: bool,
 }
 
+fn walk_seed_callers<'a>(
+    sites: &'a [LabeledSite],
+    target_id: &str,
+) -> (Vec<&'a str>, Option<(usize, usize)>) {
+    let mut callers: Vec<&str> = Vec::new();
+    let mut seen = HashSet::new();
+    let mut unique_count = 0;
+    for labeled in sites {
+        let caller = labeled.site.from_symbol_id.as_str();
+        if matches!(labeled.label, SiteLabel::Proven | SiteLabel::Likely)
+            && !caller.is_empty()
+            && caller != target_id
+            && seen.insert(caller)
+        {
+            unique_count += 1;
+            if callers.len() < MAX_WALK_SEEDS {
+                callers.push(caller);
+            }
+        }
+    }
+    let seeds_cut = (unique_count > MAX_WALK_SEEDS).then_some((MAX_WALK_SEEDS, unique_count));
+    (callers, seeds_cut)
+}
+
 fn is_call(kind: &str) -> bool {
     matches!(kind, "calls" | "call" | "instantiates")
 }
@@ -2159,22 +2183,10 @@ impl<'a> SiteLister<'a> {
     /// The tests that the `blast_radius` walk reaches from the callers of the proven and likely
     /// sites, up to [`MAX_BLAST_DEPTH`] calls from the changed symbol.
     fn walked_tests(&self, report: &ReferenceReport) -> Result<WalkedTests, EditCheckError> {
-        let mut callers: Vec<&str> = Vec::new();
-        for labeled in &report.sites {
-            let caller = labeled.site.from_symbol_id.as_str();
-            if matches!(labeled.label, SiteLabel::Proven | SiteLabel::Likely)
-                && !caller.is_empty()
-                && caller != report.target.symbol_id
-                && !callers.contains(&caller)
-            {
-                callers.push(caller);
-            }
-        }
+        let (callers, seeds_cut) = walk_seed_callers(&report.sites, &report.target.symbol_id);
         if callers.is_empty() {
             return Ok(WalkedTests::default());
         }
-        let seeds_cut = (callers.len() > MAX_WALK_SEEDS).then_some((MAX_WALK_SEEDS, callers.len()));
-        callers.truncate(MAX_WALK_SEEDS);
         let walk = compute_blast_radius_from_callers(
             self.conn,
             &callers,
@@ -3766,6 +3778,7 @@ fn test_symbol(language: &str, kind: &str, name: &str, signature: &str) -> Symbo
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::ReferenceSite;
 
     fn row(
         name: &str,
@@ -3946,5 +3959,52 @@ mod tests {
         let source = lines("x = Foo\ny = bar(\n  1)\n");
         assert_eq!(construction_end(&source, 1, "Foo"), 1);
         assert_eq!(construction_end(&source, 9, "Foo"), 9);
+    }
+
+    fn caller_site(caller_id: &str, label: SiteLabel) -> LabeledSite {
+        LabeledSite {
+            site: ReferenceSite {
+                from_symbol_name: caller_id.to_owned(),
+                from_symbol_id: caller_id.to_owned(),
+                to_symbol_name: "target".to_owned(),
+                kind: "calls".to_owned(),
+                path: "caller.rs".to_owned(),
+                start_line: Some(1),
+                start_column: None,
+                occurrences: None,
+                target: None,
+                enclosing_symbol_name: None,
+            },
+            label,
+            basis: "name".to_owned(),
+            end_line: None,
+            arg_count: None,
+        }
+    }
+
+    #[test]
+    fn walk_seed_callers_preserves_order_and_counts_unique_cut_seeds() {
+        let mut sites = Vec::new();
+        for index in 0..MAX_WALK_SEEDS + 2 {
+            let caller = format!("caller-{index}");
+            sites.push(caller_site(&caller, SiteLabel::Proven));
+            sites.push(caller_site(&caller, SiteLabel::Likely));
+        }
+        sites.push(caller_site("target", SiteLabel::Proven));
+        sites.push(caller_site("", SiteLabel::Proven));
+        sites.push(caller_site("unresolved", SiteLabel::Unresolved));
+
+        let (callers, seeds_cut) = walk_seed_callers(&sites, "target");
+
+        assert_eq!(
+            callers
+                .iter()
+                .map(|caller| caller.to_string())
+                .collect::<Vec<_>>(),
+            (0..MAX_WALK_SEEDS)
+                .map(|index| format!("caller-{index}"))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(seeds_cut, Some((MAX_WALK_SEEDS, MAX_WALK_SEEDS + 2)));
     }
 }

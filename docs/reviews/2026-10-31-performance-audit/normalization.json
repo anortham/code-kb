@@ -1,0 +1,50 @@
+{
+  "database": "/home/murphy/source/hermes-agent/.code-kb/artifact.db",
+  "database_mode": "read-only immutable; query_only enabled",
+  "workload": {
+    "symbols": 988410,
+    "parentless_symbols": 246246,
+    "rust_unlinked_rows": 0,
+    "go_unlinked_rows": 0,
+    "warmups_per_variant": 1,
+    "repeats_per_variant": 5,
+    "percentile": "nearest-rank p95 over five warm runs (maximum sample)",
+    "vm_progress_interval": 1000
+  },
+  "queries": {
+    "rust_unlinked": {
+      "planner": {
+        "explain_query_plan": ["SEARCH symbols USING INDEX idx_symbols_parent (parent_symbol_id=?)"],
+        "rows": 0,
+        "wall_ms": [85.671, 84.645, 89.550, 87.645, 85.744],
+        "p95_ms": 89.550,
+        "vm_instruction_bounds": [[1478000, 1478999], [1477000, 1477999], [1478000, 1478999], [1477000, 1477999], [1478000, 1478999]]
+      },
+      "forced_partial_index": {
+        "index": "idx_symbols_unlinked_impl",
+        "explain_query_plan": ["SCAN symbols USING INDEX idx_symbols_unlinked_impl"],
+        "rows": 0,
+        "wall_ms": [0.003, 0.002, 0.001, 0.001, 0.001],
+        "p95_ms": 0.003,
+        "vm_instruction_bounds": [[0, 999], [0, 999], [0, 999], [0, 999], [0, 999]]
+      }
+    },
+    "go_unlinked": {
+      "planner": {
+        "explain_query_plan": ["SEARCH symbols USING INDEX idx_symbols_parent (parent_symbol_id=?)"],
+        "rows": 0,
+        "wall_ms": [55.025, 53.142, 52.544, 53.061, 53.442],
+        "p95_ms": 55.025,
+        "vm_instruction_bounds": [[1231000, 1231999], [1231000, 1231999], [1232000, 1232999], [1231000, 1231999], [1231000, 1231999]]
+      },
+      "forced_partial_index": {
+        "index": "idx_symbols_unlinked_go_method",
+        "explain_query_plan": ["SCAN symbols USING INDEX idx_symbols_unlinked_go_method"],
+        "rows": 0,
+        "wall_ms": [0.002, 0.002, 0.001, 0.001, 0.001],
+        "p95_ms": 0.002,
+        "vm_instruction_bounds": [[0, 999], [0, 999], [0, 999], [0, 999], [0, 999]]
+      }
+    }
+  }
+}

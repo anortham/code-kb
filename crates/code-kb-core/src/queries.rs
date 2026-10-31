@@ -716,21 +716,49 @@ pub(crate) fn inherited_write_names<'a>(
     Ok(found)
 }
 
-fn search_symbols_sql(variables_wanted: bool, include_tests: bool, limit: usize) -> String {
+fn lookup_trigram_phrase(query: &str, kind_filter: Option<&str>) -> Option<String> {
+    if kind_filter == Some("variable")
+        || query.contains("::")
+        || query.contains('.')
+        || query.contains('\0')
+        || query.chars().count() < 3
+    {
+        return None;
+    }
+    Some(format!("\"{}\"", query.replace('"', "\"\"")))
+}
+
+fn search_symbols_sql(
+    variables_wanted: bool,
+    include_tests: bool,
+    limit: usize,
+    use_trigram: bool,
+) -> String {
+    let (from, query_filter) = if use_trigram {
+        (
+            "symbol_names_tri CROSS JOIN symbols s ON s.rowid = symbol_names_tri.rowid",
+            "symbol_names_tri MATCH :trigram AND (s.name = :query OR s.name LIKE :pattern ESCAPE '\\')",
+        )
+    } else {
+        (
+            "symbols s",
+            "(s.name = :query OR s.name LIKE :pattern ESCAPE '\\')",
+        )
+    };
     let mut sql = format!(
-        "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,
-                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,
-                start_byte, end_byte, body_start_line, body_start_column, body_end_line,
-                body_end_column, body_start_byte, body_end_byte, body_hash, semantic_group,
-                is_test, test_container
-         FROM symbols s
-         WHERE (name = :query OR name LIKE :pattern ESCAPE '\\')
+        "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,
+                s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,
+                s.start_byte, s.end_byte, s.body_start_line, s.body_start_column, s.body_end_line,
+                s.body_end_column, s.body_start_byte, s.body_end_byte, s.body_hash, s.semantic_group,
+                s.is_test, s.test_container
+         FROM {from}
+         WHERE {query_filter}
            AND {KIND_FILTER}
-           AND (:path IS NULL OR replace(path, '\\', '/') = :path COLLATE NOCASE OR replace(path, '\\', '/') LIKE :path_like || '/%' ESCAPE '\\' OR replace(path, '\\', '/') LIKE '%/' || :path_like ESCAPE '\\')",
+           AND (:path IS NULL OR replace(s.path, '\\', '/') = :path COLLATE NOCASE OR replace(s.path, '\\', '/') LIKE :path_like || '/%' ESCAPE '\\' OR replace(s.path, '\\', '/') LIKE '%/' || :path_like ESCAPE '\\')",
     );
     sql.push_str(&document_link_exclusion());
     sql.push_str(&format!(
-        " AND (+name = :query OR NOT {})",
+        " AND (+s.name = :query OR NOT {})",
         anonymous_class_predicate("s")
     ));
 
@@ -740,19 +768,21 @@ fn search_symbols_sql(variables_wanted: bool, include_tests: bool, limit: usize)
 
     if !include_tests {
         sql.push_str(&format!(
-            " AND (+name = :query OR (is_test = 0 AND test_container = 0 AND NOT {}))",
+            " AND (+s.name = :query OR (s.is_test = 0 AND s.test_container = 0 AND NOT {}))",
             test_path_predicate("s")
         ));
     }
 
     sql.push_str(
-        " ORDER BY (name = :query) DESC, (name LIKE :prefix ESCAPE '\\') DESC, (kind IN ('function', 'struct', 'class', 'trait', 'method', 'enum', 'interface', 'type')) DESC, ",
+        " ORDER BY (s.name = :query) DESC, (s.name LIKE :prefix ESCAPE '\\') DESC, (s.kind IN ('function', 'struct', 'class', 'trait', 'method', 'enum', 'interface', 'type')) DESC, ",
     );
     sql.push_str(&format!(
-        "(language IN ({})) ASC, ",
+        "(s.language IN ({})) ASC, ",
         non_code_language_list()
     ));
-    sql.push_str("(COALESCE(signature, '') LIKE 'self.%') ASC, length(name) ASC, path ASC LIMIT ");
+    sql.push_str(
+        "(COALESCE(s.signature, '') LIKE 'self.%') ASC, length(s.name) ASC, s.path ASC LIMIT ",
+    );
     sql.push_str(&limit.to_string());
     sql
 }
@@ -807,26 +837,34 @@ pub fn search_symbols_scoped(
     let path_val = normalized_path.as_deref();
     let path_like = escaped_path.as_deref();
     let kind_val = norm_kind.as_deref();
+    let trigram_phrase =
+        lookup_trigram_phrase(query, kind_val).filter(|_| crate::db::fts_index_is_ready(conn));
+    let mut params: Vec<(&str, &dyn ToSql)> = vec![
+        (":query", &query),
+        (":pattern", &pattern),
+        (":prefix", &prefix),
+        (":kind", &kind_val),
+        (":path", &path_val),
+        (":path_like", &path_like),
+    ];
+    if let Some(phrase) = trigram_phrase.as_ref() {
+        params.push((":trigram", phrase));
+    }
     let mut fetch = 4 * limit;
     loop {
         let sql = search_symbols_sql(
             norm_kind.as_deref() == Some("variable"),
             include_tests,
             fetch,
+            trigram_phrase.is_some(),
         );
+        #[cfg(test)]
+        if trigram_phrase.is_some() {
+            LOOKUP_TRIGRAM_EXECUTIONS.with(|count| count.set(count.get() + 1));
+        }
         let rows = conn
             .prepare(&sql)?
-            .query_map(
-                rusqlite::named_params! {
-                    ":query": query,
-                    ":pattern": pattern,
-                    ":prefix": prefix,
-                    ":kind": kind_val,
-                    ":path": path_val,
-                    ":path_like": path_like,
-                },
-                map_symbol,
-            )?
+            .query_map(params.as_slice(), map_symbol)?
             .collect::<Result<Vec<Symbol>, _>>()?;
         let fetched = rows.len();
         let inherited = inherited_writes_among(conn, rows.iter().map(|s| s.symbol_id.as_str()))?;
@@ -1767,6 +1805,8 @@ pub(crate) fn collect_search_candidates(
         not_doc = not_documentation(conn, "s")
     );
     let word_rows = |match_clause: &str| -> Result<Vec<(i64, Candidate)>, QueryError> {
+        #[cfg(test)]
+        WORD_QUERY_EXECUTIONS.with(|count| count.set(count.get() + 1));
         let map_fn = |row: &Row| -> rusqlite::Result<(i64, Candidate)> {
             let (rowid, mut candidate) = new_candidate(row)?;
             let score: f64 = row.get("rank_score")?;
@@ -1808,7 +1848,7 @@ pub(crate) fn collect_search_candidates(
         for (rowid, candidate) in and_rows {
             admit(rowid, candidate);
         }
-        if and_q != or_q {
+        if and_q != or_q && word_admitted.len() < word_cap {
             for (rowid, candidate) in word_rows(&or_q)? {
                 if word_admitted.len() >= word_cap && !word_admitted.contains(&rowid) {
                     break;
@@ -1858,6 +1898,12 @@ pub(crate) fn collect_search_candidates(
     candidates.retain(|c| !inherited.contains(&c.result.symbol.symbol_id));
     load_module_facts(conn, &mut candidates)?;
     Ok(candidates)
+}
+
+#[cfg(test)]
+thread_local! {
+    static WORD_QUERY_EXECUTIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static LOOKUP_TRIGRAM_EXECUTIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// Follow only a few highly ranked code types, one level down. A member must still match
@@ -7816,7 +7862,7 @@ pub(crate) fn typed_receiver_chain_owner_rows_sql() -> String {
          FROM pending_relationships pending
          LEFT JOIN symbols source ON source.symbol_id = pending.from_symbol_id
          LEFT JOIN files source_file ON source_file.file_id = pending.file_id
-         WHERE CAST(pending.rowid AS TEXT) IN (SELECT value FROM json_each(?1))
+         WHERE pending.rowid IN (SELECT CAST(value AS INTEGER) FROM json_each(?1))
            AND pending.kind != 'imports'
            AND json_array_length({receiver_chain_json}) > 1
            AND pending.target_receiver IS NOT NULL AND pending.target_receiver != ''"
@@ -10750,6 +10796,69 @@ mod tests {
     }
 
     #[test]
+    fn typed_receiver_chain_owner_rows_do_not_scan_unrelated_pending_rows() {
+        fn vm_steps(unrelated_rows: usize) -> i32 {
+            let conn = Connection::open_in_memory().unwrap();
+            conn.execute_batch(
+                "CREATE TABLE symbols (
+                    symbol_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
+                    parent_symbol_id TEXT, start_line INTEGER, metadata_json TEXT,
+                    signature TEXT, file_id TEXT
+                );
+                CREATE TABLE type_facts (symbol_id TEXT, resolved_type TEXT, language TEXT);
+                CREATE TABLE relationships (from_symbol_id TEXT, to_symbol_id TEXT, kind TEXT);
+                CREATE TABLE pending_relationships (
+                    from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT, path TEXT,
+                    start_line INTEGER, file_id TEXT, target_receiver TEXT, target_namespace_json TEXT,
+                    target_display_name TEXT
+                );
+                CREATE TABLE files (file_id TEXT, language TEXT);
+                INSERT INTO symbols VALUES
+                    ('caller', 'caller.go', 'go', 'Call', 'function', NULL, 1, NULL, NULL, NULL);
+                INSERT INTO pending_relationships VALUES
+                    ('caller', 'Send', 'calls', 'caller.go', 1, NULL, 'service', '[\"group\"]', 'group.service.Send');",
+            )
+            .unwrap();
+            conn.execute(
+                "WITH RECURSIVE rows(row_number) AS (
+                    SELECT 1 WHERE ?1 > 0
+                    UNION ALL
+                    SELECT row_number + 1 FROM rows WHERE row_number < ?1
+                )
+                INSERT INTO pending_relationships
+                    (from_symbol_id, target_terminal_name, kind, path, start_line,
+                     target_receiver, target_namespace_json)
+                SELECT 'unrelated', 'Other', 'calls', 'other.go', row_number,
+                       NULL, '[]'
+                FROM rows",
+                [unrelated_rows as i64],
+            )
+            .unwrap();
+
+            let mut statement = conn
+                .prepare(&typed_receiver_chain_owner_rows_sql())
+                .unwrap();
+            let rows = statement
+                .query_map(["[\"1\"]"], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
+                })
+                .unwrap()
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .unwrap();
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0].0, "P:1");
+            statement.get_status(rusqlite::StatementStatus::VmStep)
+        }
+
+        let one_row = vm_steps(0);
+        let many_rows = vm_steps(2_000);
+        assert!(
+            many_rows <= one_row + 128,
+            "receiver owner lookup executed {many_rows} VM steps with unrelated rows versus {one_row} without them"
+        );
+    }
+
+    #[test]
     fn member_receiver_match_keeps_its_single_segment_predicate_compact() {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(
@@ -11569,6 +11678,104 @@ mod tests {
     }
 
     #[test]
+    fn lookup_trigram_candidates_match_the_scan_path_for_literal_substrings() {
+        let rows = [
+            code_row("a", "src/lib.rs", "rust", "needle", ""),
+            code_row("b", "src/lib.rs", "rust", "prefixneedlepostfix", ""),
+            code_row("c", "src/lib.rs", "rust", "quoted \"needle\"", ""),
+            code_row("d", "src/lib.rs", "rust", "under_score", ""),
+            code_row("e", "src/lib.rs", "rust", "percent%wild", ""),
+            code_row("f", "src/lib.rs", "rust", "two  spaces", ""),
+            code_row("g", "src/lib.rs", "rust", "λambda", ""),
+            code_row("h", "src/lib.rs", "rust", " padded ", ""),
+        ]
+        .join(", ");
+        let indexed = search_fixture(&rows);
+        let scan_path = search_fixture(&rows);
+        scan_path
+            .execute_batch("DROP TABLE symbol_names_tri;")
+            .unwrap();
+
+        for (query, kind, path) in [
+            ("needle", None, None),
+            ("NeEdLe", None, None),
+            ("\"needle\"", Some("function"), None),
+            ("_score", None, None),
+            ("%wild", None, None),
+            ("two  s", None, None),
+            ("λam", None, None),
+            (" padded ", None, None),
+            ("not-present", None, None),
+            ("needle", Some("function"), Some("src")),
+        ] {
+            let indexed_rows: Vec<_> =
+                search_symbols_scoped(&indexed, query, kind, path, false, 20)
+                    .unwrap()
+                    .into_iter()
+                    .map(|symbol| (symbol.symbol_id, symbol.path, symbol.name))
+                    .collect();
+            let scan_rows: Vec<_> = search_symbols_scoped(&scan_path, query, kind, path, false, 20)
+                .unwrap()
+                .into_iter()
+                .map(|symbol| (symbol.symbol_id, symbol.path, symbol.name))
+                .collect();
+            assert_eq!(indexed_rows, scan_rows, "query: {query}");
+        }
+    }
+
+    #[test]
+    fn lookup_uses_trigram_candidates_for_plain_substring_queries() {
+        let conn = search_fixture(
+            &[
+                code_row("a", "src/lib.rs", "rust", "needle", ""),
+                code_row("b", "src/lib.rs", "rust", "prefixneedlepostfix", ""),
+            ]
+            .join(", "),
+        );
+        LOOKUP_TRIGRAM_EXECUTIONS.with(|count| count.set(0));
+
+        let rows = search_symbols_scoped(&conn, "needle", None, None, false, 20).unwrap();
+
+        assert_eq!(
+            rows.into_iter()
+                .map(|symbol| symbol.name)
+                .collect::<Vec<_>>(),
+            vec!["needle".to_string(), "prefixneedlepostfix".to_string()]
+        );
+        let executions = LOOKUP_TRIGRAM_EXECUTIONS.with(std::cell::Cell::get);
+        assert_eq!(executions, 1);
+    }
+
+    #[test]
+    fn lookup_falls_back_when_trigram_search_is_unsupported_or_unready() {
+        let conn = search_fixture(&code_row("a", "src/lib.rs", "rust", "needle", ""));
+        LOOKUP_TRIGRAM_EXECUTIONS.with(|count| count.set(0));
+        for (query, kind) in [
+            ("ab", None),
+            ("needle.part", None),
+            ("need\0le", None),
+            ("needle", Some("variable")),
+        ] {
+            search_symbols_scoped(&conn, query, kind, None, false, 20).unwrap();
+        }
+        assert_eq!(LOOKUP_TRIGRAM_EXECUTIONS.with(std::cell::Cell::get), 0);
+
+        conn.execute_batch("DROP TABLE symbol_names_tri;").unwrap();
+        search_symbols_scoped(&conn, "needle", None, None, false, 20).unwrap();
+        assert_eq!(LOOKUP_TRIGRAM_EXECUTIONS.with(std::cell::Cell::get), 0);
+
+        let stale = search_fixture(&code_row("b", "src/lib.rs", "rust", "needle", ""));
+        stale
+            .execute(
+                "UPDATE artifact_metadata SET value = 'stale' WHERE key = 'fts_rule'",
+                [],
+            )
+            .unwrap();
+        search_symbols_scoped(&stale, "needle", None, None, false, 20).unwrap();
+        assert_eq!(LOOKUP_TRIGRAM_EXECUTIONS.with(std::cell::Cell::get), 0);
+    }
+
+    #[test]
     fn lookup_statement_is_not_planned_as_a_multi_index_or() {
         let conn = search_fixture(&code_row("a", "src/lib.rs", "rust", "needle", ""));
         conn.execute_batch(
@@ -11579,7 +11786,7 @@ mod tests {
         .unwrap();
         let sql = format!(
             "EXPLAIN QUERY PLAN {}",
-            search_symbols_sql(false, false, 20)
+            search_symbols_sql(false, false, 20, false)
         );
         let plan: Vec<String> = conn
             .prepare(&sql)
@@ -11599,6 +11806,49 @@ mod tests {
             .unwrap();
         assert!(
             !plan.iter().any(|step| step.contains("MULTI-INDEX OR")),
+            "{plan:?}"
+        );
+    }
+
+    #[test]
+    fn lookup_trigram_statement_uses_the_virtual_index_without_scanning_symbols() {
+        let conn = search_fixture(&code_row("a", "src/lib.rs", "rust", "needle", ""));
+        let phrase = lookup_trigram_phrase("needle", None).unwrap();
+        let sql = format!(
+            "EXPLAIN QUERY PLAN {}",
+            search_symbols_sql(false, false, 20, true)
+        );
+        let plan: Vec<String> = conn
+            .prepare(&sql)
+            .unwrap()
+            .query_map(
+                rusqlite::named_params! {
+                    ":query": "needle",
+                    ":pattern": "%needle%",
+                    ":prefix": "needle%",
+                    ":kind": None::<&str>,
+                    ":path": None::<&str>,
+                    ":path_like": None::<&str>,
+                    ":trigram": phrase,
+                },
+                |row| row.get::<_, String>(3),
+            )
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert!(
+            plan.iter().any(|step| step.contains("VIRTUAL TABLE INDEX")),
+            "{plan:?}"
+        );
+        assert!(
+            plan.iter()
+                .any(|step| step.contains("SEARCH s USING INTEGER PRIMARY KEY")),
+            "{plan:?}"
+        );
+        assert!(
+            !plan
+                .iter()
+                .any(|step| step == "SCAN s" || step.starts_with("SCAN s ")),
             "{plan:?}"
         );
     }
@@ -11963,6 +12213,44 @@ mod tests {
                 .filter(|c| c.result.symbol.name.starts_with("both_"))
                 .count(),
             20
+        );
+    }
+
+    #[test]
+    fn a_full_and_word_branch_does_not_run_the_or_query() {
+        let mut rows: Vec<String> = (1..=40)
+            .map(|i| {
+                code_row(
+                    &format!("a{i:02}"),
+                    "src/a.rs",
+                    "rust",
+                    &format!("both_{i:02}"),
+                    "restore offline",
+                )
+            })
+            .collect();
+        rows.extend((1..=50).map(|i| {
+            code_row(
+                &format!("p{i:02}"),
+                "src/p.rs",
+                "rust",
+                &format!("partial_{i:02}"),
+                "restore records",
+            )
+        }));
+        let conn = search_fixture(&rows.join(","));
+        WORD_QUERY_EXECUTIONS.with(|count| count.set(0));
+
+        let candidates =
+            collect_search_candidates(&conn, "restore offline", None, None, false, 10).unwrap();
+
+        assert_eq!(WORD_QUERY_EXECUTIONS.with(|count| count.get()), 1);
+        let word_rows: Vec<&Candidate> = candidates.iter().filter(|c| c.word_match).collect();
+        assert_eq!(word_rows.len(), 40);
+        assert!(
+            word_rows
+                .iter()
+                .all(|candidate| candidate.result.symbol.name.starts_with("both_"))
         );
     }
 
