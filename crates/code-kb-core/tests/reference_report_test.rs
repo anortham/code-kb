@@ -5111,6 +5111,27 @@ fn a_bare_import_of_a_node_builtin_subpath_is_excluded_beside_a_folder_of_its_la
 }
 
 #[test]
+fn a_catch_parameter_names_its_own_line_when_a_later_block_declares_the_name() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"r\"}\n"),
+        ("e.ts", "export function error() { return 1 }\n"),
+        (
+            "use.ts",
+            "import { error } from './e';\nexport function t() {\n  try { x() } catch (error) {\n    error.message;\n  }\n  try { x() } catch (_e) {\n    const error = _e;\n    error.message;\n  }\n}\n",
+        ),
+    ]);
+    let report = report(&repo, "error", Some("e.ts"));
+
+    assert_site(
+        &report,
+        "use.ts",
+        3,
+        SiteLabel::Excluded,
+        &binding_note(3).replacen("import; ", "", 1),
+    );
+}
+
+#[test]
 fn a_promise_catch_method_is_not_a_catch_clause() {
     let repo = scanned_repo(&[
         ("package.json", "{\"name\":\"r\"}\n"),

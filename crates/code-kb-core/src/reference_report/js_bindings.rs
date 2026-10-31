@@ -53,6 +53,9 @@ impl Accounting<'_> {
             None if !row.has_qualifier() => name,
             None => return Ok(None),
         };
+        if self.js_row_is_binding(row, head) {
+            return Ok(Some(row.site_line));
+        }
         self.nearest_binding(row, head, |_| true)
     }
 
@@ -68,18 +71,23 @@ impl Accounting<'_> {
         if language_family(&row.language) != "js" || row.hidden_receiver || !row.is_bare_use() {
             return Ok(None);
         }
-        let site = (row.site_line, row.site_column.unwrap_or(usize::MAX));
-        if row.site_column.is_some()
-            && self
-                .js_binding_sites(&row.path, name)
-                .iter()
-                .any(|binding| binding.at == site)
-        {
+        if self.js_row_is_binding(row, name) {
             return Ok(Some(row.site_line));
         }
+        let site = (row.site_line, row.site_column.unwrap_or(usize::MAX));
         self.nearest_binding(row, name, |binding| {
             binding.body_end.is_some_and(|end| site < end)
         })
+    }
+
+    /// Whether the row sits on the bound name itself, so it is that binding.
+    fn js_row_is_binding(&self, row: &NameRow, name: &str) -> bool {
+        let Some(column) = row.site_column else {
+            return false;
+        };
+        self.js_binding_sites(&row.path, name)
+            .iter()
+            .any(|binding| binding.at == (row.site_line, column))
     }
 
     fn nearest_binding(
