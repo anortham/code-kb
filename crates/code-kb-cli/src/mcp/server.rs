@@ -11,7 +11,7 @@ use code_kb_core::{
     file_sizes_for_paths, file_skeleton_op, find_references_for_symbol_ext, fit_bodies_to_budget,
     fit_context_slices_to_budget, format_context_slices, format_symbol_bodies,
     get_context_slices_selected_op, get_symbol_bodies_selected_op, installed_extractor_version,
-    is_project_root, is_unreadable_database, lookup_symbols_op, open_global_telemetry_db,
+    is_project_root, is_unreadable_database, lookup_symbols_with_body_op, open_global_telemetry_db,
     open_read_only, reconcile_offline_edits, record_tool_call, record_tool_call_conn,
     reference_report, render_symbol_lookup, resolve_symbol_op, scan_remedy,
     select_reference_target, start_watcher,
@@ -407,7 +407,7 @@ impl McpServer {
             },
             Tool {
                 name: "lookup_symbol".to_string(),
-                description: "Find symbols by name, qualified name ('Type::method'), prefix, or concept; returns kind, path, line, signature, and id. A query that names no symbol exactly also gets the ranked matches by name words, signatures, and docs. Use instead of grep on a name.".to_string(),
+                description: "Find symbols by name, qualified name ('Type::method'), prefix, or concept; returns kind, path, line, signature, and id. A query that names no symbol exactly also gets the ranked matches by name words, signatures, and docs. A query that names one definition with a short body also gets that body. Use instead of grep on a name.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -1020,7 +1020,8 @@ impl McpServer {
                     Err(error) => return error,
                 };
 
-                let lookup = match lookup_symbols_op(
+                let lookup = match lookup_symbols_with_body_op(
+                    &self.workspace,
                     &self.db_path,
                     &conn,
                     query,

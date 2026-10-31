@@ -94,6 +94,130 @@ pub struct SymbolLookup {
     /// The text for a query that finds nothing: the bound workspace and close names.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub miss: Option<String>,
+    /// The source of the one definition the query names, when it fits [`LOOKUP_BODY_CHARS`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body: Option<String>,
+    /// The text that follows the rows for that definition: its body as `get_symbol_body` prints
+    /// it, or a line that names the `symbol_id` to read a body over [`LOOKUP_BODY_CHARS`].
+    #[serde(skip)]
+    pub body_text: Option<String>,
+}
+
+/// The longest printed body that a lookup shows: a quarter of [`OUTPUT_BUDGET_CHARS`].
+pub const LOOKUP_BODY_CHARS: usize = OUTPUT_BUDGET_CHARS / 4;
+
+/// [`lookup_symbols_op`], plus the body of the one definition the query names (see
+/// [`add_unique_definition_body`]).
+#[allow(clippy::too_many_arguments)]
+pub fn lookup_symbols_with_body_op(
+    workspace: &Workspace,
+    db_path: &Path,
+    conn: &Connection,
+    query: &str,
+    kind: Option<&str>,
+    path_filter: Option<&str>,
+    include_tests: bool,
+    limit: usize,
+) -> Result<SymbolLookup, OpError> {
+    let mut lookup = lookup_symbols_op(
+        db_path,
+        conn,
+        query,
+        kind,
+        path_filter,
+        include_tests,
+        limit,
+    )?;
+    add_unique_definition_body(
+        workspace,
+        db_path,
+        conn,
+        query,
+        kind,
+        path_filter,
+        include_tests,
+        limit,
+        &mut lookup,
+    )?;
+    Ok(lookup)
+}
+
+/// Adds the body of the one definition that `lookup` names: one exact-name row of a definition
+/// kind, with the imports of that name folded and no other exact-name row. A body over
+/// [`LOOKUP_BODY_CHARS`] gets a line that names its `symbol_id` instead. Member listings,
+/// misses, ranked rows, and overloads get nothing.
+#[allow(clippy::too_many_arguments)]
+fn add_unique_definition_body(
+    workspace: &Workspace,
+    db_path: &Path,
+    conn: &Connection,
+    query: &str,
+    kind: Option<&str>,
+    path_filter: Option<&str>,
+    include_tests: bool,
+    limit: usize,
+    lookup: &mut SymbolLookup,
+) -> Result<(), OpError> {
+    let Some(target) = unique_definition(query, &lookup.names, limit) else {
+        return Ok(());
+    };
+    let complete =
+        lookup.names.len() < limit || lookup.names.iter().any(|s| !is_exact_name_row(query, s));
+    if !complete {
+        let wider = queries::search_symbols_scoped(
+            conn,
+            query,
+            kind,
+            path_filter,
+            include_tests,
+            limit + 1,
+        )?;
+        if unique_definition(query, &wider, limit + 1).is_none() {
+            return Ok(());
+        }
+    }
+    let target = target.clone();
+    let selector = SymbolSelector::Id(target.symbol_id.clone());
+    let read_hint = |lines: Option<usize>| {
+        let size = lines.map_or(String::new(), |n| format!(" has {n} lines,"));
+        format!(
+            "The body of `{}`{size} more than a lookup shows. Call get_symbol_body with symbol_id={}.\n",
+            target.name, target.symbol_id
+        )
+    };
+    match get_symbol_body_selected_op(workspace, db_path, conn, &selector, None) {
+        Ok((symbol, source)) => {
+            let text = format_symbol_bodies(&[(symbol, source.clone())]);
+            if text.len() <= LOOKUP_BODY_CHARS {
+                lookup.body = Some(source);
+                lookup.body_text = Some(text);
+            } else {
+                lookup.body_text = Some(read_hint(Some(source.lines().count())));
+            }
+        }
+        Err(_) => lookup.body_text = Some(read_hint(None)),
+    }
+    Ok(())
+}
+
+/// The row of `names` that is the one definition `query` names, if there is one.
+fn unique_definition<'a>(query: &str, names: &'a [Symbol], limit: usize) -> Option<&'a Symbol> {
+    if limit == 0 || query.ends_with('.') || query.ends_with("::") {
+        return None;
+    }
+    let qualified = query.contains('.') || query.contains("::");
+    let mut exact = names
+        .iter()
+        .filter(|s| s.kind != "import" && (qualified || is_exact_name_row(query, s)));
+    let row = exact.next()?;
+    let defines = queries::DEFINITION_KINDS.contains(&queries::normalize_kind(&row.kind).as_str());
+    (exact.next().is_none() && defines).then_some(row)
+}
+
+/// True when lookup text counts `row` as named exactly `query`, as `format_find_symbol_results`
+/// does.
+fn is_exact_name_row(query: &str, row: &Symbol) -> bool {
+    row.name == query || row.name.ends_with(&format!(".{query}"))
 }
 
 /// Looks up `query` by name. A plain query that no row names exactly also gets the ranked search,
@@ -168,6 +292,8 @@ pub fn lookup_symbols_op(
         suggestions: suggestions.symbols,
         suggestion_hint: suggestion_hint.filter(|_| miss.is_none()),
         miss,
+        body: None,
+        body_text: None,
     })
 }
 
@@ -190,7 +316,12 @@ pub fn render_symbol_lookup(
             .chain(ranked.iter_mut().map(|hit| &mut hit.symbol)),
     )?;
     let Some(hint) = &lookup.suggestion_hint else {
-        return Ok(format_find_symbol_results(query, &names, &ranked, limit));
+        let mut out = format_find_symbol_results(query, &names, &ranked, limit);
+        if let Some(body) = &lookup.body_text {
+            out.push('\n');
+            out.push_str(body);
+        }
+        return Ok(out);
     };
     let mut sections = Vec::new();
     if !names.is_empty() {

@@ -3336,7 +3336,7 @@ fn test_mcp_lookup_symbol_is_described_as_the_one_tool_for_a_name_or_a_concept()
 
     assert_eq!(
         lookup["description"],
-        "Find symbols by name, qualified name ('Type::method'), prefix, or concept; returns kind, path, line, signature, and id. A query that names no symbol exactly also gets the ranked matches by name words, signatures, and docs. Use instead of grep on a name."
+        "Find symbols by name, qualified name ('Type::method'), prefix, or concept; returns kind, path, line, signature, and id. A query that names no symbol exactly also gets the ranked matches by name words, signatures, and docs. A query that names one definition with a short body also gets that body. Use instead of grep on a name."
     );
     assert_eq!(
         lookup["inputSchema"]["properties"]["query"]["description"],

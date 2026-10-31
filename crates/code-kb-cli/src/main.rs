@@ -10,9 +10,9 @@ use code_kb_core::{
     fit_bodies_to_budget, fit_context_slices_to_budget, format_context_slices, format_edit_check,
     format_fact_categories, format_search_results, format_structural_facts, format_symbol_bodies,
     fts_search_symbols_explained, get_context_slices_selected_op, get_symbol_bodies_selected_op,
-    list_structural_fact_categories_scoped, load_file_symbols, lookup_symbols_op, open_read_only,
-    qualify_members, queries, reference_report, render_symbol_lookup, resolve_symbol_op,
-    scan_workspace, select_reference_target,
+    list_structural_fact_categories_scoped, load_file_symbols, lookup_symbols_with_body_op,
+    open_read_only, qualify_members, queries, reference_report, render_symbol_lookup,
+    resolve_symbol_op, scan_workspace, select_reference_target,
 };
 
 mod hooks;
@@ -608,7 +608,8 @@ fn main() -> anyhow::Result<ExitCode> {
             let path_filter = rel_path.as_deref();
 
             let query = mcp::McpServer::sanitize_symbol_name(&args.query);
-            let lookup = lookup_symbols_op(
+            let lookup = lookup_symbols_with_body_op(
+                &workspace,
                 &db_path,
                 &conn,
                 &query,
