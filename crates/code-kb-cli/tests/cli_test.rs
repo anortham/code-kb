@@ -807,6 +807,11 @@ fn test_cli_lookup_prints_the_text_of_the_mcp_lookup_symbol_for_a_concept_an_exa
         mcp_texts[1]
     );
     assert!(
+        mcp_texts[1].ends_with("\n// src/net.rs:6-6 (send_again)\npub fn send_again() {}\n"),
+        "{}",
+        mcp_texts[1]
+    );
+    assert!(
         mcp_texts[2].contains("Did you mean one of:"),
         "{}",
         mcp_texts[2]
@@ -830,6 +835,17 @@ fn test_cli_lookup_prints_the_text_of_the_mcp_lookup_symbol_for_a_concept_an_exa
     assert_eq!(lookup["names"][0]["name"], "retry_count");
     assert_eq!(lookup["ranked"][0]["symbol"]["name"], "send_again");
     assert!(lookup.get("suggestions").is_none(), "{lookup}");
+    assert!(lookup.get("body").is_none(), "{lookup}");
+
+    let json = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .args(["--json", "lookup", "send_again"])
+        .output()
+        .unwrap();
+    assert!(json.status.success());
+    let lookup: serde_json::Value = serde_json::from_slice(&json.stdout).unwrap();
+    assert_eq!(lookup["body"], "pub fn send_again() {}");
 
     let hint = mcp_texts[5]
         .find("Did you mean one of:\n  - function `send_again` (src/net.rs:6)")
