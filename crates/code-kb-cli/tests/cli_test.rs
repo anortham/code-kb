@@ -2992,6 +2992,136 @@ fn test_skill_routes_orientation_to_the_skeleton_and_edits_to_read() {
     assert!(prose.contains("Use `rg` for literal text"));
 }
 
+fn guidance_sentences(text: &str) -> Vec<String> {
+    let plain = text
+        .replace(['`', '*', '"'], "")
+        .replace("\\n", " ")
+        .to_lowercase();
+    let mut blocks: Vec<String> = Vec::new();
+    for line in plain.lines() {
+        let trimmed = line.trim_start();
+        let starts_block = trimmed.is_empty()
+            || ["- ", "|", "#", "<", "//"]
+                .iter()
+                .any(|marker| trimmed.starts_with(marker))
+            || trimmed.split_once(". ").is_some_and(|(number, _)| {
+                !number.is_empty() && number.chars().all(|c| c.is_ascii_digit())
+            });
+        match blocks.last_mut() {
+            Some(block) if !starts_block => {
+                block.push(' ');
+                block.push_str(trimmed);
+            }
+            _ => blocks.push(trimmed.to_string()),
+        }
+    }
+    blocks
+        .iter()
+        .flat_map(|block| block.split(". "))
+        .map(|sentence| sentence.split_whitespace().collect::<Vec<_>>().join(" "))
+        .filter(|sentence| !sentence.is_empty())
+        .collect()
+}
+
+fn names_word_before(sentence: &str, words: &[&str], tools: &[&str]) -> bool {
+    let tokens: Vec<&str> = sentence
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .filter(|token| !token.is_empty())
+        .collect();
+    tokens.iter().enumerate().any(|(index, token)| {
+        words.contains(token)
+            && tokens[index + 1..]
+                .iter()
+                .any(|later| tools.contains(later))
+    })
+}
+
+fn outdated_routing_rule(sentence: &str) -> Option<&'static str> {
+    if sentence.contains("file_skeleton")
+        && [
+            "before you read",
+            "before every read",
+            "before each read",
+            "before reading",
+            "before you open",
+        ]
+        .iter()
+        .any(|phrase| sentence.contains(phrase))
+    {
+        return Some("calls file_skeleton before every Read");
+    }
+    let after_context = sentence.split_once("get_symbol_context")?.1;
+    if names_word_before(
+        after_context,
+        &["then", "call", "next"],
+        &["find_references", "blast_radius"],
+    ) {
+        return Some("follows get_symbol_context with find_references or blast_radius");
+    }
+    None
+}
+
+fn outdated_routing_rules(text: &str) -> Vec<String> {
+    guidance_sentences(text)
+        .into_iter()
+        .filter_map(|sentence| {
+            outdated_routing_rule(&sentence).map(|rule| format!("{rule}: {sentence}"))
+        })
+        .collect()
+}
+
+#[test]
+fn test_outdated_routing_rules_are_caught_in_the_2_11_wording() {
+    for old in [
+        "- **Before you `Read`, `cat`, `head`, or `sed -n` a source file**, call `file_skeleton` on it, then `get_symbol_body` or `get_symbol_context` for the symbols you need.",
+        "Pass project_root on every call. Call file_skeleton before you read a source file, then get_symbol_body or get_symbol_context for the symbols you need.",
+        "- **Before you change a symbol**, call `get_symbol_context`; to pick the tests to run, call `blast_radius`.",
+        "Call `get_symbol_context`, then `find_references` and `blast_radius`.",
+    ] {
+        assert!(!outdated_routing_rules(old).is_empty(), "missed: {old}");
+    }
+    for current in [
+        "- **To orient**, call `file_skeleton` on a folder or a file you do not know.",
+        "- **Before you change a symbol**, call `get_symbol_context`: it carries the body, callers, tests to run, and types.",
+        "The context answer lists the first callers and the tests to run, so the edit needs no other call. For the full list of callers or tests, call `find_references` or `blast_radius`.",
+    ] {
+        assert!(
+            outdated_routing_rules(current).is_empty(),
+            "flagged: {current}"
+        );
+    }
+}
+
+#[test]
+fn test_guidance_routes_without_skeleton_before_read_or_required_drill_downs() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = manifest_dir.parent().unwrap().parent().unwrap();
+    let mut files = Vec::new();
+    for entry in [
+        "hooks",
+        "skills",
+        "crates/code-kb-cli/src/routing-block.md",
+        "crates/code-kb-cli/src/mcp/server.rs",
+        "README.md",
+        "docs/site/index.html",
+    ] {
+        collect_guidance_files(&root.join(entry), &mut files);
+    }
+    let mut offenders = Vec::new();
+    for file in files {
+        let Ok(text) = std::fs::read_to_string(&file) else {
+            continue;
+        };
+        for finding in outdated_routing_rules(&text) {
+            offenders.push(format!(
+                "{} {finding}",
+                file.strip_prefix(root).unwrap().display()
+            ));
+        }
+    }
+    assert!(offenders.is_empty(), "{}", offenders.join("\n"));
+}
+
 #[test]
 fn test_cli_rejects_removed_edit_commands() {
     for command in ["edit", "edit-file"] {

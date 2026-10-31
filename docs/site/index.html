@@ -81,12 +81,25 @@ fn sanitize_error_message(msg: &amp;str) -&gt; String {
 }
 ```
 
+<span class="h">### Callers</span>
+Sites: 3 · proven 3 · likely 0 · unresolved 0 · excluded 0
+Proven (3):
+- `get_telemetry_summary` [crates/code-kb-core/src/telemetry.rs:744] (kind: calls; same file; 1 arg)
+- `generate_bug_report` [crates/code-kb-core/src/telemetry.rs:981] (kind: calls; same file; 1 arg)
+- `generate_bug_report` [crates/code-kb-core/src/telemetry.rs:1058] (kind: variable_ref; same file)
+Not visible to this index: calls inside macro bodies.
+More: find_references(symbol_id="85b090b5b6194fea3141e12ede7642aa") lists every site; blast_radius(symbol_id="85b090b5b6194fea3141e12ede7642aa") lists the tests that reach it through callers.
+
+<span class="h">### Tests to run</span>
+No test calls or uses `sanitize_error_message` in the index; blast_radius(symbol_id="85b090b5b6194fea3141e12ede7642aa") lists the tests that reach it through callers.
+
 <span class="h">### Dependencies (Signatures):</span>
 - fn sanitize_error_message_with_homes(msg: &amp;str, home_candidates: &amp;[String]) -&gt; String (crates/code-kb-core/src/telemetry.rs:817)
 - fn home_candidates() -&gt; Vec&lt;String&gt; (crates/code-kb-core/src/telemetry.rs:782)
 
-<span class="h">### Related Tests:</span>
-No related test was found in the index; blast_radius may find tests through callers.</pre>
+<span class="h">### Open Ends</span>
+No indexed code calls these symbols, so the walk stopped at them. The runtime, a framework, a library, or a call that the index cannot tie may call them, or nothing does. The tests above do not include the tests that reach the target through them:
+  - function `main` (crates/code-kb-cli/src/main.rs:356)</pre>
 
     <pre class="demo-pane" id="pane-blast" data-view="blast" hidden>$ code-kb blast-radius mask_home_paths_with
 
@@ -143,8 +156,8 @@ Broader test commands, each for the reported paths its runner covers:
 get_symbol_context("sanitize_error_message")</pre>
             <dl>
               <dt>Skeleton</dt><dd>≈ 2,400 tokens, 88% less</dd>
-              <dt>Context slice</dt><dd>≈ 170 tokens, 99% less</dd>
-              <dt>Query time</dt><dd>≈ 5 ms skeleton, ≈ 80 ms context</dd>
+              <dt>Context slice</dt><dd>≈ 420 tokens, 98% less</dd>
+              <dt>Query time</dt><dd>≈ 5 ms skeleton, ≈ 110 ms context</dd>
             </dl>
           </div>
         </div>
@@ -162,11 +175,11 @@ get_symbol_context("sanitize_error_message")</pre>
           </div>
           <div>
             <dt>Function context</dt>
-            <dd><code>get_symbol_context</code> shows a function's code, the signatures of functions it calls, related types, and test locations.</dd>
+            <dd><code>get_symbol_context</code> shows a function's code and return type, its callers with their evidence, the tests to run with their commands, the signatures of functions it calls, and related types, in one call.</dd>
           </div>
           <div>
             <dt>Callers and tests</dt>
-            <dd><code>blast_radius</code> follows callers across the repository and suggests tests to run. With no target, it checks your uncommitted changes.</dd>
+            <dd><code>find_references</code> lists every caller site, and <code>blast_radius</code> follows callers across the repository to the tests to run. Use them when you need the full list. With no target, <code>blast_radius</code> checks your uncommitted changes.</dd>
           </div>
           <div>
             <dt>Post-edit check</dt>
@@ -263,7 +276,7 @@ get_symbol_context("sanitize_error_message")</pre>
               </tr>
               <tr>
                 <td>Predict which tests to run</td>
-                <td class="kept"><code>blast_radius</code> suggests related tests</td>
+                <td class="kept"><code>get_symbol_context</code> lists the tests to run; <code>blast_radius</code> walks further</td>
                 <td>Find relevant tests yourself</td>
               </tr>
               <tr>
@@ -319,19 +332,19 @@ get_symbol_context("sanitize_error_message")</pre>
 lookup_symbol("auth token validation")</pre>
           </li>
           <li>
-            <div><h3>Get the context</h3><p>The target body, its callees' signatures, parameter types, and tests in one call.</p></div>
+            <div><h3>Get the context</h3><p>Before you change a symbol: its body, its callers, the tests to run with their commands, its callees' signatures, and its types in one call.</p></div>
             <pre>get_symbol_context("handle_request")</pre>
           </li>
           <li>
-            <div><h3>Check the impact</h3><p>Callers across several hops and the tests that cover them.</p></div>
-            <pre>blast_radius(symbol="compute_hash")</pre>
+            <div><h3>Edit</h3><p>Read the file you will edit, since the editor needs it, and edit with your usual tools. code-kb picks up file changes automatically.</p></div>
           </li>
           <li>
-            <div><h3>Edit</h3><p>Edit with your usual tools. code-kb picks up file changes automatically.</p></div>
+            <div><h3>Check the edit</h3><p>The symbols whose shape changed and every site that your diff did not reach. For the full list of callers or tests, call <code>find_references</code> or <code>blast_radius</code>.</p></div>
+            <pre>check_edit()</pre>
           </li>
           <li>
-            <div><h3>Verify</h3><p>Run the suggested tests. Check usage with <code>code-kb stats</code>.</p></div>
-            <pre>cargo test compute_hash
+            <div><h3>Verify</h3><p>Run the tests that the context listed. Check usage with <code>code-kb stats</code>.</p></div>
+            <pre>cargo test handle_request
 code-kb stats</pre>
           </li>
         </ol>
@@ -355,11 +368,11 @@ code-kb stats</pre>
               </tr>
             </thead>
             <tbody>
-              <tr><td><code>file_skeleton</code></td><td><code>code-kb skeleton &lt;file&gt;</code><br>or <code>code-kb outline [path]</code> for a folder</td><td>File outline, bodies removed; a folder returns its layout</td><td><code>file_path</code> (a file or a folder)</td></tr>
-              <tr><td><code>lookup_symbol</code></td><td><code>code-kb lookup &lt;query&gt;</code></td><td>Name, prefix, or concept; a query that names no symbol exactly also gets ranked matches; each result row includes <code>id=&lt;symbol_id&gt;</code></td><td><code>query</code>, <code>path</code>, <code>kind</code>, <code>is_test</code>, <code>limit</code></td></tr>
+              <tr><td><code>file_skeleton</code></td><td><code>code-kb skeleton &lt;file&gt;</code><br>or <code>code-kb outline [path]</code> for a folder</td><td>File outline, bodies removed; a folder returns its layout; <code>public_only</code> hides private rows</td><td><code>file_path</code> (a file or a folder), <code>public_only</code></td></tr>
+              <tr><td><code>lookup_symbol</code></td><td><code>code-kb lookup &lt;query&gt;</code></td><td>Name, prefix, or concept; a query that names no symbol exactly also gets ranked matches; a query that names one definition with a short body also gets that body; a query with <code>/</code>, <code>.</code>, <code>{</code>, or <code>:</code> also lists matching routes and config keys; each result row includes <code>id=&lt;symbol_id&gt;</code></td><td><code>query</code>, <code>path</code>, <code>kind</code>, <code>is_test</code>, <code>limit</code></td></tr>
               <tr><td><code>get_symbol_body</code></td><td><code>code-kb body [symbol]</code><br>or <code>code-kb body --symbol-id &lt;id&gt;</code></td><td>Source of one symbol</td><td><code>symbol_name</code> or <code>symbol_id</code>, <code>file_path</code></td></tr>
-              <tr><td><code>get_symbol_context</code></td><td><code>code-kb context [symbol]</code><br>or <code>code-kb context --symbol-id &lt;id&gt;</code></td><td>Body, callee signatures, types, tests</td><td><code>symbol_name</code> or <code>symbol_id</code>, <code>file_path</code>, <code>include_external</code></td></tr>
-              <tr><td><code>find_references</code></td><td><code>code-kb refs [symbol]</code><br>or <code>code-kb refs --symbol-id &lt;id&gt;</code></td><td>Callers with each site labeled by its evidence, or callees with stdlib calls filtered</td><td><code>symbol_name</code> or <code>symbol_id</code>, <code>file_path</code>, <code>direction</code> (default <code>callers</code>), <code>include_external</code>, <code>offset</code>, <code>limit</code></td></tr>
+              <tr><td><code>get_symbol_context</code></td><td><code>code-kb context [symbol]</code><br>or <code>code-kb context --symbol-id &lt;id&gt;</code></td><td>Body and return type, callers summary, tests to run with commands, callee signatures, types, open ends</td><td><code>symbol_name</code> or <code>symbol_id</code>, <code>file_path</code>, <code>include_external</code></td></tr>
+              <tr><td><code>find_references</code></td><td><code>code-kb refs [symbol]</code><br>or <code>code-kb refs --symbol-id &lt;id&gt;</code></td><td>Every caller site, labeled by its evidence, or callees with stdlib calls filtered</td><td><code>symbol_name</code> or <code>symbol_id</code>, <code>file_path</code>, <code>direction</code> (default <code>callers</code>), <code>include_external</code>, <code>offset</code>, <code>limit</code></td></tr>
               <tr><td><code>blast_radius</code></td><td><code>code-kb blast-radius [symbol]</code><br>or <code>code-kb blast-radius --symbol-id &lt;id&gt;</code><br>or <code>code-kb blast-radius --file &lt;file&gt;</code></td><td>Multi-hop callers and tests to run</td><td><code>symbol</code>, <code>symbol_id</code>, or <code>file</code> (omitted target reads git changes), <code>depth</code> (default 2), <code>include_low_signal</code>, <code>offset</code>, <code>limit</code></td></tr>
               <tr><td><code>check_edit</code></td><td><code>code-kb check [--base REV]</code></td><td>After you edit: the symbols whose shape changed, and every site of each that your diff did not reach</td><td><code>base</code> (default: the session base, else <code>HEAD</code>), <code>offset</code>, <code>limit</code></td></tr>
             </tbody>
@@ -577,7 +590,7 @@ code-kb hook SubagentStop
     const tokens = {
       whole: '≈ 20,900 tokens',
       skeleton: '≈ 2,400 tokens, 88% less',
-      context: '≈ 170 tokens, 99% less',
+      context: '≈ 420 tokens, 98% less',
       blast: '≈ 280 tokens'
     };
 
