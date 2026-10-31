@@ -700,7 +700,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     assert!(
         resp["result"]["instructions"]
             .as_str()
-            .is_some_and(|instructions| instructions == "Pass project_root, the absolute path of the project or git worktree you work in, on every call. Call file_skeleton on a folder or a file you do not know. Before you change a symbol, call get_symbol_context for its body, callers, tests, and types. Read the file you will edit. Use lookup_symbol for a name or a concept, and find_references, not grep, for its uses. After you edit, call check_edit.")
+            .is_some_and(|instructions| instructions == "Pass project_root, the absolute path of the project or git worktree you work in, on every call. Call file_skeleton on a folder or a file you do not know. Before you change a symbol, call get_symbol_context for its body, callers, tests, and types. Read the file you will edit. Use lookup_symbol for a name or a concept, and find_references, not grep, for its uses. After you edit, call check_edit before you say the change is done; blast_radius() lists the tests of the whole diff.")
     );
 
     // 2. Send tools/list

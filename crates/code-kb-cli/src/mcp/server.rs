@@ -1462,7 +1462,7 @@ impl McpServer {
                         "name": "code-kb",
                         "version": env!("CARGO_PKG_VERSION")
                     },
-                    "instructions": "Pass project_root, the absolute path of the project or git worktree you work in, on every call. Call file_skeleton on a folder or a file you do not know. Before you change a symbol, call get_symbol_context for its body, callers, tests, and types. Read the file you will edit. Use lookup_symbol for a name or a concept, and find_references, not grep, for its uses. After you edit, call check_edit."
+                    "instructions": "Pass project_root, the absolute path of the project or git worktree you work in, on every call. Call file_skeleton on a folder or a file you do not know. Before you change a symbol, call get_symbol_context for its body, callers, tests, and types. Read the file you will edit. Use lookup_symbol for a name or a concept, and find_references, not grep, for its uses. After you edit, call check_edit before you say the change is done; blast_radius() lists the tests of the whole diff."
                 });
                 Some(JsonRpcResponse::success(id, init_result))
             }
