@@ -3989,12 +3989,28 @@ fn find_callees_page_internal(
     offset: usize,
     include_external: bool,
 ) -> Result<(Vec<ReferenceSite>, usize), QueryError> {
-    let cte = callee_page_cte(conn, include_external, symbol_id);
-    let total: i64 = conn.query_row(
-        &format!("{cte} SELECT COUNT(*) FROM merged_sites"),
-        params![symbol_name, symbol_id],
-        |row| row.get(0),
-    )?;
+    let (cte, reads_owners) = callee_page_cte(conn, include_external, symbol_id);
+    let owners = if reads_owners {
+        receiver_chain_owner_map(
+            conn,
+            "",
+            "",
+            "s_from.name = ?1 AND (?2 IS NULL OR p.from_symbol_id = ?2)",
+            params![symbol_name, symbol_id],
+        )?
+    } else {
+        "{}".to_string()
+    };
+    let count_sql = format!("{cte} SELECT COUNT(*) FROM merged_sites");
+    let total: i64 = if reads_owners {
+        conn.query_row(&count_sql, params![symbol_name, symbol_id, owners], |row| {
+            row.get(0)
+        })?
+    } else {
+        conn.query_row(&count_sql, params![symbol_name, symbol_id], |row| {
+            row.get(0)
+        })?
+    };
     let total = total as usize;
     if limit == 0 || offset > i64::MAX as usize {
         return Ok((Vec::new(), total));
@@ -4006,10 +4022,10 @@ fn find_callees_page_internal(
                 start_line, start_column
          FROM merged_sites
          ORDER BY path, start_line, start_column, to_symbol_name, kind, from_symbol_id
-         LIMIT ?3 OFFSET ?4"
+         LIMIT ?4 OFFSET ?5"
     ))?;
     let rows = stmt.query_map(
-        params![symbol_name, symbol_id, limit as i64, offset as i64],
+        params![symbol_name, symbol_id, owners, limit as i64, offset as i64],
         |row| {
             Ok(ReferenceSite {
                 from_symbol_name: row.get(0)?,
@@ -4030,8 +4046,14 @@ fn find_callees_page_internal(
     Ok((sites, total))
 }
 
-fn callee_page_cte(conn: &Connection, include_external: bool, symbol_id: Option<&str>) -> String {
+/// The callee sites CTE, and whether it reads the receiver-chain owner map bound as `?3`.
+fn callee_page_cte(
+    conn: &Connection,
+    include_external: bool,
+    symbol_id: Option<&str>,
+) -> (String, bool) {
     let pending_language = pending_relationship_language_filter("p.kind", "s_from", "s_to");
+    let mut reads_owners = false;
     let pending_predicate = if include_external || !has_pending_namespace_column(conn) {
         String::new()
     } else {
@@ -4039,7 +4061,13 @@ fn callee_page_cte(conn: &Connection, include_external: bool, symbol_id: Option<
             pending_receiver_chain_requires_full_for_source(conn, source_id)
         });
         if pending_receiver_chain {
-            pending_target_predicate(conn, "s_to", "s_to_parent")
+            reads_owners = has_typed_receiver_chain_support(conn);
+            pending_target_predicate_with_receiver_chain_owner(
+                conn,
+                "s_to",
+                "s_to_parent",
+                &bound_receiver_chain_owner_sql("?3"),
+            )
         } else {
             pending_target_predicate_without_typed_receiver_chain(conn, "s_to", "s_to_parent")
         }
@@ -4111,7 +4139,7 @@ fn callee_page_cte(conn: &Connection, include_external: bool, symbol_id: Option<
     };
     let relationship_call_language =
         call_languages_compatible_sql("s_from.language", "s_to.language");
-    format!(
+    let cte = format!(
         "WITH raw_sites AS (
              SELECT s_from.name AS from_symbol_name,
                     r.from_symbol_id AS from_symbol_id,
@@ -4133,7 +4161,8 @@ fn callee_page_cte(conn: &Connection, include_external: bool, symbol_id: Option<
              FROM raw_sites
              GROUP BY from_symbol_name, from_symbol_id, to_symbol_name, kind, path, start_line
          )"
-    )
+    );
+    (cte, reads_owners)
 }
 
 /// SQL expression ranking a candidate path against the call site `p.path`:
@@ -4805,6 +4834,25 @@ pub(crate) fn owner_binding_in_scope_sql(owner: &str) -> String {
     )
 }
 
+/// The receiver chain of the pending row `p`: its namespace segments, then its receiver.
+const PENDING_RECEIVER_CHAIN_JSON: &str = "json_insert(
+        CASE WHEN json_valid(p.target_namespace_json)
+                   AND json_type(p.target_namespace_json) = 'array'
+             THEN p.target_namespace_json ELSE '[]' END,
+        '$[#]', p.target_receiver
+    )";
+
+/// The owner of the receiver chain of the pending row `p`, whose caller is joined as `s_from`.
+fn pending_receiver_chain_owner_sql() -> String {
+    typed_receiver_chain_owner_id_sql(
+        "p.from_symbol_id",
+        "p.path",
+        "p.start_line",
+        "COALESCE(s_from.language, '')",
+        PENDING_RECEIVER_CHAIN_JSON,
+    )
+}
+
 /// SQL predicate that decides whether a pending call edge `p` (with caller `s_from`) points at
 /// the candidate definition `target` (whose parent symbol is joined as `parent`).
 pub(crate) fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> String {
@@ -4816,7 +4864,20 @@ fn pending_target_predicate_without_typed_receiver_chain(
     target: &str,
     parent: &str,
 ) -> String {
-    pending_target_predicate_builder(conn, target, parent, None, false)
+    pending_target_predicate_builder(conn, target, parent, None, None, false)
+}
+
+/// [`pending_target_predicate`] with the receiver-chain owner of the pending row `p` read from
+/// `receiver_chain_owner`, an expression over values that [`pending_receiver_chain_owners`]
+/// computed with the same owner query. Inline, SQLite computes the owner once for each read of
+/// the owner walk, which made one walk level over `json.hpp` take a minute.
+fn pending_target_predicate_with_receiver_chain_owner(
+    conn: &Connection,
+    target: &str,
+    parent: &str,
+    receiver_chain_owner: &str,
+) -> String {
+    pending_target_predicate_builder(conn, target, parent, None, Some(receiver_chain_owner), true)
 }
 
 pub(crate) fn pending_target_predicate_with_receiver_chain_status(
@@ -4825,7 +4886,7 @@ pub(crate) fn pending_target_predicate_with_receiver_chain_status(
     parent: &str,
     receiver_chain_status: Option<&str>,
 ) -> String {
-    pending_target_predicate_builder(conn, target, parent, receiver_chain_status, true)
+    pending_target_predicate_builder(conn, target, parent, receiver_chain_status, None, true)
 }
 
 fn pending_target_predicate_builder(
@@ -4833,13 +4894,25 @@ fn pending_target_predicate_builder(
     target: &str,
     parent: &str,
     receiver_chain_status: Option<&str>,
+    receiver_chain_owner: Option<&str>,
     include_typed_receiver_chain: bool,
 ) -> String {
     let ns = "json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)";
     let target_path = format!("('/' || replace({target}.path, '\\', '/'))");
     let like_value = "replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_')";
-    let closer_rank = call_site_proximity("closer.path");
     let target_rank = call_site_proximity(&format!("{target}.path"));
+    let closer_path = "replace(closer.path, '\\', '/')";
+    let site_path = "replace(p.path, '\\', '/')";
+    let closer_folder = format!("rtrim({closer_path}, replace({closer_path}, '/', ''))");
+    let site_folder = format!("rtrim({site_path}, replace({site_path}, '/', ''))");
+    let closer = format!(
+        "SELECT 1 FROM symbols closer
+                    WHERE closer.name = {target}.name
+                      AND closer.symbol_id != {target}.symbol_id
+                      AND closer.parent_symbol_id IS NULL
+                      AND closer.kind = {target}.kind
+                      AND NOT (p.kind IS 'extends' AND closer.symbol_id = p.from_symbol_id)"
+    );
     let relative = is_relative_import_path("import_source.value");
     let relative_match = relative_import_matches("import_source.value", target);
     // `import { util } from "../helpers/util.js"`: `util.f()` reaches only that file's `util`.
@@ -4877,28 +4950,24 @@ fn pending_target_predicate_builder(
     } else {
         String::new()
     };
-    let receiver_chain_json = "json_insert(
-        CASE WHEN json_valid(p.target_namespace_json)
-                   AND json_type(p.target_namespace_json) = 'array'
-             THEN p.target_namespace_json ELSE '[]' END,
-        '$[#]', p.target_receiver
-    )";
+    let receiver_chain_json = PENDING_RECEIVER_CHAIN_JSON;
     let typed_receiver_chain_supported = has_typed_receiver_chain_support(conn);
     let typed_receiver_chain = if typed_receiver_chain_supported && include_typed_receiver_chain {
         let matches_target = match receiver_chain_status {
             Some(status) => format!(
                 "({status}) IN ({RECEIVER_CHAIN_STATUS_RECEIVER_TYPE}, {RECEIVER_CHAIN_STATUS_QUALIFIED_PATH})"
             ),
-            None => {
-                let receiver_chain_owner = typed_receiver_chain_owner_id_sql(
-                    "p.from_symbol_id",
-                    "p.path",
-                    "p.start_line",
-                    "COALESCE(s_from.language, '')",
-                    receiver_chain_json,
-                );
-                typed_receiver_chain_matches_target_sql(&receiver_chain_owner, target)
-            }
+            // A NULL owner gives the status NULL or 0, so a bound owner skips the status query.
+            None => match receiver_chain_owner {
+                Some(owner) => format!(
+                    "({owner} IS NOT NULL AND {})",
+                    typed_receiver_chain_matches_target_sql(owner, target)
+                ),
+                None => typed_receiver_chain_matches_target_sql(
+                    &pending_receiver_chain_owner_sql(),
+                    target,
+                ),
+            },
         };
         format!(
             "(json_array_length({receiver_chain_json}) > 1
@@ -5007,15 +5076,10 @@ fn pending_target_predicate_builder(
                       AND shadow.kind NOT IN ('import', 'export', 'module', 'namespace')
                       AND (shadow.parent_symbol_id IS NULL OR shadow.parent_symbol_id = p.from_symbol_id)
                 ))
-                AND ({target}.parent_symbol_id IS NOT NULL OR NOT EXISTS (
-                    SELECT 1 FROM symbols closer
-                    WHERE closer.name = {target}.name
-                      AND closer.symbol_id != {target}.symbol_id
-                      AND closer.parent_symbol_id IS NULL
-                      AND closer.kind = {target}.kind
-                      AND NOT (p.kind IS 'extends' AND closer.symbol_id = p.from_symbol_id)
-                      AND {closer_rank} > {target_rank}
-                ))
+                AND ({target}.parent_symbol_id IS NOT NULL OR CASE {target_rank}
+                    WHEN 2 THEN 1
+                    WHEN 1 THEN NOT EXISTS ({closer} AND {closer_path} = {site_path})
+                    ELSE NOT EXISTS ({closer} AND {closer_folder} = {site_folder}) END)
             )
             OR (
                 {target}.parent_symbol_id IS NULL
@@ -6219,11 +6283,26 @@ pub fn find_callee_signatures(
         }
     }
 
+    let mut owners = None;
     let pending_predicate = if has_pending_namespace_column(conn) {
         let pending_receiver_chain = signatures.len() < limit
             && pending_receiver_chain_requires_full_for_source(conn, symbol_id);
         if pending_receiver_chain {
-            pending_target_predicate(conn, "s_to", "s_parent")
+            if has_typed_receiver_chain_support(conn) {
+                owners = Some(receiver_chain_owner_map(
+                    conn,
+                    "",
+                    "",
+                    "s_from.name = ?1 AND p.from_symbol_id = ?2",
+                    params![symbol_name, symbol_id],
+                )?);
+            }
+            pending_target_predicate_with_receiver_chain_owner(
+                conn,
+                "s_to",
+                "s_parent",
+                &bound_receiver_chain_owner_sql("?4"),
+            )
         } else {
             pending_target_predicate_without_typed_receiver_chain(conn, "s_to", "s_parent")
         }
@@ -6246,17 +6325,23 @@ pub fn find_callee_signatures(
                     AND {pred}
                  LIMIT ?3", kind = callee_target_kind("s_parent"), pred = pending_predicate, pending_language = pending_language);
                 let mut p_stmt = conn.prepare(&pending_sql)?;
-
-                let rows =
-                    p_stmt.query_map(params![symbol_name, symbol_id, remaining as i64], |row| {
-                        Ok((
-                            row.get::<_, String>(0)?,
-                            row.get::<_, Option<String>>(1)?,
-                            row.get::<_, String>(2)?.replace('\\', "/"),
-                            row.get::<_, Option<i64>>(3)?.unwrap_or(1) as usize,
-                            row.get::<_, String>(4)?,
-                        ))
-                    })?;
+                let map_row = |row: &rusqlite::Row<'_>| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, Option<String>>(1)?,
+                        row.get::<_, String>(2)?.replace('\\', "/"),
+                        row.get::<_, Option<i64>>(3)?.unwrap_or(1) as usize,
+                        row.get::<_, String>(4)?,
+                    ))
+                };
+                let rows = match &owners {
+                    Some(owners) => p_stmt.query_map(
+                        params![symbol_name, symbol_id, remaining as i64, owners],
+                        map_row,
+                    )?,
+                    None => p_stmt
+                        .query_map(params![symbol_name, symbol_id, remaining as i64], map_row)?,
+                };
                 rows.flatten().collect()
             } else {
                 let mut p_stmt = conn.prepare(&format!(
@@ -8850,10 +8935,12 @@ impl CallerWalk {
                 if full_stmt.is_none() {
                     full_stmt = Some(conn.prepare(full_sql)?);
                 }
+                let owners = pending_receiver_chain_owners(conn, &frontier)?;
                 level_callers(
                     full_stmt.as_mut().expect("prepared full walk"),
                     bound,
                     &frontier,
+                    Some(&owners),
                 )?
             } else {
                 if legacy_stmt.is_none() {
@@ -8863,6 +8950,7 @@ impl CallerWalk {
                     legacy_stmt.as_mut().expect("prepared legacy walk"),
                     bound,
                     &frontier,
+                    None,
                 )?
             };
             for step in steps {
@@ -8905,17 +8993,26 @@ impl CallerWalk {
             .map(|symbol| (symbol.symbol_id.clone(), symbol.depth, 0))
             .collect();
         if !unexpanded.is_empty() {
-            let sql = if pending_receiver_chain_requires_full_for_frontier(conn, &unexpanded) {
-                full_sql
-            } else {
-                legacy_sql
-            };
+            let (sql, owners) =
+                if pending_receiver_chain_requires_full_for_frontier(conn, &unexpanded) {
+                    (
+                        full_sql,
+                        Some(pending_receiver_chain_owners(conn, &unexpanded)?),
+                    )
+                } else {
+                    (legacy_sql, None)
+                };
             let mut stmt = conn.prepare(sql)?;
             let mut overloads = crate::reference_report::overloads::OverloadSteps::new(conn);
             let root = index_root(conn);
             let mut includes =
                 crate::reference_report::include_reach::IncludeSteps::new(conn, &root);
-            for step in level_callers(&mut stmt, MAX_BLAST_DEPTH + 1, &unexpanded)? {
+            for step in level_callers(
+                &mut stmt,
+                MAX_BLAST_DEPTH + 1,
+                &unexpanded,
+                owners.as_deref(),
+            )? {
                 if step.caller.is_some_and(|caller| {
                     caller != step.origin
                         && overloads.keeps(&caller, &step.origin)
@@ -9130,21 +9227,95 @@ struct CallerStep {
     origin: String,
 }
 
-/// The caller steps that leave each row of `frontier`.
+/// The caller steps that leave each row of `frontier`. A statement with the typed receiver-chain
+/// rule also takes `receiver_chain_owners`, the map of [`pending_receiver_chain_owners`].
 fn level_callers(
     stmt: &mut rusqlite::Statement,
     bound: usize,
     frontier: &[(String, usize, i64)],
+    receiver_chain_owners: Option<&str>,
 ) -> Result<Vec<CallerStep>, QueryError> {
-    let rows = stmt.query_map(params![bound as i64, walk_rows_json(frontier)], |row| {
+    let map_row = |row: &rusqlite::Row<'_>| {
         Ok(CallerStep {
             caller: row.get(0)?,
             depth: row.get::<_, i64>(1)? as usize,
             via: row.get(2)?,
             origin: row.get(3)?,
         })
-    })?;
+    };
+    let frontier_json = walk_rows_json(frontier);
+    let rows = match receiver_chain_owners {
+        Some(owners) if stmt.parameter_count() >= 3 => {
+            stmt.query_map(params![bound as i64, frontier_json, owners], map_row)?
+        }
+        _ => stmt.query_map(params![bound as i64, frontier_json], map_row)?,
+    };
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
+/// The receiver-chain owner of the pending row `p`, read from the JSON map bound as `param`.
+fn bound_receiver_chain_owner_sql(param: &str) -> String {
+    format!("json_extract({param}, '$.\"' || p.rowid || '\"')")
+}
+
+/// The receiver-chain owners of the pending rows `p` that `joins` and `filter` select, as a JSON
+/// object from the pending row id to the owner id, computed with the owner query of
+/// [`pending_target_predicate`]. `ctes` are common table expressions for `joins`, each followed
+/// by a comma. It holds only calls whose chain has two or more names, the only calls the typed
+/// receiver-chain rule reads, and leaves out a call with no owner.
+fn receiver_chain_owner_map(
+    conn: &Connection,
+    ctes: &str,
+    joins: &str,
+    filter: &str,
+    params: impl rusqlite::Params,
+) -> Result<String, QueryError> {
+    let sql = format!(
+        "WITH {ctes} owners(pending_id, owner_id) AS (
+             SELECT CAST(p.rowid AS TEXT), {owner}
+             FROM pending_relationships p
+             {joins}
+             LEFT JOIN symbols s_from ON s_from.symbol_id = p.from_symbol_id
+             WHERE ({filter})
+               AND json_array_length({PENDING_RECEIVER_CHAIN_JSON}) > 1
+               AND p.target_receiver IS NOT NULL AND p.target_receiver != ''
+         )
+         SELECT json_group_object(pending_id, owner_id)
+         FROM owners WHERE owner_id IS NOT NULL",
+        owner = pending_receiver_chain_owner_sql(),
+    );
+    Ok(conn.query_row(&sql, params, |row| row.get(0))?)
+}
+
+/// The receiver-chain owners of the pending calls that can reach a row of `frontier`: the calls
+/// to the name of a frontier symbol, or of the class of a frontier constructor.
+fn pending_receiver_chain_owners(
+    conn: &Connection,
+    frontier: &[(String, usize, i64)],
+) -> Result<String, QueryError> {
+    let frontier_ids: Vec<&str> = frontier
+        .iter()
+        .map(|(symbol_id, _, _)| symbol_id.as_str())
+        .collect();
+    let frontier_json = serde_json::to_string(&frontier_ids).unwrap_or_else(|_| "[]".into());
+    receiver_chain_owner_map(
+        conn,
+        "frontier_ids(symbol_id) AS (
+             SELECT value FROM json_each(?1)
+         ), target_names(name) AS (
+             SELECT s.name
+             FROM frontier_ids f JOIN symbols s ON s.symbol_id = f.symbol_id
+             UNION
+             SELECT parent.name
+             FROM frontier_ids f
+             JOIN symbols ctor ON ctor.symbol_id = f.symbol_id AND ctor.kind = 'constructor'
+             JOIN symbols parent ON parent.symbol_id = ctor.parent_symbol_id
+             WHERE parent.kind IN ('class', 'struct', 'record')
+         ),",
+        "JOIN target_names target ON target.name = p.target_terminal_name",
+        "1",
+        [&frontier_json],
+    )
 }
 
 fn collect_walk(
@@ -9585,7 +9756,12 @@ fn walk_caller_branches(
         };
         let ns_condition = if has_target_namespace {
             let predicate = if include_typed_receiver_chain {
-                pending_target_predicate(conn, "s_target", "s_target_parent")
+                pending_target_predicate_with_receiver_chain_owner(
+                    conn,
+                    "s_target",
+                    "s_target_parent",
+                    &bound_receiver_chain_owner_sql("?3"),
+                )
             } else {
                 pending_target_predicate_without_typed_receiver_chain(
                     conn,
@@ -9711,7 +9887,12 @@ fn walk_caller_branches(
         let constructor_call_language =
             call_languages_compatible_sql("s_from.language", "s_target.language");
         let predicate = if include_typed_receiver_chain {
-            pending_target_predicate(conn, "s_target", "s_target_parent")
+            pending_target_predicate_with_receiver_chain_owner(
+                conn,
+                "s_target",
+                "s_target_parent",
+                &bound_receiver_chain_owner_sql("?3"),
+            )
         } else {
             pending_target_predicate_without_typed_receiver_chain(
                 conn,
@@ -10280,7 +10461,7 @@ mod tests {
         )
         .unwrap();
 
-        let cte = callee_page_cte(&conn, true, None);
+        let (cte, _) = callee_page_cte(&conn, true, None);
         let mut stmt = conn
             .prepare(&format!(
                 "EXPLAIN QUERY PLAN {cte}
@@ -10528,6 +10709,44 @@ mod tests {
         let legacy =
             pending_target_predicate_without_typed_receiver_chain(&conn, "s_target", "s_parent");
         assert!(full.len() > legacy.len() * 2);
+    }
+
+    #[test]
+    fn graph_queries_read_receiver_chain_owners_from_a_bound_map() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
+                parent_symbol_id TEXT, start_line INTEGER, metadata_json TEXT, signature TEXT
+            );
+            CREATE TABLE type_facts (symbol_id TEXT, resolved_type TEXT, language TEXT);
+            CREATE TABLE relationships (from_symbol_id TEXT, to_symbol_id TEXT, kind TEXT);
+            CREATE TABLE files (file_id TEXT, language TEXT);
+            CREATE TABLE pending_relationships (
+                from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT, path TEXT,
+                start_line INTEGER, file_id TEXT, target_receiver TEXT, target_namespace_json TEXT,
+                target_display_name TEXT
+            );
+            INSERT INTO symbols VALUES
+                ('send', 'service.go', 'go', 'Send', 'method', NULL, 1, NULL, NULL);
+            INSERT INTO pending_relationships VALUES
+                ('caller', 'Send', 'calls', 'caller.go', 1, NULL, 'service', '[\"group\"]', 'group.service.Send');",
+        )
+        .unwrap();
+        let owner = pending_receiver_chain_owner_sql();
+        let inline = pending_target_predicate(&conn, "s_target", "s_parent");
+        let bound = bound_receiver_chain_owner_sql("?3");
+        let walk = pending_target_predicate_with_receiver_chain_owner(
+            &conn, "s_target", "s_parent", &bound,
+        );
+
+        assert!(inline.contains(&owner));
+        assert!(!walk.contains(&owner));
+        assert!(walk.contains(&bound));
+        assert_eq!(
+            pending_receiver_chain_owners(&conn, &[("send".to_string(), 0, 0)]).unwrap(),
+            "{}"
+        );
     }
 
     #[test]

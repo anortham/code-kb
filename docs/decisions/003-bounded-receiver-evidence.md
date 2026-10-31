@@ -22,6 +22,8 @@ Choose query shape before preparation. A complete negative probe in the exact ca
 
 The no-typed mode must preserve legacy qualified-module, import, and path matching. Supplying status `0` is not equivalent: it rejects multi-segment chains, so it is safe only where the caller has established a single segment. Avoid multiplying the same owner/status proof inside positive graph branches. Preserve indexed branch joins: a trial OR-based merge reduced preparation but made stepping take seconds, so it was rejected.
 
+A positive walk level computes the owner of each pending call that can reach its frontier once (`pending_receiver_chain_owners`), with the same owner query, and binds the map. The callee page and the callee signatures of context do the same for the calls of their source (`receiver_chain_owner_map`). With the owner query inline, SQLite ran it once for each read of the owner walk: one level over the nlohmann `json.hpp` file took more than 5 minutes, and with the map it takes under 6 s with the same steps. A NULL owner gives the target status NULL or 0, never 1, so a bound owner skips the status query when the map has no owner for the call: the callees of a Razor `ExecuteAsync` in aspnetcore went from 44 s to 2.5 s with the same rows.
+
 ## Related-type statement lifetime
 
 Context prepares the shared type-owner query lazily on its first fact and reuses that statement for the remaining bounded fact stream. The statement is dropped when the context operation ends. A separate connection or global statement cache is unnecessary.
