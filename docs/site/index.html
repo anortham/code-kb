@@ -175,7 +175,7 @@ get_symbol_context("sanitize_error_message")</pre>
           </div>
           <div>
             <dt>Function context</dt>
-            <dd><code>get_symbol_context</code> shows a function's code and return type, its callers with their evidence, the tests to run with their commands, the signatures of functions it calls, and related types, in one call.</dd>
+            <dd><code>get_symbol_context</code> shows a function's code and return type, its callers with their evidence, the tests to run with their commands, the markers its sibling symbols share, the signatures of functions it calls, and related types, in one call.</dd>
           </div>
           <div>
             <dt>Callers and tests</dt>
@@ -332,7 +332,7 @@ get_symbol_context("sanitize_error_message")</pre>
 lookup_symbol("auth token validation")</pre>
           </li>
           <li>
-            <div><h3>Get the context</h3><p>Before you change a symbol: its body, its callers, the tests to run with their commands, its callees' signatures, and its types in one call.</p></div>
+            <div><h3>Get the context</h3><p>Before you change a symbol: its body, its callers, the tests to run with their commands, the markers its siblings share, its callees' signatures, and its types in one call.</p></div>
             <pre>get_symbol_context("handle_request")</pre>
           </li>
           <li>

@@ -229,10 +229,12 @@ Run after tasks 1-3 land in one branch, before the release:
 
 ## Release order
 
-1. Tasks 1-4 to `main` through PRs; task 6 in code-kb and razorback; measurement;
-   release code-kb 2.12.0 and razorback with it.
-2. julie 3.11.0 release (separate session, its own plan).
-3. Task 5; task 6 again for the new sections; release code-kb 2.13.0.
+The user chose one combined release on 2026-10-31, after julie 3.11.0 shipped:
+
+1. Tasks 1-4, task 6, and task 5 (julie 3.11.0) on `feat/julie-3.11`; task 6 again for
+   the new sections in code-kb and razorback.
+2. Measurement, reach gate alone, corpus check, dogfood round.
+3. One release of code-kb with razorback, after user approval.
 
 ## Effort
 
