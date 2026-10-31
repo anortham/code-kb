@@ -432,8 +432,9 @@ pub struct ContextSlice {
 }
 
 /// An annotation that at least two thirds of a symbol's siblings carry: the other symbols of its
-/// kind with its parent, or, for a symbol with no parent, in its file with no parent. `text` is
-/// the marker as written (`derive(Debug)`, `Obsolete("x")`).
+/// shown kind with its parent, or, for a symbol with no parent, in its file with no parent. `text`
+/// is the marker as written (`derive(Debug)`, `Obsolete("x")`), or its name when the siblings
+/// write it with different arguments.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Convention {
     pub annotation: String,

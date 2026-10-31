@@ -1290,12 +1290,14 @@ fn context_conventions_section(slice: &ContextSlice) -> String {
     let siblings = if sym.parent_symbol_id.is_some() {
         format!(
             "the other {} `{}` symbols of its owner",
-            first.siblings, sym.kind
+            first.siblings,
+            display_kind(sym)
         )
     } else {
         format!(
             "the other {} top-level `{}` symbols of its file",
-            first.siblings, sym.kind
+            first.siblings,
+            display_kind(sym)
         )
     };
     let mut out =

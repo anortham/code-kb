@@ -230,10 +230,12 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   first three open ends of the depth-2 `blast_radius` walk from the target, which reuses the same
   report, and leaves out a target with no site. `### Conventions` (`find_sibling_conventions` in
   `queries.rs`) lists the markers that the target's siblings share, from julie's `symbol_annotations`.
-  The siblings are the other symbols of the target's kind with its parent, or, with no parent, in
-  its file with no parent; the target's overloads count. A marker is an annotation key and its
+  The siblings are the other symbols of the kind the output shows for the target with its parent,
+  or, with no parent, in its file with no parent, so a `self.` attribute is no sibling of a
+  `@property` method; the target's overloads count. A marker is an annotation key and its
   carrier, so `derive(Debug)` and a bare `Debug` differ. It is a convention when at least two thirds
-  of the siblings carry it, with 2 or more siblings. Each row shows the marker as written, `N of M
+  of the siblings carry it, with 2 or more siblings. Each row shows the marker as written, or only
+  its name when the siblings write it with different arguments (`serde`), then `N of M
   siblings`, and whether the target has it. The ones the target lacks come first; the section shows
   8 and folds the rest, and prints nothing when no marker is shared. The section counts toward the
   context budget, and only the caller rows yield to the body. Every query reads the one index snapshot of the answer. CLI `context --json` adds

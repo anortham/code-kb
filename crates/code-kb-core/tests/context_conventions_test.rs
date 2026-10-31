@@ -228,3 +228,50 @@ fn context_json_leaves_out_empty_conventions_and_names_each_field() {
     let json = serde_json::to_value(&without).unwrap();
     assert!(json.get("conventions").is_none(), "{json}");
 }
+
+#[test]
+fn a_marker_written_with_different_arguments_shows_its_name_alone() {
+    let slice = context_of(
+        &[(
+            "src/lib.rs",
+            "#[serde(default)]\npub struct A;\n\n#[serde(rename = \"b\")]\npub struct B;\n\n#[serde(rename = \"c\")]\npub struct C;\n\npub struct Target;\n",
+        )],
+        "src/lib.rs",
+        "Target",
+    );
+
+    assert_eq!(shown(&slice.conventions), vec![row("serde", 3, 3, false)]);
+}
+
+#[test]
+fn python_instance_attributes_are_no_siblings_of_a_property() {
+    let slice = context_of(
+        &[(
+            "src/app/model.py",
+            "class Model:\n    def __init__(self):\n        self.a = 1\n        self.b = 2\n        self.c = 3\n\n    @property\n    def one(self):\n        return 1\n\n    @property\n    def two(self):\n        return 2\n\n    @property\n    def three(self):\n        return 3\n",
+        )],
+        "src/app/model.py",
+        "three",
+    );
+
+    assert_eq!(shown(&slice.conventions), vec![row("property", 2, 2, true)]);
+    let text = format_context_slices(std::slice::from_ref(&slice));
+    assert!(
+        text.contains("the other 2 `property` symbols of its owner"),
+        "{text}"
+    );
+}
+
+#[test]
+fn a_python_instance_attribute_has_only_attributes_as_siblings() {
+    let slice = context_of(
+        &[(
+            "src/app/model.py",
+            "class Model:\n    def __init__(self):\n        self.a = 1\n        self.b = 2\n\n    @property\n    def one(self):\n        return 1\n\n    @property\n    def two(self):\n        return 2\n",
+        )],
+        "src/app/model.py",
+        "a",
+    );
+
+    assert!(slice.conventions.is_empty(), "{:?}", slice.conventions);
+}
