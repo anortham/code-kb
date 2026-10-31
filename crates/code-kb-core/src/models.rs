@@ -377,13 +377,38 @@ pub struct TypeFact {
     pub generic_params: Option<String>,
 }
 
+/// Everything an edit of one symbol needs in one answer: its body and return type, the summary
+/// of its callers report, the tests to run, the signatures it calls, its types, and the open ends
+/// of a depth-2 walk from it.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ContextSlice {
     pub target_symbol: Symbol,
     pub target_body: String,
+    /// The return type that `type_facts` records for a callable target whose signature does not
+    /// spell it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub return_type: Option<String>,
     pub callee_signatures: Vec<String>,
     pub related_types: Vec<String>,
     pub related_tests: Vec<Symbol>,
+    /// `None` when the callers report failed.
+    #[serde(default)]
+    pub callers: Option<ContextCallers>,
+    /// The tests of the callers report, then the related tests it does not list, each with the
+    /// command that runs it when the project names the runner.
+    #[serde(default)]
+    pub tests: Vec<CallingTest>,
+    #[serde(default)]
+    pub open_ends: Vec<OpenEnd>,
+}
+
+/// The callers summary of a context: the site counts of the target's callers report, its first
+/// proven and likely sites in report order, and the sites its checks did not reach in time.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct ContextCallers {
+    pub counts: CallersReportSites,
+    pub sites: Vec<LabeledSite>,
+    pub unchecked: usize,
 }
 
 /// One `search` hit. `score` is the rerank score; `explain` is present only when the

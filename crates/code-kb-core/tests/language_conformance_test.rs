@@ -1,5 +1,6 @@
 use code_kb_core::db::open_read_only;
 use code_kb_core::edit_check::EditCheck;
+use code_kb_core::formatters::format_context_slices;
 use code_kb_core::ops::{
     blast_radius_op, edit_check_op, file_skeleton_op, get_context_slice_op, get_symbol_body_op,
     lookup_symbols_op,
@@ -357,6 +358,19 @@ fn real_extractor_fixtures_cover_navigation_slices_references_impact_and_refresh
         }
 
         if let Some(caller) = case["caller"].as_str() {
+            let target_text = format_context_slices(std::slice::from_ref(&context));
+            if !context.callers.as_ref().is_some_and(|callers| {
+                callers
+                    .sites
+                    .iter()
+                    .any(|site| site.site.from_symbol_name == caller && site.site.path == path)
+            }) || !target_text.contains("### Callers\nSites: ")
+            {
+                consumer_gaps.push(format!(
+                    "{language} context for {name} omitted its caller {caller}: {target_text}"
+                ));
+            }
+
             let context =
                 get_context_slice_op(&workspace, &db_path, &conn, caller, Some(path), false)
                     .unwrap();
@@ -450,6 +464,25 @@ fn real_extractor_fixtures_cover_navigation_slices_references_impact_and_refresh
         {
             consumer_gaps.push(format!(
                 "CSS reference report omitted {caller_name} -> {declaration_name}: {report:#?}"
+            ));
+        }
+        let declaration_context = get_context_slice_op(
+            &workspace,
+            &db_path,
+            &conn,
+            &declaration.name,
+            Some(path),
+            false,
+        )
+        .unwrap();
+        if !declaration_context.callers.as_ref().is_some_and(|callers| {
+            callers
+                .sites
+                .iter()
+                .any(|site| site.site.from_symbol_name == caller_name)
+        }) {
+            consumer_gaps.push(format!(
+                "CSS context for {declaration_name} omitted its caller {caller_name}: {declaration_context:#?}"
             ));
         }
         let context =

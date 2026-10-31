@@ -3,9 +3,9 @@ use std::path::Path;
 
 use crate::edit_check::{BaseSource, EditCheck, EditSite, ShapeChange};
 use crate::models::{
-    BlastRadiusResult, CallersReportSites, CallingTest, ConstructionSite, ContextSlice,
-    ImpactedSymbol, LabeledSite, OpenEnd, OverrideRow, ReferenceReport, ReferenceSite,
-    Registration, SearchExplain, SiteLabel, Symbol, SymbolSearchResult, VariantUse,
+    BlastRadiusResult, CallersReportSites, CallingTest, ConstructionSite, ContextCallers,
+    ContextSlice, ImpactedSymbol, LabeledSite, OpenEnd, OverrideRow, ReferenceReport,
+    ReferenceSite, Registration, SearchExplain, SiteLabel, Symbol, SymbolSearchResult, VariantUse,
 };
 
 /// Format progressive disclosure file skeleton with implementation bodies stripped.
@@ -1047,7 +1047,12 @@ fn overloads_header<'a>(symbols: impl ExactSizeIterator<Item = &'a Symbol>) -> S
     }
 }
 
-/// Format surgical context bundle for a symbol.
+/// The tests a context lists before it folds the rest into one line.
+pub const CONTEXT_TESTS_SHOWN: usize = 10;
+
+/// The context of one symbol, in the order an edit needs it: the target with its signature and
+/// return type, the body, the callers summary, the tests to run, the signatures it calls, its
+/// types, and the open ends of a depth-2 walk from it.
 pub fn format_context_slice(slice: &ContextSlice) -> String {
     let sym = &slice.target_symbol;
     let mut out = String::new();
@@ -1056,11 +1061,19 @@ pub fn format_context_slice(slice: &ContextSlice) -> String {
         sym.name, sym.path, sym.start_line, sym.end_line
     ));
 
+    let mut header = String::new();
     if let Some(ref sig) = sym.signature {
         let sig = signature_without_duplicate_body(sig, &slice.target_body);
         if !sig.trim().is_empty() {
-            out.push_str(&format!("Signature: `{sig}`\n\n"));
+            header.push_str(&format!("Signature: `{sig}`\n"));
         }
+    }
+    if let Some(return_type) = &slice.return_type {
+        header.push_str(&format!("Returns: `{return_type}`\n"));
+    }
+    if !header.is_empty() {
+        out.push_str(&header);
+        out.push('\n');
     }
 
     out.push_str(&format!("```{}\n", sym.language));
@@ -1069,6 +1082,9 @@ pub fn format_context_slice(slice: &ContextSlice) -> String {
         out.push('\n');
     }
     out.push_str("```\n\n");
+
+    out.push_str(&context_callers_section(slice));
+    out.push_str(&context_tests_section(slice));
 
     if !slice.callee_signatures.is_empty() {
         out.push_str("### Dependencies (Signatures):\n");
@@ -1089,24 +1105,146 @@ pub fn format_context_slice(slice: &ContextSlice) -> String {
         out.push('\n');
     }
 
-    if !slice.related_tests.is_empty() {
-        out.push_str("### Related Tests:\n");
-        for test in &slice.related_tests {
+    out.push_str(&context_open_ends(slice));
+    out
+}
+
+fn context_drill_down(id: &str) -> String {
+    format!(
+        "More: find_references(symbol_id=\"{id}\") lists every site; blast_radius(symbol_id=\"{id}\") lists the tests that reach it through callers.\n"
+    )
+}
+
+/// The `Sites:` line, the shown proven and likely sites grouped by label with a fold line for the
+/// rest, the count of sites the checks did not reach, and the drill-down line.
+fn context_callers_section(slice: &ContextSlice) -> String {
+    let id = &slice.target_symbol.symbol_id;
+    let mut out = String::from("### Callers\n");
+    let Some(ContextCallers {
+        counts,
+        sites,
+        unchecked,
+    }) = &slice.callers
+    else {
+        out.push_str(&format!(
+            "The callers report failed; find_references(symbol_id=\"{id}\") shows the error.\n\n"
+        ));
+        return out;
+    };
+    if counts.sites == 0 {
+        out.push_str(&format!(
+            "No indexed code calls or uses `{}`.\n\n",
+            slice.target_symbol.name
+        ));
+        return out;
+    }
+    out.push_str(&format!(
+        "Sites: {} · proven {} · likely {} · unresolved {} · excluded {}\n",
+        counts.sites, counts.proven, counts.likely, counts.unresolved, counts.excluded,
+    ));
+    for (label, title, total) in [
+        (SiteLabel::Proven, "Proven", counts.proven),
+        (SiteLabel::Likely, "Likely", counts.likely),
+    ] {
+        if total == 0 {
+            continue;
+        }
+        out.push_str(&format!("{title} ({total}):\n"));
+        let shown: Vec<&LabeledSite> = sites.iter().filter(|site| site.label == label).collect();
+        for labeled in &shown {
+            let site = &labeled.site;
+            let line = site.start_line.map(|l| format!(":{l}")).unwrap_or_default();
             out.push_str(&format!(
-                "- `{}` ({}:{})\n",
-                test.name, test.path, test.start_line
+                "- {} [{}{line}] (kind: {}; {}{})\n",
+                caller_text(site),
+                site.path,
+                site.kind,
+                labeled.basis,
+                arg_count_text(labeled)
             ));
         }
-        if slice.related_tests.len() >= 5 {
-            out.push_str("[Showing 5 tests (limit reached)]\n");
+        let hidden = total.saturating_sub(shown.len());
+        if hidden > 0 {
+            out.push_str(&format!(
+                "… {hidden} more {} {}; find_references lists them.\n",
+                label.as_str(),
+                plural(hidden, "site"),
+            ));
         }
-        out.push_str("These tests call, use, or name this symbol; blast_radius also lists tests that can reach it through callers.\n\n");
-    } else {
-        out.push_str(
-            "### Related Tests:\nNo related test was found in the index; blast_radius may find tests through callers.\n",
-        );
     }
+    if *unchecked > 0 {
+        out.push_str(&format!(
+            "find_references did not check {unchecked} {} within the time limit, so callers and tests that only {} would tie may be missing.\n",
+            plural(*unchecked, "site"),
+            if *unchecked == 1 { "it" } else { "they" },
+        ));
+    }
+    out.push_str(&context_drill_down(id));
+    out.push('\n');
+    out
+}
 
+fn context_tests_section(slice: &ContextSlice) -> String {
+    let mut out = String::from("### Tests to run\n");
+    if slice.tests.is_empty() {
+        out.push_str(&format!(
+            "No test calls or uses `{}` in the index; blast_radius(symbol_id=\"{}\") lists the tests that reach it through callers.\n\n",
+            slice.target_symbol.name, slice.target_symbol.symbol_id
+        ));
+        return out;
+    }
+    let shown = CONTEXT_TESTS_SHOWN.min(slice.tests.len());
+    for row in &slice.tests[..shown] {
+        let run = row
+            .command
+            .as_ref()
+            .map(|command| format!(" run: {command}"))
+            .unwrap_or_default();
+        let name_only = if row.name_only { " (name only)" } else { "" };
+        out.push_str(&format!(
+            "- `{}` [{}:{}]{name_only}{run}\n",
+            on_one_line(&row.name),
+            row.path,
+            row.line
+        ));
+    }
+    if shown < slice.tests.len() {
+        out.push_str(&section_fold(
+            slice.tests[shown..].iter().map(|row| row.path.as_str()),
+            "test",
+        ));
+    }
+    out.push('\n');
+    out
+}
+
+/// The first three open ends of the depth-2 walk, as `blast_radius` lists them.
+fn context_open_ends(slice: &ContextSlice) -> String {
+    const SHOWN: usize = 3;
+    if slice.open_ends.is_empty() {
+        return String::new();
+    }
+    let mut out = String::from(
+        "### Open Ends\nNo indexed code calls these symbols, so the walk stopped at them. The runtime, a framework, a library, or a call that the index cannot tie may call them, or nothing does. The tests above do not include the tests that reach the target through them:\n",
+    );
+    for end in slice.open_ends.iter().take(SHOWN) {
+        let name = match &end.owner {
+            Some(owner) => format!("{owner}.{}", end.name),
+            None => end.name.clone(),
+        };
+        out.push_str(&format!(
+            "  - {} `{name}` ({}:{})\n",
+            end.kind, end.path, end.line
+        ));
+    }
+    if slice.open_ends.len() > SHOWN {
+        out.push_str(&format!(
+            "  - {} more; blast_radius(symbol_id=\"{}\") lists them.\n",
+            slice.open_ends.len() - SHOWN,
+            slice.target_symbol.symbol_id
+        ));
+    }
+    out.push('\n');
     out
 }
 
@@ -4878,10 +5016,148 @@ mod tests {
         ContextSlice {
             target_symbol: sample_symbol("target_fn"),
             target_body: "    println!(\"hello\");\n".into(),
+            return_type: None,
             callee_signatures: Vec::new(),
             related_types: Vec::new(),
             related_tests: Vec::new(),
+            callers: Some(ContextCallers::default()),
+            tests: Vec::new(),
+            open_ends: Vec::new(),
         }
+    }
+
+    fn sample_site(caller: &str, label: SiteLabel, line: usize) -> LabeledSite {
+        LabeledSite {
+            site: ReferenceSite {
+                from_symbol_name: caller.into(),
+                from_symbol_id: format!("id_{caller}"),
+                to_symbol_name: "target_fn".into(),
+                kind: "call".into(),
+                path: "src/use.rs".into(),
+                start_line: Some(line),
+                start_column: Some(4),
+                occurrences: None,
+                target: None,
+                enclosing_symbol_name: None,
+            },
+            label,
+            basis: "import".into(),
+            end_line: None,
+            arg_count: None,
+        }
+    }
+
+    fn sample_test(index: usize) -> CallingTest {
+        CallingTest {
+            symbol_id: format!("id_test_{index}"),
+            name: format!("test_{index}"),
+            path: format!("tests/t{index}.rs"),
+            line: 3,
+            command: Some(format!("cargo test test_{index}")),
+            name_only: false,
+        }
+    }
+
+    #[test]
+    fn a_context_prints_its_sections_in_edit_order() {
+        let mut slice = sample_context_slice();
+        slice.return_type = Some("Builder".into());
+        slice.callee_signatures = vec!["fn helper() (src/lib.rs:20)".into()];
+        slice.related_types = vec!["pub struct Builder (src/lib.rs:30)".into()];
+        slice.callers = Some(ContextCallers {
+            counts: CallersReportSites {
+                sites: 4,
+                proven: 1,
+                likely: 1,
+                unresolved: 1,
+                excluded: 1,
+            },
+            sites: vec![
+                sample_site("run", SiteLabel::Proven, 7),
+                sample_site("main", SiteLabel::Likely, 9),
+            ],
+            unchecked: 0,
+        });
+        slice.tests = vec![sample_test(1)];
+        slice.open_ends = vec![OpenEnd {
+            name: "main".into(),
+            kind: "function".into(),
+            path: "src/use.rs".into(),
+            line: 8,
+            depth: 1,
+            owner: None,
+        }];
+
+        let text = format_context_slice(&slice);
+
+        let order = [
+            "### Target: `target_fn` (src/lib.rs:1-10)\n\nSignature: `pub fn target_fn()`\nReturns: `Builder`\n\n```rust\n",
+            "### Callers\nSites: 4 · proven 1 · likely 1 · unresolved 1 · excluded 1\nProven (1):\n- `run` [src/use.rs:7] (kind: call; import)\nLikely (1):\n- `main` [src/use.rs:9] (kind: call; import)\nMore: find_references(symbol_id=\"id_target_fn\") lists every site; blast_radius(symbol_id=\"id_target_fn\") lists the tests that reach it through callers.\n\n",
+            "### Tests to run\n- `test_1` [tests/t1.rs:3] run: cargo test test_1\n\n",
+            "### Dependencies (Signatures):\n",
+            "### Types:\n",
+            "### Open Ends\n",
+        ];
+        let positions: Vec<usize> = order
+            .iter()
+            .map(|part| {
+                text.find(part)
+                    .unwrap_or_else(|| panic!("missing {part:?} in:\n{text}"))
+            })
+            .collect();
+        assert!(positions.windows(2).all(|pair| pair[0] < pair[1]), "{text}");
+        assert!(
+            text.contains("  - function `main` (src/use.rs:8)\n"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn a_context_folds_the_callers_it_does_not_show_and_counts_unchecked_sites() {
+        let mut slice = sample_context_slice();
+        slice.callers = Some(ContextCallers {
+            counts: CallersReportSites {
+                sites: 5,
+                proven: 3,
+                likely: 2,
+                unresolved: 0,
+                excluded: 0,
+            },
+            sites: vec![sample_site("run", SiteLabel::Proven, 7)],
+            unchecked: 2,
+        });
+
+        let text = format_context_slice(&slice);
+
+        assert!(
+            text.contains("- `run` [src/use.rs:7] (kind: call; import)\n… 2 more proven sites; find_references lists them.\nLikely (2):\n… 2 more likely sites; find_references lists them.\nfind_references did not check 2 sites within the time limit, so callers and tests that only they would tie may be missing.\nMore: "),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn a_context_says_in_one_line_that_nothing_calls_the_target() {
+        let text = format_context_slice(&sample_context_slice());
+
+        assert!(
+            text.contains(
+                "### Callers\nNo indexed code calls or uses `target_fn`.\n\n### Tests to run"
+            ),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn a_context_says_when_its_callers_report_failed() {
+        let mut slice = sample_context_slice();
+        slice.callers = None;
+
+        let text = format_context_slice(&slice);
+
+        assert!(
+            text.contains("### Callers\nThe callers report failed; find_references(symbol_id=\"id_target_fn\") shows the error.\n\n"),
+            "{text}"
+        );
     }
 
     #[test]
@@ -4920,7 +5196,7 @@ mod tests {
         let text = format_context_slice(&sample_context_slice());
 
         assert!(
-            text.ends_with("### Related Tests:\nNo related test was found in the index; blast_radius may find tests through callers.\n"),
+            text.contains("### Tests to run\nNo test calls or uses `target_fn` in the index; blast_radius(symbol_id=\"id_target_fn\") lists the tests that reach it through callers.\n\n"),
             "{text}"
         );
     }
@@ -4933,16 +5209,12 @@ mod tests {
         assert!(text.contains("[Showing 10 dependencies (limit reached)]"));
 
         let mut slice_tests = sample_context_slice();
-        slice_tests.related_tests = (1..=5)
-            .map(|i| {
-                let mut sym = sample_symbol(&format!("test_fn_{i}"));
-                sym.path = format!("tests/test_{i}.rs");
-                sym.is_test = true;
-                sym
-            })
-            .collect();
+        slice_tests.tests = (1..=12).map(sample_test).collect();
         let text_tests = format_context_slice(&slice_tests);
-        assert!(text_tests.contains("[Showing 5 tests (limit reached)]"));
+        assert!(
+            text_tests.contains("- `test_10` [tests/t10.rs:3] run: cargo test test_10\n… 2 more tests in 2 files: tests/t11.rs (1), tests/t12.rs (1)\n"),
+            "{text_tests}"
+        );
     }
 
     #[test]

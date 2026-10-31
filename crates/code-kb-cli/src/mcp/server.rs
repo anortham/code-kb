@@ -457,7 +457,7 @@ impl McpServer {
             },
             Tool {
                 name: "get_symbol_context".to_string(),
-                description: format!("A symbol's body with the signatures of what it calls, its parameter types, and its tests, in one call. Overloads return one context each, at most {MAX_CONTEXT_OVERLOADS}. Use before you change a function."),
+                description: format!("A symbol's body and return type, its callers summary, the tests to run with their commands, the signatures of what it calls, its parameter types, and open ends, in one call. Overloads return one context each, at most {MAX_CONTEXT_OVERLOADS}. Use before you change a function."),
                 input_schema: json!({
                     "type": "object",
                     "properties": {

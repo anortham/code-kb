@@ -12,14 +12,14 @@ use crate::formatters::{
     format_unindexed_file, is_container_kind, render_outline_tree,
 };
 use crate::models::{
-    BlastRadiusResult, CallersReportSites, CallingTest, ContextSlice, ImpactedSymbol, LabeledSite,
-    OpenEnd, ReferenceReport, ReferenceTarget, SiteLabel, Symbol, SymbolSearchResult, TestTarget,
-    is_generated_lambda_name,
+    BlastRadiusResult, CallersReportSites, CallingTest, ContextCallers, ContextSlice,
+    ImpactedSymbol, LabeledSite, OpenEnd, ReferenceReport, ReferenceTarget, SiteLabel, Symbol,
+    SymbolSearchResult, TestTarget, is_generated_lambda_name,
 };
 use crate::queries::{self, QueryError};
 use crate::reference_report::{
     overload_group, reference_report_for_impact, reference_report_for_impact_within,
-    select_reference_target, unchecked_site_count,
+    select_reference_target, tests_at, unchecked_site_count,
 };
 use crate::slicer::{self, SliceError};
 use crate::sync::{self, SyncError};
@@ -426,20 +426,41 @@ pub fn fit_bodies_to_budget(
         .collect()
 }
 
+/// The characters a context body keeps before its callers detail yields: room for the cut note.
+const CONTEXT_BODY_FLOOR: usize = 160;
+
 /// `slices` fitted so that [`format_context_slices`] prints at most about
-/// [`OUTPUT_BUDGET_CHARS`]: the target bodies share what the other sections leave.
+/// [`OUTPUT_BUDGET_CHARS`]: the target bodies share what the other sections leave, and when that
+/// is less than [`CONTEXT_BODY_FLOOR`] each, the shown caller sites go, last first, while the
+/// `Sites:` line, the fold lines, and the drill-down line stay.
 pub fn fit_context_slices_to_budget(
     conn: &Connection,
-    slices: Vec<ContextSlice>,
+    mut slices: Vec<ContextSlice>,
 ) -> Result<Vec<ContextSlice>, OpError> {
-    let frames: Vec<ContextSlice> = slices
-        .iter()
-        .map(|slice| ContextSlice {
-            target_body: String::new(),
-            ..slice.clone()
-        })
-        .collect();
-    let share = body_share(format_context_slices(&frames).len(), slices.len());
+    let frame_len = |slices: &[ContextSlice]| {
+        let frames: Vec<ContextSlice> = slices
+            .iter()
+            .map(|slice| ContextSlice {
+                target_body: String::new(),
+                ..slice.clone()
+            })
+            .collect();
+        format_context_slices(&frames).len()
+    };
+    let mut frame = frame_len(&slices);
+    while frame + CONTEXT_BODY_FLOOR * slices.len() > OUTPUT_BUDGET_CHARS {
+        let Some(callers) = slices
+            .iter_mut()
+            .filter_map(|slice| slice.callers.as_mut())
+            .filter(|callers| !callers.sites.is_empty())
+            .max_by_key(|callers| callers.sites.len())
+        else {
+            break;
+        };
+        callers.sites.pop();
+        frame = frame_len(&slices);
+    }
+    let share = body_share(frame, slices.len());
     slices
         .into_iter()
         .map(|mut slice| {
@@ -620,16 +641,140 @@ pub fn get_context_slice_selected_op(
         10,
         include_external,
     )?;
+    let return_type = queries::find_unspelled_return_type(conn, &target_symbol)?;
     let related_types = queries::find_related_types(conn, &target_symbol, 10)?;
     let related_tests = queries::find_related_tests(conn, &target_symbol, 5)?;
+    let report = reference_report_for_impact(conn, &workspace.root, &target_symbol).ok();
+    let callers = report.as_ref().map(context_callers);
+    let tests = context_tests(conn, &workspace.root, report.as_ref(), &related_tests)?;
+    let open_ends = context_open_ends(workspace, conn, &target_symbol, report)?;
 
     Ok(ContextSlice {
         target_symbol,
         target_body,
+        return_type,
         callee_signatures,
         related_types,
         related_tests,
+        callers,
+        tests,
+        open_ends,
     })
+}
+
+/// The proven and likely sites of each label that a context shows before it folds the rest.
+const CONTEXT_SITES_PER_LABEL: usize = 8;
+
+/// The depth of the walk whose open ends a context lists, the default depth of `blast_radius`.
+const CONTEXT_WALK_DEPTH: usize = 2;
+
+fn context_callers(report: &ReferenceReport) -> ContextCallers {
+    let counts = &report.counts;
+    let mut sites = Vec::new();
+    for label in [SiteLabel::Proven, SiteLabel::Likely] {
+        sites.extend(
+            report
+                .sites
+                .iter()
+                .filter(|site| site.label == label)
+                .take(CONTEXT_SITES_PER_LABEL)
+                .cloned(),
+        );
+    }
+    ContextCallers {
+        counts: CallersReportSites {
+            sites: counts.sites,
+            proven: counts.proven,
+            likely: counts.likely,
+            unresolved: counts.unresolved,
+            excluded: counts.excluded,
+        },
+        sites,
+        unchecked: unchecked_site_count(report),
+    }
+}
+
+/// The tests of the callers report, then each related test that it does not list, with the
+/// command that runs it when the runner is known.
+fn context_tests(
+    conn: &Connection,
+    root: &Path,
+    report: Option<&ReferenceReport>,
+    related: &[Symbol],
+) -> Result<Vec<CallingTest>, OpError> {
+    let mut tests: Vec<CallingTest> = report
+        .map(|report| report.tests.clone())
+        .unwrap_or_default();
+    let mut seen: HashSet<(String, usize)> = tests
+        .iter()
+        .map(|test| (test.path.clone(), test.line))
+        .collect();
+    let place = |test: &Symbol| (test.path.replace('\\', "/"), test.start_line);
+    let places: Vec<(String, usize)> = related
+        .iter()
+        .map(place)
+        .filter(|place| !seen.contains(place))
+        .collect();
+    if places.is_empty() {
+        return Ok(tests);
+    }
+    let mut commanded: HashMap<(String, usize), CallingTest> = tests_at(conn, root, &places)?
+        .into_iter()
+        .map(|test| ((test.path.clone(), test.line), test))
+        .collect();
+    for symbol in related {
+        let (path, line) = place(symbol);
+        if !seen.insert((path.clone(), line)) {
+            continue;
+        }
+        tests.push(
+            commanded
+                .remove(&(path.clone(), line))
+                .unwrap_or_else(|| CallingTest {
+                    symbol_id: symbol.symbol_id.clone(),
+                    name: symbol.name.clone(),
+                    path,
+                    line,
+                    command: None,
+                    name_only: false,
+                }),
+        );
+    }
+    Ok(tests)
+}
+
+/// The open ends of the depth-2 `blast_radius` walk from `target`, with `report` standing in for
+/// the callers report that the walk would run again.
+fn context_open_ends(
+    workspace: &Workspace,
+    conn: &Connection,
+    target: &Symbol,
+    report: Option<ReferenceReport>,
+) -> Result<Vec<OpenEnd>, OpError> {
+    let walked = queries::compute_blast_radius_scoped_with_ids_and_low_signal(
+        conn,
+        &[],
+        &[&target.symbol_id],
+        None,
+        &[],
+        CONTEXT_WALK_DEPTH,
+        queries::MAX_RESULT_LIMIT,
+        false,
+    )?;
+    let Some(report) = report else {
+        return Ok(walked.open_ends);
+    };
+    let res = with_calling_tests(
+        workspace,
+        conn,
+        Some(target.clone()),
+        walked,
+        CONTEXT_WALK_DEPTH,
+        queries::MAX_RESULT_LIMIT,
+        false,
+        Some(report),
+    )?;
+    Ok(res.open_ends)
 }
 
 /// Generate file skeleton with fresh file synchronization.
@@ -984,6 +1129,7 @@ fn discover_blast_radius(
             depth,
             limit,
             include_low_signal,
+            None,
         );
     }
     let _snapshot = crate::db::read_snapshot(conn).map_err(QueryError::from)?;
@@ -1053,6 +1199,7 @@ fn discover_blast_radius(
         depth,
         limit,
         include_low_signal,
+        None,
     )
 }
 
@@ -1359,6 +1506,7 @@ fn with_report_tests(
 /// otherwise. The walk follows resolved and pending rows by name, and the report also proves a
 /// call through a receiver's type, so the walk goes on from the callers the report found, one
 /// level deeper.
+#[allow(clippy::too_many_arguments)]
 fn with_calling_tests(
     workspace: &Workspace,
     conn: &Connection,
@@ -1367,6 +1515,7 @@ fn with_calling_tests(
     depth: usize,
     limit: usize,
     include_low_signal: bool,
+    known_report: Option<ReferenceReport>,
 ) -> Result<BlastRadiusResult, OpError> {
     let Some(target) = target else {
         return Ok(res);
@@ -1385,9 +1534,13 @@ fn with_calling_tests(
     if !needs_tests && !needs_callers && !reads_unlisted {
         return Ok(res);
     }
-    // The walk's answer stands alone; an index too old for the report keeps it.
-    let Ok(report) = reference_report_for_impact(conn, &workspace.root, &target) else {
-        return Ok(res);
+    let report = match known_report {
+        Some(report) => report,
+        None => match reference_report_for_impact(conn, &workspace.root, &target) {
+            Ok(report) => report,
+            // The walk's answer stands alone; an index too old for the report keeps it.
+            Err(_) => return Ok(res),
+        },
     };
     let mut gaps = ReportGaps::default();
     gaps.record(&report);
@@ -1791,9 +1944,10 @@ mod tests {
     use rusqlite::Connection;
 
     use super::{
-        FileReportLimits, OUTLINE_SHORTENED_NOTE, OUTPUT_BUDGET_CHARS, codebase_outline_op,
-        file_blast_radius_within, fit_bodies_to_budget, fit_body_to_budget, format_symbol_bodies,
-        one_level_deeper,
+        CallersReportSites, ContextCallers, ContextSlice, FileReportLimits, OUTLINE_SHORTENED_NOTE,
+        OUTPUT_BUDGET_CHARS, codebase_outline_op, file_blast_radius_within, fit_bodies_to_budget,
+        fit_body_to_budget, fit_context_slices_to_budget, format_context_slices,
+        format_symbol_bodies, one_level_deeper,
     };
     use crate::workspace::Workspace;
     use crate::{
@@ -2280,6 +2434,75 @@ mod tests {
             fitted[1].1.ends_with("-3001 for the rest.\n"),
             "{}",
             fitted[1].1
+        );
+    }
+
+    #[test]
+    fn a_context_over_the_budget_cuts_its_body_then_its_caller_rows_and_keeps_the_summary() {
+        let conn = Connection::open_in_memory().unwrap();
+        let (symbol, body) = long_function("a", 1);
+        let site = |line: usize| crate::models::LabeledSite {
+            site: crate::models::ReferenceSite {
+                from_symbol_name: format!("caller_{line}"),
+                from_symbol_id: format!("id_{line}"),
+                to_symbol_name: "parse".into(),
+                kind: "call".into(),
+                path: format!("src/{}.rs", "deep/".repeat(1000)),
+                start_line: Some(line),
+                start_column: Some(0),
+                occurrences: None,
+                target: None,
+                enclosing_symbol_name: None,
+            },
+            label: crate::models::SiteLabel::Proven,
+            basis: "import".into(),
+            end_line: None,
+            arg_count: None,
+        };
+        let slice = ContextSlice {
+            target_symbol: symbol,
+            target_body: body,
+            return_type: None,
+            callee_signatures: Vec::new(),
+            related_types: Vec::new(),
+            related_tests: Vec::new(),
+            callers: Some(ContextCallers {
+                counts: CallersReportSites {
+                    sites: 30,
+                    proven: 30,
+                    ..CallersReportSites::default()
+                },
+                sites: (1..=8).map(site).collect(),
+                unchecked: 0,
+            }),
+            tests: Vec::new(),
+            open_ends: Vec::new(),
+        };
+
+        let fitted = fit_context_slices_to_budget(&conn, vec![slice]).unwrap();
+        let answer = format_context_slices(&fitted);
+
+        assert!(answer.len() <= OUTPUT_BUDGET_CHARS, "{}", answer.len());
+        let shown = fitted[0].callers.as_ref().unwrap().sites.len();
+        assert!((1..8).contains(&shown), "{shown}");
+        assert!(
+            answer.contains("Sites: 30 · proven 30 · likely 0"),
+            "{answer}"
+        );
+        assert!(
+            answer.contains(&format!(
+                "… {} more proven sites; find_references lists them.\n",
+                30 - shown
+            )),
+            "{answer}"
+        );
+        assert!(
+            answer.contains("More: find_references(symbol_id="),
+            "{answer}"
+        );
+        assert!(
+            answer.contains("// Cut to about 8K tokens: Read lines "),
+            "{answer}"
         );
     }
 

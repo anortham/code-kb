@@ -210,8 +210,24 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   prints `Nothing to outline.` with its top-level rows by kind, at most three names with lines
   each, and a pointer to `get_symbol_body`. A file with no symbols, a file of a language with no
   extractor, and a path the scan skips each get one line that says so.
-- Include only immediate callee signatures, related types, and test
-  locations in `get_symbol_context`.
+- `get_symbol_context` answers an edit of one symbol in one call (`get_context_slice_selected_op`
+  in `ops.rs`, `format_context_slice` in `formatters.rs`), in this order: the target, its
+  signature and `Returns: <type>` when julie's `type_facts` row of a function, method, or
+  constructor names a type that the signature does not spell outside its first parameter list
+  (`fn new() -> Self`), the body, `### Callers`, `### Tests to run`, `### Dependencies`
+  (immediate callee signatures, each with `; Returns: <type>` by the same rule), `### Types`,
+  and `### Open Ends`. `### Callers` comes from `reference_report_for_impact` (the labels and the
+  3 s limit of `find_references`, without the text scan): the `Sites:` line, then the first 8
+  `proven` and 8 `likely` sites grouped by label as `find_references` prints them, a fold line
+  for the rest of each label, the count of sites not checked within the time limit, and a line
+  that names `find_references(symbol_id="…")` and `blast_radius(symbol_id="…")`. A target with no
+  site gets the one line ``No indexed code calls or uses `name`.``, and a failed report a line
+  that names `find_references`. `### Tests to run` lists the report's `Tests that call or use it`
+  with their run commands, then the related tests (below) that it does not list, with a command
+  where `test_commands.rs` names one; it shows 10 and folds the rest. `### Open Ends` lists the
+  first three open ends of the depth-2 `blast_radius` walk from the target, which reuses the same
+  report. Every query reads the one index snapshot of the answer. CLI `context --json` adds
+  `return_type`, `callers` (`counts`, `sites`, `unchecked`), `tests`, and `open_ends`.
 - `OUTPUT_BUDGET_CHARS` in `formatters.rs` (32,000 characters, about 8K tokens, below the 10K tokens
   at which Claude Code warns about a large MCP answer) bounds a file skeleton and the source in a
   `get_symbol_body` or `get_symbol_context` text answer. A skeleton over it prints its rows in
@@ -220,7 +236,9 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   and a line under the file header says so. A fold or a collapsed row names the lines of the rows
   below it too, which can lie outside its own span (a Rust method in another `impl` block). The
   bodies of one answer share what its location comments, overload header, and context sections
-  leave (`fit_bodies_to_budget`, `fit_context_slices_to_budget` in `ops.rs`). A body over its share
+  leave (`fit_bodies_to_budget`, `fit_context_slices_to_budget` in `ops.rs`). A context body yields
+  first; when the other sections leave a body less than 160 characters, the shown caller sites go,
+  last first, and the `Sites:` line, the fold lines, and the drill-down line stay. A body over its share
   shows the skeleton of a container's members under a line that names the lines to read, or the
   lines of other source that fit and `// Cut to about 8K tokens: Read lines A-B for the rest.` CLI
   `--json` keeps the whole body. A folder outline over it names 3, 2, 1, then no definitions per file (`[N
@@ -640,7 +658,7 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   `--include-low-signal`; its graph discovery ceiling remains 200. Incomplete test coverage
   names a broader command only when repository configuration identifies a runner, otherwise
   it names the broader scope to verify. Candidate-only references still add no impact edge.
-- Related tests (`get_symbol_context`): callers from relationships, pending calls, and references
+- Related tests (`get_symbol_context`, after the report's tests in `### Tests to run`): callers from relationships, pending calls, and references
   that are tests, test classes, or functions and methods in test files that are members of a test
   class or have a name that reads like a test (`names_a_test`), so a module-level app factory such
   as `create_app` is not a related test. A helper function defined inside such a test counts as
