@@ -6,10 +6,11 @@ use code_kb_core::formatters::ZERO_LIMIT_NOTICE;
 use code_kb_core::workspace::NO_PROJECT_MARKER_REASON;
 use code_kb_core::{
     SymbolSelector, Workspace, WorkspaceError, codebase_outline_op, edit_check_op,
-    ensure_fresh_file, ensure_fts_index_path, file_skeleton_op, find_references_for_symbol_ext,
-    fit_bodies_to_budget, fit_context_slices_to_budget, format_context_slices, format_edit_check,
-    format_fact_categories, format_search_results, format_structural_facts, format_symbol_bodies,
-    fts_search_symbols_explained, get_context_slices_selected_op, get_symbol_bodies_selected_op,
+    ensure_fresh_file, ensure_fts_index_path, file_skeleton_op_with,
+    find_references_for_symbol_ext, fit_bodies_to_budget, fit_context_slices_to_budget,
+    format_context_slices, format_edit_check, format_fact_categories, format_search_results,
+    format_structural_facts, format_symbol_bodies, fts_search_symbols_explained,
+    get_context_slices_selected_op, get_symbol_bodies_selected_op,
     list_structural_fact_categories_scoped, load_file_symbols, lookup_symbols_with_body_op,
     open_read_only, qualify_members, queries, reference_report, render_symbol_lookup,
     resolve_symbol_op, scan_workspace, select_reference_target,
@@ -127,6 +128,9 @@ pub struct OutlineArgs {
 pub struct SkeletonArgs {
     /// Relative or absolute path to a source file, or a folder for its outline.
     pub file: String,
+    /// Hide private, protected, and fileprivate rows and count them.
+    #[arg(long)]
+    pub public_only: bool,
 }
 
 #[derive(Debug, Args)]
@@ -595,11 +599,20 @@ fn main() -> anyhow::Result<ExitCode> {
                     println!("{}", serde_json::to_string_pretty(&files)?);
                 } else {
                     ensure_fresh_file(&workspace, &db_path, &conn, &rel_path)?;
-                    let symbols = load_file_symbols(&conn, &rel_path)?;
+                    let mut symbols = load_file_symbols(&conn, &rel_path)?;
+                    if args.public_only {
+                        symbols = code_kb_core::formatters::public_surface(&symbols).0;
+                    }
                     println!("{}", serde_json::to_string_pretty(&symbols)?);
                 }
             } else {
-                let skeleton = file_skeleton_op(&workspace, &db_path, &conn, &args.file)?;
+                let skeleton = file_skeleton_op_with(
+                    &workspace,
+                    &db_path,
+                    &conn,
+                    &args.file,
+                    args.public_only,
+                )?;
                 print!("{skeleton}");
             }
         }

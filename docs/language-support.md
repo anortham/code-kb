@@ -239,6 +239,76 @@ or a Rust `#[path]` attribute; such a file keeps its stem or folder. A test path
 through a `fixtures`, `vendor`, `vendored`, or `third_party` folder, and a row
 of a Rust test module earn no module credit.
 
+## Public surface (`public_only`)
+
+`file_skeleton` with `public_only` (CLI `skeleton --public-only`) reads julie's
+`symbols.visibility`. It hides a row whose visibility is `private`, `protected`,
+or `fileprivate`, and every row below it, and says how many rows of the full
+skeleton it hid (`// Public surface: N private rows hidden.`). It keeps `public`,
+`open`, `internal`, and a row with no visibility fact. A folder outline names
+only the top-level definitions it keeps and counts the others per file
+(`[function open, 2 private]`).
+
+`internal` stays because code outside the file can name it: Rust `pub(crate)`,
+`pub(super)`, and `pub(in path)`, a Java member with no modifier (package
+private), and C#, VB.NET (`Friend`), Kotlin, F#, and Swift `internal`. The rule
+for each language is julie's:
+
+| Languages | Hidden rows |
+| --- | --- |
+| Rust | No `pub` modifier, or `pub(self)`. Trait members take the trait's visibility, trait-impl members are public, enum variants take the enum's. |
+| Python | A name that starts with `_` and is not a dunder name. |
+| JavaScript, TypeScript, TSX, JSX, Vue | A top-level name that an ES module does not export; a JavaScript class member named `#x` or `_x`; a TypeScript member with a `private` or `protected` modifier. A member with no modifier is public. |
+| Go | A name that starts with a lower-case letter. |
+| Java, C#, VB.NET, Kotlin, Scala, Swift, F#, PHP, C++, Razor | A `private`, `protected`, or Swift `fileprivate` modifier, or the language's default for a member with no modifier (C# and Razor members are private). |
+| Dart, GDScript, Lua, R | Dart, GDScript, and Lua names that start with `_`, a Lua `local`, and an R name that starts with `.` or a roxygen `@keywords internal`. |
+| C | A `static` declaration. |
+| Ruby, Elixir, Erlang, Zig, Bash, PowerShell | Ruby `private` and `protected` sections, Elixir `defp`, an Erlang function no `-export` names, a Zig declaration without `pub` or `export`, a nested Bash function or a Bash variable without `export`, and a PowerShell `private:` function, a variable without `global:` scope, a `hidden` class member, or a function that a module manifest does not export. |
+| JSON, YAML, TOML, Markdown, and other data and document languages | None: julie records no visibility, so every row stays. |
+
+`data_fills_test.rs` checks Rust, Python, TypeScript, and a Rust folder outline
+with real extraction.
+
+## Routes and configuration keys in `lookup_symbol`
+
+A `lookup_symbol` query that holds `/`, `.`, `{`, or `:` (and is not a member
+listing that ends in `.` or `::`) also reads `structural_facts` of the `route`
+and `config` families of `CATEGORY_ALIASES`:
+
+- A route matches when its `effective_route_template`, `route_template`, or
+  `normalized_route_template` has the query's shape (`{id}`, `<int:id>`, `:id`,
+  and `*` are one parameter each, case and a trailing `/` do not count) or ends
+  with it. A verb before the path (`GET /users/{id}`) must equal the route's verb
+  when the route has one. A row prints as
+  ``route `GET /users/<int:user_id>` (app.py:6) -> show_user``: the template as
+  the source spells it, and the handler from `view_target`, `handler`,
+  `handler_name`, or `controller_action`, or the decorated function of a
+  decorator, annotation, or attribute route.
+- A configuration key matches when its dotted path is the query or ends with
+  `.` and the query, case-insensitively. YAML and TOML give `key_path`; JSON gives
+  the object `path` and the `key`. A row prints as
+  ``config `mcp_servers.code-kb.command` (config.toml:2)``, and the name row of
+  the same key at the same line is left out.
+
+Exact matches come first. The rows follow the `path` filter, hide test paths
+unless `is_test` is true, and follow a `kind` of `route` or `config`; any other
+`kind` hides them. CLI `lookup --json` adds them as `facts`, and `facts_found` when
+`limit` cut them. A qualified query that names several definitions and a route or
+key lists those definitions as name rows instead of the `Ambiguous symbol` error.
+A plain word adds no
+row, so the ranked search does not change.
+
+## Languages with no reference sites
+
+julie's `language_capability_gaps` table records an `exception` for
+`identifiers` or `pending_relationships` in JSON, TOML, Markdown, `go.mod`,
+`go.sum`, `qmldir`, and regex. When the target of `find_references` (callers) or
+`blast_radius` is in such a language, or a file, folder, or diff target holds
+files of one, the answer prints one line under its header:
+`Coverage: the index records no reference sites in json files (julie: identifiers exception), so this answer lists no site inside them.`
+JSON adds `coverage_gap` with the languages and capabilities. An index with no
+capability table prints no line.
+
 ## SQL argument contracts
 
 SQL navigation and caller fixtures pass, but strict argument checks remain an

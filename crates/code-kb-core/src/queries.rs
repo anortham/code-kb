@@ -283,7 +283,45 @@ pub fn load_scoped_outline_symbols(
     depth: usize,
     limit_per_file: usize,
 ) -> Result<HashMap<String, Vec<Symbol>>, QueryError> {
+    load_outline_symbols(conn, path_filter, depth, limit_per_file, false)
+}
+
+/// The visibility values that a public outline or skeleton hides: a row that code outside its
+/// file, type, or package cannot name. `internal` (Rust `pub(crate)`, Java package-private,
+/// C#, Kotlin, and Swift `internal`) and a row with no visibility fact stay.
+pub const HIDDEN_VISIBILITIES: &[&str] = &["private", "protected", "fileprivate"];
+
+/// True when `visibility` hides a row from a public outline or skeleton.
+pub fn is_hidden_visibility(visibility: Option<&str>) -> bool {
+    visibility.is_some_and(|value| HIDDEN_VISIBILITIES.contains(&value))
+}
+
+/// SQL mirror of [`is_hidden_visibility`].
+fn hidden_visibility_predicate(alias: &str) -> String {
+    let values: Vec<String> = HIDDEN_VISIBILITIES
+        .iter()
+        .map(|value| format!("'{value}'"))
+        .collect();
+    format!(
+        "COALESCE({alias}.visibility, '') IN ({})",
+        values.join(", ")
+    )
+}
+
+/// [`load_scoped_outline_symbols`], keeping only rows a public outline shows when `public_only`.
+pub fn load_outline_symbols(
+    conn: &Connection,
+    path_filter: Option<&str>,
+    depth: usize,
+    limit_per_file: usize,
+    public_only: bool,
+) -> Result<HashMap<String, Vec<Symbol>>, QueryError> {
     let scope = OutlineScope::new(path_filter, depth);
+    let public = if public_only {
+        format!("NOT {}", hidden_visibility_predicate("s"))
+    } else {
+        "1 = 1".to_string()
+    };
     let sql = format!(
         "WITH {files},
         ranked AS (
@@ -300,6 +338,7 @@ pub fn load_scoped_outline_symbols(
             WHERE s.kind IN {OUTLINE_KINDS}
               AND {top}
               AND NOT {lambda}
+              AND {public}
               AND NOT EXISTS (SELECT 1 FROM symbols overload
                               WHERE +overload.path = s.path AND overload.name = s.name
                                 AND overload.kind = s.kind
@@ -346,6 +385,8 @@ pub struct OutlineCounts {
     pub tests: usize,
     /// Setup, teardown, and fixture members.
     pub fixtures: usize,
+    /// Distinct top-level definitions that a public outline hides; 0 in a full outline.
+    pub private: usize,
 }
 
 /// For each file the outline lists by name: its top-level definitions that are not tests, its
@@ -355,7 +396,23 @@ pub fn load_outline_counts(
     path_filter: Option<&str>,
     depth: usize,
 ) -> Result<HashMap<String, OutlineCounts>, QueryError> {
+    load_outline_counts_with(conn, path_filter, depth, false)
+}
+
+/// [`load_outline_counts`]; with `public_only`, `definitions` leaves out the definitions that a
+/// public outline hides and `private` counts them.
+pub fn load_outline_counts_with(
+    conn: &Connection,
+    path_filter: Option<&str>,
+    depth: usize,
+    public_only: bool,
+) -> Result<HashMap<String, OutlineCounts>, QueryError> {
     let scope = OutlineScope::new(path_filter, depth);
+    let hidden = if public_only {
+        hidden_visibility_predicate("s")
+    } else {
+        "0".to_string()
+    };
     let lifecycle = if has_column(conn, "symbols", "test_lifecycle") {
         "COALESCE(s.test_lifecycle, 0) != 0"
     } else {
@@ -365,10 +422,13 @@ pub fn load_outline_counts(
         "WITH {files}
          SELECT replace(s.path, '\\', '/'),
                 COUNT(DISTINCT CASE WHEN {top} AND s.is_test = 0 AND s.test_container = 0
-                    AND s.kind IN {OUTLINE_KINDS} AND NOT {lambda}
+                    AND s.kind IN {OUTLINE_KINDS} AND NOT {lambda} AND NOT {hidden}
                     THEN s.kind || ' ' || s.name END),
                 SUM(s.is_test = 1 AND NOT {lifecycle}),
-                SUM(s.is_test = 1 AND {lifecycle})
+                SUM(s.is_test = 1 AND {lifecycle}),
+                COUNT(DISTINCT CASE WHEN {top} AND s.is_test = 0 AND s.test_container = 0
+                    AND s.kind IN {OUTLINE_KINDS} AND NOT {lambda} AND {hidden}
+                    THEN s.kind || ' ' || s.name END)
          FROM symbols s
          JOIN outline_files bf ON s.path = bf.path
          GROUP BY replace(s.path, '\\', '/')",
@@ -383,6 +443,7 @@ pub fn load_outline_counts(
                 definitions: row.get::<_, i64>(1)? as usize,
                 tests: row.get::<_, i64>(2)? as usize,
                 fixtures: row.get::<_, i64>(3)? as usize,
+                private: row.get::<_, i64>(4)? as usize,
             },
         ))
     })?;
@@ -3503,6 +3564,15 @@ fn get_symbol_by_name_internal(
         0 | 1 => Ok(candidates.pop()),
         _ => Err(ambiguous_symbol(name, &candidates)),
     }
+}
+
+/// Every definition that a qualified `name` selects, the candidates of its `AmbiguousSymbol` error.
+pub fn qualified_name_candidates(
+    conn: &Connection,
+    name: &str,
+    path_filter: Option<&str>,
+) -> Result<Vec<Symbol>, QueryError> {
+    name_candidates(conn, name, path_filter, false)
 }
 
 fn ambiguous_symbol(name: &str, candidates: &[Symbol]) -> QueryError {
@@ -6927,6 +6997,337 @@ fn route_shape(template: &str) -> String {
     shape
 }
 
+/// The routes and configuration keys that a lookup query names, and how many there are before
+/// `limit`. Only a query with `/`, `.`, `{`, or `:` reaches them, never a member listing: a
+/// route matches when its template has the query's shape (`{id}`, `<int:id>`, and `:id` are one
+/// parameter) or ends with it, and a verb in the query must be the route's; a key matches when
+/// its dotted path is the query or ends with `.` and the query. Exact matches come first.
+pub fn lookup_facts(
+    conn: &Connection,
+    query: &str,
+    kind: Option<&str>,
+    path_filter: Option<&str>,
+    include_tests: bool,
+    limit: usize,
+) -> Result<(Vec<crate::models::LookupFact>, usize), QueryError> {
+    let query = query.trim();
+    let member_listing = query.ends_with('.') || query.ends_with("::");
+    if query.is_empty() || member_listing || !query.contains(['/', '.', '{', ':']) {
+        return Ok((Vec::new(), 0));
+    }
+    let wanted = kind.map(|k| k.trim().to_ascii_lowercase());
+    let wants = |name: &str| {
+        wanted
+            .as_deref()
+            .is_none_or(|k| k == name || k.strip_suffix('s') == Some(name))
+    };
+    let mut matches: Vec<(bool, crate::models::LookupFact)> = Vec::new();
+    if wants("route")
+        && let Some(route) = RouteQuery::parse(query)
+    {
+        matches.extend(route_facts(conn, &route, path_filter)?);
+    }
+    if wants("config") && !query.contains(['/', ' ', '\t']) && query.contains('.') {
+        matches.extend(config_facts(conn, query, path_filter)?);
+    }
+    matches.retain(|(_, fact)| include_tests || !is_test_path(&fact.path));
+    let mut seen = HashSet::new();
+    matches.retain(|(_, fact)| seen.insert((fact.path.clone(), fact.line, fact.key.clone())));
+    matches.sort_by(|a, b| {
+        b.0.cmp(&a.0)
+            .then_with(|| a.1.path.cmp(&b.1.path))
+            .then_with(|| a.1.line.cmp(&b.1.line))
+    });
+    let found = matches.len();
+    let facts = matches
+        .into_iter()
+        .take(limit)
+        .map(|(_, fact)| fact)
+        .collect();
+    Ok((facts, found))
+}
+
+/// A route query: an optional verb and the shape of its path, lower case, with no trailing `/`.
+struct RouteQuery {
+    verb: Option<String>,
+    shape: String,
+    fragment: Option<String>,
+}
+
+impl RouteQuery {
+    fn parse(query: &str) -> Option<Self> {
+        let (verb, path) = match query.split_once(char::is_whitespace) {
+            Some((verb, rest))
+                if verb.chars().all(|c| c.is_ascii_alphabetic()) && rest.trim().contains('/') =>
+            {
+                (Some(verb.to_ascii_uppercase()), rest.trim())
+            }
+            _ => (None, query),
+        };
+        if !path.contains('/') || path.contains(char::is_whitespace) {
+            return None;
+        }
+        let path = if path.starts_with('/') {
+            path.to_string()
+        } else {
+            format!("/{path}")
+        };
+        let fragment = path
+            .split('/')
+            .filter(|segment| !segment.contains(['{', '<', ':', '*']))
+            .max_by_key(|segment| segment.len())
+            .filter(|segment| !segment.is_empty())
+            .map(str::to_string);
+        Some(Self {
+            verb,
+            shape: route_query_shape(&path),
+            fragment,
+        })
+    }
+}
+
+fn route_query_shape(template: &str) -> String {
+    let shape = route_shape(&template.to_lowercase());
+    match shape.trim_end_matches('/') {
+        "" => "/".to_string(),
+        trimmed => trimmed.to_string(),
+    }
+}
+
+/// One fact row of a lookup branch: path, line, pattern id, metadata, and containing symbol.
+type FactRow = (String, usize, String, serde_json::Value, Option<String>);
+
+/// The SQL terms shared by the lookup fact branches: the pattern families, a `LIKE` on the
+/// metadata for the query's longest literal piece, and the path filter.
+fn lookup_fact_rows(
+    conn: &Connection,
+    families: &[&str],
+    fragment: Option<&str>,
+    path_filter: Option<&str>,
+) -> Result<Vec<FactRow>, QueryError> {
+    let norm_path = path_filter
+        .map(|p| {
+            p.replace('\\', "/")
+                .trim_start_matches("./")
+                .trim_matches('/')
+                .to_string()
+        })
+        .filter(|p| !p.is_empty());
+    let dir_prefix = norm_path
+        .as_deref()
+        .map(|p| format!("{}/%", escape_like(p)));
+    let fragment = fragment.map(|f| format!("%{}%", escape_like(f)));
+    let sql = format!(
+        "SELECT sf.path, sf.start_line, sf.pattern_id, sf.metadata_json, s.name
+         FROM structural_facts sf
+         LEFT JOIN symbols s ON sf.containing_symbol_id = s.symbol_id
+         WHERE {families}
+           AND sf.metadata_json IS NOT NULL
+           AND (:fragment IS NULL OR sf.metadata_json LIKE :fragment ESCAPE '\\')
+           AND (:path IS NULL OR replace(sf.path, '\\', '/') = :path COLLATE NOCASE
+                OR replace(sf.path, '\\', '/') LIKE :dir_prefix ESCAPE '\\')",
+        families = family_clause("sf.pattern_id", families),
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(
+        rusqlite::named_params! {
+            ":fragment": fragment.as_deref(),
+            ":path": norm_path.as_deref(),
+            ":dir_prefix": dir_prefix.as_deref(),
+        },
+        |row| {
+            Ok((
+                row.get::<_, String>(0)?.replace('\\', "/"),
+                row.get::<_, i64>(1)? as usize,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, Option<String>>(4)?,
+            ))
+        },
+    )?;
+    let mut out = Vec::new();
+    for row in rows {
+        let (path, line, pattern_id, metadata, container) = row?;
+        if let Ok(metadata) = serde_json::from_str(&metadata) {
+            out.push((path, line, pattern_id, metadata, container));
+        }
+    }
+    Ok(out)
+}
+
+fn route_facts(
+    conn: &Connection,
+    route: &RouteQuery,
+    path_filter: Option<&str>,
+) -> Result<Vec<(bool, crate::models::LookupFact)>, QueryError> {
+    let rows = lookup_fact_rows(conn, ROUTE_FAMILIES, route.fragment.as_deref(), path_filter)?;
+    let mut out = Vec::new();
+    for (path, line, pattern_id, metadata, container) in rows {
+        let text = |key: &str| metadata.get(key).and_then(|value| value.as_str());
+        let shapes: Vec<String> = [
+            "effective_route_template",
+            "route_template",
+            "normalized_route_template",
+        ]
+        .iter()
+        .filter_map(|key| text(key))
+        .map(route_query_shape)
+        .collect();
+        let exact = shapes.contains(&route.shape);
+        let suffix = route.shape.len() > 1 && shapes.iter().any(|s| s.ends_with(&route.shape));
+        if !exact && !suffix {
+            continue;
+        }
+        if let (Some(wanted), Some(verb)) = (&route.verb, text("verb"))
+            && !verb.eq_ignore_ascii_case(wanted)
+        {
+            continue;
+        }
+        let Some(key) = route_display(&metadata) else {
+            continue;
+        };
+        let named = [
+            "view_target",
+            "handler",
+            "handler_name",
+            "controller_action",
+        ]
+        .iter()
+        .find_map(|key| text(key))
+        .map(str::to_string);
+        let on_handler = matches!(
+            text("api_style"),
+            Some("decorator_routing" | "annotation_routing" | "attribute_routing")
+        );
+        out.push((
+            exact,
+            crate::models::LookupFact {
+                kind: "route".to_string(),
+                key,
+                path,
+                line,
+                handler: named.or(container.filter(|_| on_handler)),
+                pattern_id,
+            },
+        ));
+    }
+    Ok(out)
+}
+
+fn config_facts(
+    conn: &Connection,
+    query: &str,
+    path_filter: Option<&str>,
+) -> Result<Vec<(bool, crate::models::LookupFact)>, QueryError> {
+    let wanted = query.trim_start_matches("$.").to_lowercase();
+    let last = wanted.rsplit('.').next().filter(|s| !s.is_empty());
+    let suffix = format!(".{wanted}");
+    let rows = lookup_fact_rows(conn, CONFIG_FAMILIES, last, path_filter)?;
+    let mut out = Vec::new();
+    for (path, line, pattern_id, metadata, _) in rows {
+        let Some(key) = config_key_path(&metadata) else {
+            continue;
+        };
+        let lower = key.to_lowercase();
+        let exact = lower == wanted;
+        if !exact && !lower.ends_with(&suffix) {
+            continue;
+        }
+        out.push((
+            exact,
+            crate::models::LookupFact {
+                kind: "config".to_string(),
+                key,
+                path,
+                line,
+                handler: None,
+                pattern_id,
+            },
+        ));
+    }
+    Ok(out)
+}
+
+/// The dotted path of a configuration key fact: YAML and TOML write `key_path`, JSON writes the
+/// `path` of the object and the `key`. A fact that names no key (an object, a mapping, a
+/// sequence) has none.
+fn config_key_path(metadata: &serde_json::Value) -> Option<String> {
+    let text = |key: &str| metadata.get(key).and_then(|value| value.as_str());
+    if text("key").is_none() && text("table_name").is_none() {
+        return None;
+    }
+    let strip_root = |path: &str| {
+        path.strip_prefix("$.")
+            .or_else(|| path.strip_prefix('$'))
+            .unwrap_or(path)
+            .to_string()
+    };
+    if let Some(key_path) = text("key_path") {
+        return Some(strip_root(key_path)).filter(|path| !path.is_empty());
+    }
+    let key = text("key")?;
+    match text("path").map(strip_root) {
+        Some(parent) if !parent.is_empty() => Some(format!("{parent}.{key}")),
+        _ => Some(key.to_string()),
+    }
+}
+
+/// The languages among `languages` for which julie's capability table records an `exception`
+/// for `identifiers` or `pending_relationships`: the index holds no reference sites inside their
+/// files. `None` when there is none, or when the index has no capability table.
+pub fn coverage_gap(conn: &Connection, languages: &[&str]) -> Option<crate::models::CoverageGap> {
+    if languages.is_empty() {
+        return None;
+    }
+    let placeholders = vec!["?"; languages.len()].join(", ");
+    let sql = format!(
+        "SELECT DISTINCT language, capability FROM language_capability_gaps
+         WHERE status = 'exception'
+           AND capability IN ('identifiers', 'pending_relationships')
+           AND language IN ({placeholders})
+         ORDER BY language, capability"
+    );
+    let mut stmt = conn.prepare(&sql).ok()?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(languages), |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .ok()?;
+    let mut gap = crate::models::CoverageGap::default();
+    for (language, capability) in rows.flatten() {
+        if !gap.languages.contains(&language) {
+            gap.languages.push(language);
+        }
+        if !gap.capabilities.contains(&capability) {
+            gap.capabilities.push(capability);
+        }
+    }
+    gap.capabilities.sort();
+    (!gap.languages.is_empty()).then_some(gap)
+}
+
+/// The languages of the indexed files at `path` or under it.
+pub fn languages_under(conn: &Connection, paths: &[&str]) -> Result<Vec<String>, QueryError> {
+    let mut languages = Vec::new();
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT language FROM files
+         WHERE replace(path, '\\', '/') = ?1 COLLATE NOCASE
+            OR replace(path, '\\', '/') LIKE ?2 ESCAPE '\\'",
+    )?;
+    for path in paths {
+        let path = path.replace('\\', "/").trim_matches('/').to_string();
+        let prefix = format!("{}/%", escape_like(&path));
+        let rows = stmt.query_map(params![path, prefix], |row| row.get::<_, String>(0))?;
+        for language in rows {
+            let language = language?;
+            if !languages.contains(&language) {
+                languages.push(language);
+            }
+        }
+    }
+    Ok(languages)
+}
+
 /// Find structural facts by category (e.g. route, query, model, config).
 pub fn find_structural_facts(
     conn: &Connection,
@@ -8848,6 +9249,7 @@ fn blast_radius_walk_with_options(
             report_symbols_unchecked: None,
             report_symbols_failed: None,
             report_sites_unchecked: None,
+            coverage_gap: None,
         });
     };
 
@@ -8967,6 +9369,7 @@ fn blast_radius_walk_with_options(
         report_symbols_unchecked: None,
         report_symbols_failed: None,
         report_sites_unchecked: None,
+        coverage_gap: None,
     })
 }
 

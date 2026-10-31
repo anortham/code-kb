@@ -5253,3 +5253,44 @@ fn test_mcp_keeps_a_rebuild_failure_that_finished_before_a_switch_joined_it() {
 
     server.assert_the_target_reports_the_failed_rebuild();
 }
+
+#[test]
+fn test_mcp_file_skeleton_public_only_matches_the_cli_public_skeleton() {
+    let repo = code_kb_core::safe_tempdir();
+    let root = repo.path();
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"api\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(
+        root.join("src/lib.rs"),
+        "pub fn open() {}\n\nfn helper() {}\n",
+    )
+    .unwrap();
+    let cli_public = cli_stdout(root, &["skeleton", "--public-only", "src/lib.rs"]);
+
+    let mut session = McpSession::start(serve_command(root));
+    let public = session.call(
+        "file_skeleton",
+        json!({"project_root": root, "file_path": "src/lib.rs", "public_only": true}),
+    );
+    let full = session.call(
+        "file_skeleton",
+        json!({"project_root": root, "file_path": "src/lib.rs"}),
+    );
+    session.finish();
+
+    assert_eq!(result_text(&public), cli_public);
+    assert!(
+        cli_public.contains("// Public surface: 1 private row hidden."),
+        "{cli_public}"
+    );
+    assert!(!cli_public.contains("helper"), "{cli_public}");
+    assert!(
+        result_text(&full).contains("helper"),
+        "{}",
+        result_text(&full)
+    );
+}

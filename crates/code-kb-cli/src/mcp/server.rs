@@ -8,13 +8,13 @@ use code_kb_core::workspace::{NO_PROJECT_MARKER_REASON, paths_equal};
 use code_kb_core::{
     Connection, MAX_CONTEXT_OVERLOADS, SymbolSelector, WatcherHandle, Workspace, WorkspaceError,
     create_index, edit_check_op, ensure_fts_index_path, ensure_index_matches_extractor,
-    file_sizes_for_paths, file_skeleton_op, find_references_for_symbol_ext, fit_bodies_to_budget,
-    fit_context_slices_to_budget, format_context_slices, format_symbol_bodies,
-    get_context_slices_selected_op, get_symbol_bodies_selected_op, installed_extractor_version,
-    is_project_root, is_unreadable_database, lookup_symbols_with_body_op, open_global_telemetry_db,
-    open_read_only, reconcile_offline_edits, record_tool_call, record_tool_call_conn,
-    reference_report, render_symbol_lookup, resolve_symbol_op, scan_remedy,
-    select_reference_target, start_watcher,
+    file_sizes_for_paths, file_skeleton_op_with, find_references_for_symbol_ext,
+    fit_bodies_to_budget, fit_context_slices_to_budget, format_context_slices,
+    format_symbol_bodies, get_context_slices_selected_op, get_symbol_bodies_selected_op,
+    installed_extractor_version, is_project_root, is_unreadable_database,
+    lookup_symbols_with_body_op, open_global_telemetry_db, open_read_only, reconcile_offline_edits,
+    record_tool_call, record_tool_call_conn, reference_report, render_symbol_lookup,
+    resolve_symbol_op, scan_remedy, select_reference_target, start_watcher,
 };
 
 use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
@@ -400,6 +400,10 @@ impl McpServer {
                         "file_path": {
                             "type": "string",
                             "description": "File or directory path."
+                        },
+                        "public_only": {
+                            "type": "boolean",
+                            "description": "Hide private, protected, and fileprivate rows and count them (default: false)."
                         }
                     },
                     "required": ["file_path"]
@@ -974,7 +978,18 @@ impl McpServer {
                     .filter(|(abs, _)| abs.is_file())
                     .map(|(_, rel)| rel);
 
-                match file_skeleton_op(&self.workspace, &self.db_path, &conn, file_path) {
+                let public_only = arguments
+                    .get("public_only")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+
+                match file_skeleton_op_with(
+                    &self.workspace,
+                    &self.db_path,
+                    &conn,
+                    file_path,
+                    public_only,
+                ) {
                     Ok(skeleton) => {
                         let result = CallToolResult::text(skeleton);
                         match rendered_file.as_deref() {
@@ -1039,6 +1054,7 @@ impl McpServer {
                     .iter()
                     .map(|symbol| symbol.path.clone())
                     .chain(lookup.ranked.iter().map(|hit| hit.symbol.path.clone()))
+                    .chain(lookup.facts.iter().map(|fact| fact.path.clone()))
                     .collect();
 
                 let output = if limit == 0 {
@@ -1050,7 +1066,9 @@ impl McpServer {
                     }
                 };
                 CallToolResult::text(output)
-                    .with_logical_result_count(lookup.names.len() + lookup.ranked.len())
+                    .with_logical_result_count(
+                        lookup.names.len() + lookup.ranked.len() + lookup.facts.len(),
+                    )
                     .with_baseline_paths(baseline_paths)
             }
             "get_symbol_body" => {
