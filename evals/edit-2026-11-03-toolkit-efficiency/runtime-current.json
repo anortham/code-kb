@@ -1,0 +1,20 @@
+{
+  "source_commit": "f290fdca44cec942ae6f50265e21da9f37fca836",
+  "source_root": "/home/murphy/.codex/worktrees/dd7b/code-kb",
+  "build_command": "cargo build --release",
+  "binary": {
+    "code-kb": {
+      "path": "/home/murphy/.cache/code-kb-completed-edit/2026-11-03-toolkit-efficiency/runtime/current/code-kb",
+      "sha256": "d3f913db2025339a3496f85017eeaee98542f78afa2f654aacbdf2cc108221d2",
+      "version": "code-kb 2.12.0",
+      "build_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/runtime/current/code-kb"
+    },
+    "julie-extract": {
+      "path": "/home/murphy/.cache/code-kb-completed-edit/2026-11-03-toolkit-efficiency/runtime/current/julie-extract",
+      "sha256": "008372ec7a61f0921ef687d20e24c67547255f603d7dbca08710f8e27bef28bc",
+      "version": "julie-extract 3.11.0",
+      "build_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/runtime/current/julie-extract"
+    }
+  },
+  "mount_reason": "Sandbox forbids tool/dependency mounts below private .codex; identical binaries copied to task-specific cache, without changing sandbox rules."
+}

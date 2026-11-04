@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "manifest_sha256": "650a038b104c036c850fd05a798cf68c42f5836c3c0b57ce89742e4b6cf5ba81",
+  "schedule_sha256": "11164ff0be45a489159372f2eb31789774d6f1888f5e316de8b158a7a0b0b805",
+  "runtime_bindings_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/control/runtime-bindings-current.json",
+  "runtime_bindings_sha256": "ebdd0607587c28b484376890341eca9b1c83e7509dfa5cfbdde9fb77307790f7",
+  "artifact_paths_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/control/artifact-paths-current.json",
+  "artifact_paths_sha256": "fdb8a601ea4e546970f6272f2a7ca37356a1949c59012472126f77eaeaebee3a",
+  "preflight_no_model": {
+    "status": "finished",
+    "manifest_sha256": "650a038b104c036c850fd05a798cf68c42f5836c3c0b57ce89742e4b6cf5ba81",
+    "campaign_runner_sha256": "9dc440ce952cf622bfc77275bbf97d6a2fd02c6ad238d9f933bfab2e3a91f594",
+    "runtime_bindings_sha256": "ebdd0607587c28b484376890341eca9b1c83e7509dfa5cfbdde9fb77307790f7",
+    "runs": []
+  },
+  "actual_model_dispatches": 0
+}

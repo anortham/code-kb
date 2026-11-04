@@ -12,9 +12,9 @@
 
 **Architecture Quality:** Keep context behavior inside existing query and formatter boundaries. Main risk: reducing answer size or calls can hide callers, tests, conventions, uncertainty, or indexing cost that an agent needs.
 
-**Status:** Proposed. Implementation awaits a separate user go-ahead and model switch. Reviewer choice: none.
+**Status:** In progress on `toolkit-efficiency` in `/home/murphy/.codex/worktrees/dd7b/code-kb`. The user authorized implementation, useful subagents, verification, and local commits on 2026-11-03. Reviewer choice: none.
 
-**Authority:** This request authorizes planning, including local plan/handoff commits by the coordinating lead. Implementation/configuration changes and model trials are deferred until the user's implementation go-ahead. Repository `AGENTS.md` authorizes necessary model-evaluation spend once implementation starts; do not add a separate budget-approval gate then. Push, publication, release, and global installation changes remain ungranted.
+**Authority:** The implementation request authorizes this plan, necessary model trials, and local commits. Repository `AGENTS.md` authorizes necessary model-evaluation spend; no separate budget gate applies. The user explicitly prohibits pushing or releasing. Publication and global installation changes remain ungranted.
 
 **Reviewed baseline:** `/home/murphy/source/code-kb`, `main`, `8640bcd8cf952c842ab9a7352a568987f4caab5b`, version 2.12.0. The previous review passed 20 launcher tests but interrupted the Rust workspace suite; it is not full-suite verification. Optional coordinator: `/home/murphy/source/goldfish/docs/plans/2026-11-03-ai-toolkit-coordination-plan.md`.
 
@@ -107,12 +107,12 @@ Commit mode for future implementation work: `parallel-lead-commit`. Each worker 
 **Approach:** Reconcile the 2.11.x native comparison and the 2.12.0 one-call follow-up, including acceptance and all available token and timing fields. Treat historical cases as development data only. Use the existing campaign format and record source/test ownership selected with current `code-kb` navigation. Do not select a change from response size alone.
 
 **Acceptance criteria:**
-- [ ] The protocol names the trace evidence and a concrete repeated-cost finding, or records that no code-kb optimization is justified.
-- [ ] The protocol freezes six untouched cases, two repeats per arm, 12 matched three-arm sets (or two-arm pairs with no candidate), controls, run order, acceptance rubric, both 5% comparisons, and the stop rule before K3 starts.
-- [ ] Use the existing two-arm campaign format for native-versus-current and native-versus-candidate schedules if necessary; reuse each identical native control result once through immutable slot references in a combined report rather than rerunning it. Verify protocol/runner compatibility before exposure. Do not invent a new runner arm field or change the runner's trust boundaries to accommodate this plan.
-- [ ] Every case has independently gradable acceptance and protected-input checks; historical case files remain byte-identical.
-- [ ] The task identifies exact K2 source and regression-test paths from current code-kb evidence; if no seam is justified, K2 is skipped and baseline behavior is retained.
-- [ ] K1 artifacts pass their narrow validation and are handed to the lead per `parallel-lead-commit`.
+- [x] The protocol names the trace evidence and a concrete repeated-cost finding, or records that no code-kb optimization is justified.
+- [x] The protocol freezes six untouched cases, two repeats per arm, 12 matched three-arm sets (or two-arm pairs with no candidate), controls, run order, acceptance rubric, both 5% comparisons, and the stop rule before K3 starts.
+- [x] Use the existing two-arm campaign format for native-versus-current and native-versus-candidate schedules if necessary; reuse each identical native control result once through immutable slot references in a combined report rather than rerunning it. Verify protocol/runner compatibility before exposure. Do not invent a new runner arm field or change the runner's trust boundaries to accommodate this plan.
+- [x] Every case has independently gradable acceptance and protected-input checks; historical case files remain byte-identical.
+- [x] The task identifies exact K2 source and regression-test paths from current code-kb evidence; if no seam is justified, K2 is skipped and baseline behavior is retained.
+- [x] K1 artifacts pass their narrow validation and are handed to the lead per `parallel-lead-commit`.
 
 ### Task K2: Implement only the measured context reduction
 

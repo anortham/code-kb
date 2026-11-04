@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "status": "frozen untouched-task confirmation; repositories previously exposed",
+  "repositories": [
+    {
+      "id": "flask-config",
+      "url": "https://github.com/pallets/flask.git",
+      "commit": "d73fa1cdcbd8b1465c151db8924ba58b1dd14e35",
+      "language": "python",
+      "prior_repository_exposure": true
+    },
+    {
+      "id": "express-route",
+      "url": "https://github.com/expressjs/express.git",
+      "commit": "bed501c695a61886399ee622875f3be933c716d8",
+      "language": "javascript",
+      "prior_repository_exposure": true
+    },
+    {
+      "id": "minijinja-config",
+      "url": "https://github.com/mitsuhiko/minijinja.git",
+      "commit": "81787c4eab656f3a4f4e92dea53f303a36f1685c",
+      "language": "rust",
+      "prior_repository_exposure": true
+    },
+    {
+      "id": "hcl-config",
+      "url": "https://github.com/hashicorp/hcl.git",
+      "commit": "4a347c448ee961e556dde0fad522a996e04c00c0",
+      "language": "go",
+      "prior_repository_exposure": true
+    },
+    {
+      "id": "commons-lang",
+      "url": "https://github.com/apache/commons-lang.git",
+      "commit": "a5d6c5ed8847b2b14dacf062b646f94d6cc61a10",
+      "language": "java",
+      "prior_repository_exposure": true
+    },
+    {
+      "id": "nodatime",
+      "url": "https://github.com/nodatime/nodatime.git",
+      "commit": "649ce5a1c8ddf439eaed7b3bf9157882363cb937",
+      "language": "csharp",
+      "prior_repository_exposure": true
+    }
+  ]
+}

@@ -1,0 +1,117 @@
+diff --git a/src/flask/app.py b/src/flask/app.py
+index 4437546..4b6a4fc 100644
+--- a/src/flask/app.py
++++ b/src/flask/app.py
+@@ -217,7 +217,7 @@ class Flask(App):
+             "SERVER_NAME": None,
+             "APPLICATION_ROOT": "/",
+             "SESSION_COOKIE_NAME": "session",
+-            "SESSION_COOKIE_MAX_AGE": 0,
++            "SESSION_COOKIE_MAX_AGE": None,
+             "SESSION_COOKIE_DOMAIN": None,
+             "SESSION_COOKIE_PATH": None,
+             "SESSION_COOKIE_HTTPONLY": True,
+diff --git a/src/flask/sessions.py b/src/flask/sessions.py
+index ad35770..6c1def5 100644
+--- a/src/flask/sessions.py
++++ b/src/flask/sessions.py
+@@ -5,6 +5,7 @@ import hashlib
+ import typing as t
+ from collections.abc import MutableMapping
+ from datetime import datetime
++from datetime import timedelta
+ from datetime import timezone
+ 
+ from itsdangerous import BadSignature
+@@ -227,7 +228,14 @@ class SessionInterface:
+         lifetime configured on the application.
+         """
+         if session.permanent:
+-            return datetime.now(timezone.utc) + app.permanent_session_lifetime
++            max_age = app.config["SESSION_COOKIE_MAX_AGE"]
++
++            if max_age is not None and not isinstance(max_age, timedelta):
++                raise TypeError("SESSION_COOKIE_MAX_AGE must be a datetime.timedelta or None")
++
++            lifetime = max_age if max_age is not None else app.permanent_session_lifetime
++            return datetime.now(timezone.utc) + lifetime
++
+         return None
+ 
+     def should_set_cookie(self, app: Flask, session: SessionMixin) -> bool:
+diff --git a/tests/test_session_cookie_max_age.py b/tests/test_session_cookie_max_age.py
+new file mode 100644
+index 0000000..80a9000
+--- /dev/null
++++ b/tests/test_session_cookie_max_age.py
+@@ -0,0 +1,70 @@
++from datetime import datetime
++from datetime import timedelta
++from datetime import timezone
++from email.utils import parsedate_to_datetime
++from http.cookies import SimpleCookie
++
++import pytest
++
++from flask import Flask
++from flask import session
++
++
++def issue_session_cookie(app, permanent=True):
++    @app.get("/")
++    def issue_cookie():
++        session["value"] = "set"
++        session.permanent = permanent
++        return ""
++
++    return app.test_client().get("/")
++
++
++def test_configured_max_age_sets_permanent_cookie_expiry():
++    app = Flask(__name__)
++    app.secret_key = "test"
++    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=10)
++    app.config["SESSION_COOKIE_MAX_AGE"] = timedelta(seconds=60)
++
++    before = datetime.now(timezone.utc)
++    response = issue_session_cookie(app)
++    cookie = SimpleCookie(response.headers["Set-Cookie"])["session"]
++    expires = parsedate_to_datetime(cookie["expires"])
++
++    assert timedelta(seconds=45) < expires - before <= timedelta(seconds=60)
++
++
++def test_default_max_age_uses_permanent_cookie_lifetime():
++    app = Flask(__name__)
++    app.secret_key = "test"
++    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(seconds=90)
++
++    before = datetime.now(timezone.utc)
++    response = issue_session_cookie(app)
++    cookie = SimpleCookie(response.headers["Set-Cookie"])["session"]
++    expires = parsedate_to_datetime(cookie["expires"])
++
++    assert app.config["SESSION_COOKIE_MAX_AGE"] is None
++    assert timedelta(seconds=75) < expires - before <= timedelta(seconds=90)
++
++
++def test_nonpermanent_cookie_has_no_expiry_even_if_max_age_is_invalid():
++    app = Flask(__name__)
++    app.secret_key = "test"
++    app.config["SESSION_COOKIE_MAX_AGE"] = 60
++
++    response = issue_session_cookie(app, permanent=False)
++    cookie = SimpleCookie(response.headers["Set-Cookie"])["session"]
++
++    assert not cookie["expires"]
++    assert not cookie["max-age"]
++
++
++def test_invalid_max_age_raises_while_generating_permanent_cookie():
++    app = Flask(__name__)
++    app.secret_key = "test"
++    app.testing = True
++    app.config["SESSION_COOKIE_MAX_AGE"] = 60
++
++    with pytest.raises(TypeError, match="SESSION_COOKIE_MAX_AGE must be a datetime.timedelta or None"):
++        issue_session_cookie(app)

@@ -1,0 +1,12 @@
+diff --git a/lib/application.js b/lib/application.js
+index 310e6df..3827dcd 100644
+--- a/lib/application.js
++++ b/lib/application.js
+@@ -94,6 +94,7 @@ app.defaultConfiguration = function defaultConfiguration() {
+   this.enable('x-powered-by');
+   this.set('etag', 'weak');
+   this.set('env', env);
++  this.set('query parser depth', 5);
+   this.set('query parser', 'simple')
+   this.set('subdomain offset', 2);
+   this.set('trust proxy', false);

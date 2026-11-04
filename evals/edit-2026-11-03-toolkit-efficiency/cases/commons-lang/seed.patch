@@ -1,0 +1,60 @@
+diff --git a/src/main/java/org/apache/commons/lang3/time/DateFormatUtils.java b/src/main/java/org/apache/commons/lang3/time/DateFormatUtils.java
+index 7de17cb..c82cec0 100644
+--- a/src/main/java/org/apache/commons/lang3/time/DateFormatUtils.java
++++ b/src/main/java/org/apache/commons/lang3/time/DateFormatUtils.java
+@@ -16,9 +16,11 @@
+  */
+ package org.apache.commons.lang3.time;
+ 
++import java.time.ZoneId;
+ import java.util.Calendar;
+ import java.util.Date;
+ import java.util.Locale;
++import java.util.Objects;
+ import java.util.TimeZone;
+ 
+ /**
+@@ -297,6 +299,20 @@ public static String format(final Date date, final String pattern, final TimeZon
+         return format(date, pattern, timeZone, null);
+     }
+ 
++    /**
++     * Formats a date/time using the rules of a {@link ZoneId}.
++     *
++     * @param date The date to format, not null.
++     * @param pattern The pattern to use, not null.
++     * @param zoneId The zone rules to use, not null.
++     * @return The formatted date.
++     * @throws NullPointerException if date, pattern, or zoneId is null.
++     */
++    public static String formatInZone(final Date date, final String pattern, final ZoneId zoneId) {
++        final TimeZone timeZone = TimeZone.getTimeZone(Objects.requireNonNull(zoneId, "zoneId"));
++        return format(date, pattern);
++    }
++
+     /**
+      * Formats a date/time into a specific pattern in a time zone and locale.
+      *
+diff --git a/src/main/java/org/apache/commons/lang3/time/DateUtils.java b/src/main/java/org/apache/commons/lang3/time/DateUtils.java
+index 1272f4f..dbcfbd9 100644
+--- a/src/main/java/org/apache/commons/lang3/time/DateUtils.java
++++ b/src/main/java/org/apache/commons/lang3/time/DateUtils.java
+@@ -1795,6 +1795,18 @@ public static Calendar toCalendar(final Date date, final TimeZone tz) {
+         return c;
+     }
+ 
++    /**
++     * Converts a {@link Date} into a {@link Calendar} using the rules of a {@link ZoneId}.
++     *
++     * @param date The date to convert, not null.
++     * @param zoneId The zone rules to use, not null.
++     * @return The created Calendar.
++     * @throws NullPointerException if date or zoneId is null.
++     */
++    public static Calendar toCalendarInZone(final Date date, final ZoneId zoneId) {
++        return toCalendar(date);
++    }
++
+     /**
+      * Converts a {@link Date} to a {@link LocalDateTime}.
+      *

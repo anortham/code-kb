@@ -1,0 +1,335 @@
+{
+  "behavioral_pass": true,
+  "case_id": "nodatime",
+  "case_sha256": "a55ab9b83e8b0a45c9ed8bcbaf79a6f3350c9cb89232a04662993a7bfd05ab43",
+  "checks": {
+    "baseline_public": {
+      "commands": [
+        {
+          "command_id": "nodatime-public-instant-conversion-regressions",
+          "elapsed_seconds": 17.219327,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/baseline-public-00-nodatime-public-instant-conversion-regressions/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/baseline-public-00-nodatime-public-instant-conversion-regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        },
+        {
+          "command_id": "nodatime-public-offset-conversion-regressions",
+          "elapsed_seconds": 8.239827,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/baseline-public-01-nodatime-public-offset-conversion-regressions/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/baseline-public-01-nodatime-public-offset-conversion-regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        },
+        {
+          "command_id": "nodatime-existing-public-purity-regression",
+          "elapsed_seconds": 6.98056,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/baseline-public-02-nodatime-existing-public-purity-regression/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/baseline-public-02-nodatime-existing-public-purity-regression/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "baseline_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "nodatime-copy-prepared-nuget-cache",
+          "elapsed_seconds": 0.671562,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/runtime-baseline-00-nodatime-copy-prepared-nuget-cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/runtime-baseline-00-nodatime-copy-prepared-nuget-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "nodatime-restore-from-local-cache",
+          "elapsed_seconds": 2.269738,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/runtime-baseline-01-nodatime-restore-from-local-cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/runtime-baseline-01-nodatime-restore-from-local-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "preparation": {
+      "commands": [],
+      "mode": "reused-inputs",
+      "passed": true
+    },
+    "reference_hidden": {
+      "commands": [
+        {
+          "command_id": "try-date-time-offset-contract",
+          "elapsed_seconds": 15.621951,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/reference-hidden-00-try-date-time-offset-contract/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/reference-hidden-00-try-date-time-offset-contract/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_hidden_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "nodatime-copy-prepared-nuget-cache",
+          "elapsed_seconds": 0.365254,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/runtime-reference-hidden-00-nodatime-copy-prepared-nuget-cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/runtime-reference-hidden-00-nodatime-copy-prepared-nuget-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "nodatime-restore-from-local-cache",
+          "elapsed_seconds": 1.617609,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/runtime-reference-hidden-01-nodatime-restore-from-local-cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/runtime-reference-hidden-01-nodatime-restore-from-local-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_public": {
+      "commands": [
+        {
+          "command_id": "nodatime-public-instant-conversion-regressions",
+          "elapsed_seconds": 29.091588,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/reference-public-00-nodatime-public-instant-conversion-regressions/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/reference-public-00-nodatime-public-instant-conversion-regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        },
+        {
+          "command_id": "nodatime-public-offset-conversion-regressions",
+          "elapsed_seconds": 7.935713,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/reference-public-01-nodatime-public-offset-conversion-regressions/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/reference-public-01-nodatime-public-offset-conversion-regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        },
+        {
+          "command_id": "nodatime-existing-public-purity-regression",
+          "elapsed_seconds": 6.780741,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/reference-public-02-nodatime-existing-public-purity-regression/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/reference-public-02-nodatime-existing-public-purity-regression/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_public_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "nodatime-copy-prepared-nuget-cache",
+          "elapsed_seconds": 0.314521,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/runtime-reference-public-00-nodatime-copy-prepared-nuget-cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/runtime-reference-public-00-nodatime-copy-prepared-nuget-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "nodatime-restore-from-local-cache",
+          "elapsed_seconds": 2.432086,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/runtime-reference-public-01-nodatime-restore-from-local-cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/runtime-reference-public-01-nodatime-restore-from-local-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "seed_hidden_failure": {
+      "commands": [
+        {
+          "command_id": "try-date-time-offset-contract",
+          "elapsed_seconds": 15.998461,
+          "exit_status": 1,
+          "expected_output_missing": [
+            "NUnit3TestExecutor discovered 5 of 5 NUnit test cases",
+            "Test Run Successful.",
+            "Total tests: 5"
+          ],
+          "passed": false,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/seed-hidden-00-try-date-time-offset-contract/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/seed-hidden-00-try-date-time-offset-contract/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "seed_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "nodatime-copy-prepared-nuget-cache",
+          "elapsed_seconds": 0.465083,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/runtime-seed-00-nodatime-copy-prepared-nuget-cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/runtime-seed-00-nodatime-copy-prepared-nuget-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "nodatime-restore-from-local-cache",
+          "elapsed_seconds": 2.976869,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/runtime-seed-01-nodatime-restore-from-local-cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/evidence/runtime-seed-01-nodatime-restore-from-local-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    }
+  },
+  "created_utc": "2026-11-04T01:33:01Z",
+  "dependencies": {
+    "nodatime-nuget": "b33c5d38a4b9541a64ea5105150e5bbcd49ba2b5a7cd583b7cdee8faf9cb11dd"
+  },
+  "readiness_error": null,
+  "reference_bundle_path": "evidence/reference-bundle",
+  "reference_digest": "4e1f5c10502582fe1f8054f883d65e7b7084a665816b8bc2473f4c58d8b01c29",
+  "reference_production_files_changed": [
+    "src/NodaTime/Instant.cs",
+    "src/NodaTime/OffsetDateTime.cs"
+  ],
+  "repo_id": "nodatime",
+  "schema": 1,
+  "seed_digest": "7609d88901825bf2f4f5020e2f6b190377fe5e49712b5c522de0e5f6d3f3ca7c",
+  "seed_project_path": "work/seed-project",
+  "source_pin": "649ce5a1c8ddf439eaed7b3bf9157882363cb937",
+  "source_review": "passed",
+  "source_tree_sha256": "d809182eef59b2685373f0d7a51da696dcc67cdad291cff70b7180c9d38d5bfc",
+  "status": "ready",
+  "source_review_evidence": "source-review.md",
+  "raw_readiness_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/readiness.json",
+  "raw_readiness_sha256": "d28d2a40d818c0a7a14134de73a2e7381104867cfa84669de04ed0c0eb657c76",
+  "independent_source_review": "Reviewed both Try conversion wrappers, success/default-out paths and narrow range exceptions, existing To behavior, precision, Julian calendar, and Pure annotations. Existing purity is a public regression. Seven separate public reference tests pass."
+}

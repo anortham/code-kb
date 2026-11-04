@@ -1,0 +1,305 @@
+{
+  "schema": 1,
+  "frozen_at": "2026-11-04T01:42:06.047350+00:00",
+  "source_commit": "f290fdca44cec942ae6f50265e21da9f37fca836",
+  "cases": [
+    {
+      "id": "flask-config",
+      "repo_id": "flask-config",
+      "url": "https://github.com/pallets/flask.git",
+      "pin": "d73fa1cdcbd8b1465c151db8924ba58b1dd14e35",
+      "language": "python",
+      "source_root": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/sources/flask",
+      "seed_project": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/work/seed-project",
+      "seed_digest": "fc0b9965e6330ffa0d84577f4d787080eec7ced43c00c8307d6cc6da03d48ead",
+      "readiness_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/readiness.json",
+      "case_sha256": "00bb6dec8edcd93059ae3e1ce670331f7448e2a0dc8962706fc0e2d64478b5c4",
+      "readiness_status": "ready",
+      "dependencies": {
+        "python-site": "/home/murphy/.cache/code-kb-completed-edit/2026-11-03-toolkit-efficiency/artifacts/flask-python-site"
+      },
+      "reference_review": {
+        "status": "passed",
+        "evidence": [
+          "Reviewed pinned src/flask/app.py default config and src/flask/sessions.py SessionInterface.get_expiration_time; reference replaces seed SESSION_COOKIE_MAX_AGE=0 with None and validates only when permanent expiry is calculated.",
+          "Reference changes src/flask/app.py and src/flask/sessions.py and adds tests/test_session_cookie_max_age.py; live request tests cover configured expiry, default lifetime, non-permanent cookie despite invalid config, and invalid permanent value.",
+          "Readiness-5 baseline public passed (1 test), reference public passed (5 tests), seed hidden failed with the expected diagnostic, reference hidden passed (1 test).",
+          "Historical eval search found no SESSION_COOKIE_MAX_AGE or matching session-max-age task outside the current campaign."
+        ],
+        "public_test_files": [
+          "tests/test_session_cookie_max_age.py"
+        ],
+        "production_files": [
+          "src/flask/app.py",
+          "src/flask/sessions.py"
+        ]
+      },
+      "seed_git": {
+        "commit": "18e6c28ec37e078aea9290f6d8dc30e1ecd65d37",
+        "commit_count": 1,
+        "clean": true,
+        "remotes": []
+      },
+      "readiness_evidence": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/evidence",
+      "corpus_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/flask-config/corpus.json",
+      "source_version": "Flask 3.2.0.dev",
+      "reference_digest": "76830730a19cd58ebf9e3f818da8666daf371c81e4d5268969b5d2ec60c00062",
+      "tools": {},
+      "tool_inputs": [],
+      "runtime_bindings": {
+        "runtime": "Python 3.14.8 at /usr/bin/python3",
+        "test_runner": "pytest 9.2.0 via /usr/bin/python3 -m pytest",
+        "network": "disabled during readiness execution",
+        "public_command_id": "focused_public_regressions",
+        "hidden_command_id": "session_max_age"
+      },
+      "author_family": "framework",
+      "rejected_seed_copy": "/home/murphy/.cache/code-kb-completed-edit/2026-11-03-toolkit-efficiency/seeds/flask-config"
+    },
+    {
+      "id": "express-route",
+      "repo_id": "express-route",
+      "url": "https://github.com/expressjs/express.git",
+      "pin": "bed501c695a61886399ee622875f3be933c716d8",
+      "language": "javascript",
+      "source_root": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/sources/express",
+      "seed_project": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/work/seed-project",
+      "seed_digest": "ad2fb07c2954951a089b29f3f8f0ec9356fac82259d13009890343770b1e455a",
+      "readiness_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/readiness.json",
+      "case_sha256": "92bd3e7736b45473f4c2a904c224d3234e45bca8068604738f26a69cf573e3b5",
+      "readiness_status": "ready",
+      "dependencies": {
+        "node-modules": "/home/murphy/.cache/code-kb-completed-edit/2026-11-03-toolkit-efficiency/artifacts/express-node-modules"
+      },
+      "reference_review": {
+        "status": "passed",
+        "evidence": [
+          "Reviewed pinned lib/application.js app.defaultConfiguration/app.set and lib/utils.js compileQueryParser/parseExtendedQueryString; reference installs default depth 5, validates before mutation, recompiles on setting changes, and passes depth only to the built-in extended qs parser.",
+          "Reference changes lib/application.js and lib/utils.js and adds test/query-parser-depth.js; public route test proves the nesting limit and invalid-value tests confirm setting remains 5.",
+          "Readiness-6 baseline public passed; reference public passed (11 tests); seed hidden failed with the expected assertion diagnostic; reference hidden passed (7 tests), covering depth 0, later depth changes, and simple, disabled, and custom parsers.",
+          "Historical eval search found no query-parser-depth task outside the current campaign."
+        ],
+        "public_test_files": [
+          "test/query-parser-depth.js"
+        ],
+        "production_files": [
+          "lib/application.js",
+          "lib/utils.js"
+        ],
+        "hidden_test_file": "checks/test_query_parser_depth.js",
+        "hidden_destination": "test/query-parser-depth-hidden.js"
+      },
+      "seed_git": {
+        "commit": "40848a87c2f34eefea80665d799ebe572e26144b",
+        "commit_count": 1,
+        "clean": true,
+        "remotes": []
+      },
+      "readiness_evidence": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/evidence",
+      "corpus_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/express-route/corpus.json",
+      "source_version": "Express 5.2.1",
+      "reference_digest": "5a8186af1bc2d4cbadf6719b860c9980b08c8de9d91a7950aba3a208a3e6aa6c",
+      "tools": {},
+      "tool_inputs": [],
+      "runtime_bindings": {
+        "runtime": "Node.js v24.18.1 at /usr/bin/node",
+        "test_runner": "Mocha 11.8.0 loaded from /state/node-modules",
+        "http_assertions": "Supertest 6.3.4 loaded from /state/node-modules",
+        "network": "disabled during readiness execution",
+        "public_command_id": "focused_public_regressions",
+        "hidden_command_id": "query_parser_depth"
+      },
+      "author_family": "framework",
+      "rejected_seed_copy": "/home/murphy/.cache/code-kb-completed-edit/2026-11-03-toolkit-efficiency/seeds/express-route-readiness-6"
+    },
+    {
+      "id": "minijinja-config",
+      "repo_id": "minijinja-config",
+      "url": "https://github.com/mitsuhiko/minijinja.git",
+      "pin": "81787c4eab656f3a4f4e92dea53f303a36f1685c",
+      "language": "rust",
+      "source_root": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/minijinja-source",
+      "seed_project": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/minijinja-v5/work/seed-project",
+      "seed_digest": "e70f8d055dff7a54758b5fd4661ab5dbf08e8a2484f8fc7f8498f3245114ed72",
+      "readiness_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/minijinja-v5/readiness.json",
+      "dependencies": {
+        "cargo-cache": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_minijinja_cargo-cache"
+      },
+      "tools": {
+        "rust": "/home/murphy/.rustup/toolchains/stable-x86_64-unknown-linux-gnu"
+      },
+      "runtime_bindings": {
+        "container": "Linux bubblewrap; network disabled for checks",
+        "environment": {
+          "CARGO_HOME": "/state/cargo",
+          "CARGO_NET_OFFLINE": "true",
+          "CARGO_TARGET_DIR": "/state/target",
+          "CARGO_INCREMENTAL": "0",
+          "RUSTC": "/tools/rust/bin/rustc"
+        },
+        "tool_versions": {
+          "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)",
+          "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)"
+        }
+      },
+      "source_tree_sha256": "286853b205b2dfa30f70e74245d9b4e32f86a33c2ac0cfb128a3821b4b82e10b",
+      "case_sha256": "3580ae7fd74760eec9ed0e4c0f07a274552949bab76600be5eeb25f72d088915",
+      "reference_review": {
+        "status": "pending",
+        "evidence": "Lead review pending. Readiness v5 passed baseline, expected zero-fuel seed failure, reference public tests for zero/positive/help, and hidden zero/positive acceptance. Reference changes minijinja-cli/src/config.rs and command.rs."
+      },
+      "author_family": "rust-go"
+    },
+    {
+      "id": "hcl-config",
+      "repo_id": "hcl-config",
+      "url": "https://github.com/hashicorp/hcl.git",
+      "pin": "4a347c448ee961e556dde0fad522a996e04c00c0",
+      "language": "go",
+      "source_root": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/hcl-source",
+      "seed_project": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/work/seed-project",
+      "seed_digest": "28893caee13b3b5a54118948e02c0dc528e9117e53eca1518ce43892eb2dffa3",
+      "readiness_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/readiness.json",
+      "dependencies": {
+        "go-mod-cache": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_hcl_go-mod-cache"
+      },
+      "tools": {},
+      "runtime_bindings": {
+        "container": "Linux bubblewrap; network disabled for checks",
+        "environment": {
+          "GOMODCACHE": "/state/go-mod-cache",
+          "GOCACHE": "/state/go-cache"
+        },
+        "system_executable": "/usr/lib/golang/bin/go",
+        "system_runtime_version": "go version go1.26.10-X:nodwarf5 linux/amd64"
+      },
+      "source_tree_sha256": "8ff36484a1c2f3868e37ae605a4f709aad796d9c6c58c699a792c625ffa82373",
+      "case_sha256": "37fdb1ef7267ae6d9165a9fb54623b71a428f753b5881c67c56dcf6c26540079",
+      "reference_review": {
+        "status": "pending",
+        "evidence": "Lead review pending. Readiness v5 passed baseline suites, expected seeded native failure, native/JSON public tests with exact and wrong-case assertions, and both hidden acceptances. The request identifies the case-insensitive behavior as a task-snapshot mutation. Reference changes ops.go and json/structure.go."
+      },
+      "author_family": "rust-go"
+    },
+    {
+      "authoring_reference_scratch": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-work",
+      "dependencies": {
+        "commons-m2": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_commons-lang_commons-m2"
+      },
+      "id": "commons-lang",
+      "language": "java",
+      "pin": "a5d6c5ed8847b2b14dacf062b646f94d6cc61a10",
+      "readiness_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/readiness.json",
+      "reference_review": {
+        "evidence": {
+          "behavior_review_cues": [
+            "New APIs are in DateUtils and DateFormatUtils. Tests cover DST rules, Kathmandu +05:45, null zone rejection in both entry points, exact Calendar epoch preservation, and unchanged input Date."
+          ],
+          "case_sha256": "f5bcc4a9f9f1c631d17a5934ffc91de72cf4157bdbf1b8b2cacf784cfe21960f",
+          "checks": {
+            "baseline_public": true,
+            "baseline_runtime_setup": true,
+            "preparation": true,
+            "reference_hidden": true,
+            "reference_hidden_runtime_setup": true,
+            "reference_public": true,
+            "reference_public_runtime_setup": true,
+            "seed_hidden_failure": true,
+            "seed_runtime_setup": true
+          },
+          "readiness_status": "ready",
+          "reference_production_files_changed": [
+            "src/main/java/org/apache/commons/lang3/time/DateFormatUtils.java",
+            "src/main/java/org/apache/commons/lang3/time/DateUtils.java"
+          ],
+          "source_review": "pending",
+          "source_tree_sha256": "6a3a572d1f84211a81c0f35e0caf78069900ff6562794ba90afb2f3c7a05d402",
+          "standalone_public_reference_test_replay": {
+            "command_id": "reference-public-zone-id-tests",
+            "path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/reference-test-replay-clean-source/commons-lang/receipt.json",
+            "reference_test_files": [
+              "src/test/java/org/apache/commons/lang3/time/ZoneIdInteropTest.java"
+            ],
+            "source_archive_sha256": "6a3a572d1f84211a81c0f35e0caf78069900ff6562794ba90afb2f3c7a05d402",
+            "status": "passed",
+            "test_execution_observed": true
+          }
+        },
+        "status": "pending"
+      },
+      "repo_id": "commons-lang",
+      "seed_digest": "45360d445c673c6a4ecbd8d32de4afaa701841fd9638caa6668846f10af5b3e3",
+      "seed_git_commit_count": 1,
+      "seed_git_remotes": [],
+      "seed_project": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/work/seed-project",
+      "source_archive_sha256": "6a3a572d1f84211a81c0f35e0caf78069900ff6562794ba90afb2f3c7a05d402",
+      "source_root": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-lang-pinned-source",
+      "tools": {
+        "java": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/tools_commons-lang_java",
+        "maven": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/tools_commons-lang_maven"
+      },
+      "url": "https://github.com/apache/commons-lang.git",
+      "author_family": "java-csharp"
+    },
+    {
+      "authoring_reference_scratch": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-work",
+      "dependencies": {
+        "nodatime-nuget": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_nodatime_nodatime-nuget"
+      },
+      "id": "nodatime",
+      "language": "csharp",
+      "pin": "649ce5a1c8ddf439eaed7b3bf9157882363cb937",
+      "readiness_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/readiness.json",
+      "reference_review": {
+        "evidence": {
+          "behavior_review_cues": [
+            "Try methods preserve [Pure]. Tests cover success, precision truncation, lower BCL boundary, valid upper boundary, OffsetDateTime out-of-range date and offset, and Julian-calendar conversion. Existing purity check is a baseline-safe public regression."
+          ],
+          "case_sha256": "a55ab9b83e8b0a45c9ed8bcbaf79a6f3350c9cb89232a04662993a7bfd05ab43",
+          "checks": {
+            "baseline_public": true,
+            "baseline_runtime_setup": true,
+            "preparation": true,
+            "reference_hidden": true,
+            "reference_hidden_runtime_setup": true,
+            "reference_public": true,
+            "reference_public_runtime_setup": true,
+            "seed_hidden_failure": true,
+            "seed_runtime_setup": true
+          },
+          "readiness_status": "ready",
+          "reference_production_files_changed": [
+            "src/NodaTime/Instant.cs",
+            "src/NodaTime/OffsetDateTime.cs"
+          ],
+          "source_review": "pending",
+          "source_tree_sha256": "d809182eef59b2685373f0d7a51da696dcc67cdad291cff70b7180c9d38d5bfc",
+          "standalone_public_reference_test_replay": {
+            "command_id": "reference-public-try-date-time-offset-tests",
+            "path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/reference-test-replay-clean-source/nodatime/receipt.json",
+            "reference_test_files": [
+              "src/NodaTime.Test/TryDateTimeOffsetTest.cs"
+            ],
+            "source_archive_sha256": "d809182eef59b2685373f0d7a51da696dcc67cdad291cff70b7180c9d38d5bfc",
+            "status": "passed",
+            "test_execution_observed": true
+          }
+        },
+        "status": "pending"
+      },
+      "repo_id": "nodatime",
+      "seed_digest": "7609d88901825bf2f4f5020e2f6b190377fe5e49712b5c522de0e5f6d3f3ca7c",
+      "seed_git_commit_count": 1,
+      "seed_git_remotes": [],
+      "seed_project": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/work/seed-project",
+      "source_archive_sha256": "d809182eef59b2685373f0d7a51da696dcc67cdad291cff70b7180c9d38d5bfc",
+      "source_root": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-pinned-source",
+      "tools": {
+        "dotnet": "/usr/lib64/dotnet"
+      },
+      "url": "https://github.com/nodatime/nodatime.git",
+      "author_family": "java-csharp"
+    }
+  ],
+  "seed_binding_note": "Framework cached copies changed only .git/index on status refresh; bind the exact original ready seeds instead. No source or readiness result was rewritten."
+}
