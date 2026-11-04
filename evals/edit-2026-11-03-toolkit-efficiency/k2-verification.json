@@ -1,0 +1,35 @@
+{
+  "source_commit": "3dc4d5d8c8668740bfb9b3a74b95facd1f2bdaf3",
+  "red": {
+    "command": "cargo test -p code-kb-cli --test mcp_test test_mcp_blast_radius_stdio_handshake_and_tools -- --exact",
+    "exit_code": 101,
+    "expected_failure": "initialize instructions assertion",
+    "log_sha256": "46e0d3f3e3693c76f4a6b1c282924ad68915e9e72085a43e353fd459c9623f9e"
+  },
+  "green": {
+    "exit_code": 0,
+    "passed": 1,
+    "log_sha256": "4b1882aa324ebc6da20ff2c773b27a9716bc7284d55ed6d27706d61e4cc061d5"
+  },
+  "affected_target": {
+    "command": "cargo test -p code-kb-cli --test mcp_test",
+    "exit_code": 0,
+    "passed": 66,
+    "log_sha256": "c2df418bf26dd46b867d7bad35caf70396e9749dce1e69532114228348337688"
+  },
+  "format": {
+    "command": "cargo fmt --all -- --check",
+    "exit_code": 0
+  },
+  "check_edit": {
+    "base": "47fc4eb",
+    "result": "no symbol changed shape"
+  },
+  "release_build": {
+    "command": "cargo build --release",
+    "exit_code": 0,
+    "log_sha256": "db2ead9a7dbe474ff95bd796696da67eff6aa9922a176868a477ed415752e07b"
+  },
+  "schema_proof": "schema-comparison.json",
+  "quality_and_efficiency": "pending K3; no retention or savings claim"
+}

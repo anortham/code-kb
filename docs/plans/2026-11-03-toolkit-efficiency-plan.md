@@ -137,11 +137,11 @@ Commit mode for future implementation work: `parallel-lead-commit`. Each worker 
 **Approach:** Use `get_symbol_context` and `find_references` on the selected seam before editing. Add the targeted failing test first. Do not assume a batching, truncation, caching, summary, or prompt rewrite is the right algorithm; implement only what the frozen traces support.
 
 **Acceptance criteria:**
-- [ ] The regression test fails before the implementation and passes after it.
-- [ ] All seven MCP tools, explicit root, automatic refresh, caller/test/convention information, uncertainty and coverage notices, and budget/drill-down warnings remain available as required.
-- [ ] No unrelated public behavior, language contract, or Stop hook behavior changes.
-- [ ] `cargo build --release` produces the candidate and its path/hash/version/commit are frozen alongside a separately preserved current-code-kb runtime before K3.
-- [ ] Worker-scope verification passes; hand the verified diff to the lead per `parallel-lead-commit`.
+- [x] The regression test fails before the implementation and passes after it.
+- [x] All seven MCP tools, explicit root, automatic refresh, caller/test/convention information, uncertainty and coverage notices, and budget/drill-down warnings remain available as required.
+- [x] No unrelated public behavior, language contract, or Stop hook behavior changes.
+- [x] `cargo build --release` produces the candidate and its path/hash/version/commit are frozen alongside a separately preserved current-code-kb runtime before K3.
+- [x] Worker-scope verification passes; hand the verified diff to the lead per `parallel-lead-commit`.
 
 ### Task K3: Run the fresh paired confirmation campaign
 

@@ -18,3 +18,7 @@ K1 passes the frozen-manifest validator (6 cases, 24 primary slots) and the exis
 Branch gate and confirmation evidence are pending. Security scope: none
 declared by the plan. Reviewer choice: none. The lead reviews worker output
 and completed patches against the frozen acceptance criteria.
+
+## K2 candidate
+
+Source `3dc4d5d` passes the expected red/green handshake test, all 66 MCP tests, formatting, and the release build. Real baseline/candidate handshakes have equal tool definitions and initialize results except the 480-to-158-character shared instructions. Candidate runtime, source, binary hash, controls, and zero-dispatch compatibility are bound in `runtime-candidate.json`, `schema-comparison.json`, and `control-candidate.json`. This is an unretained candidate pending K3, not a savings result.

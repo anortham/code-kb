@@ -1,0 +1,83 @@
+{
+  "schema": 1,
+  "cases": [
+    {
+      "id": "minijinja-config",
+      "repo_id": "minijinja-config",
+      "url": "https://github.com/mitsuhiko/minijinja.git",
+      "pin": "81787c4eab656f3a4f4e92dea53f303a36f1685c",
+      "language": "rust",
+      "source_root": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/minijinja-source",
+      "seed_project": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/minijinja-v5/work/seed-project",
+      "seed_digest": "e70f8d055dff7a54758b5fd4661ab5dbf08e8a2484f8fc7f8498f3245114ed72",
+      "readiness_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/minijinja-v5/readiness.json",
+      "dependencies": {
+        "cargo-cache": {
+          "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_minijinja_cargo-cache",
+          "container_mount": "/deps/cargo-cache",
+          "sha256": "eac88f77d5490563112b892dcb38a804d9fdb32e52de2624bd5c0738faef538a"
+        }
+      },
+      "tools": {
+        "rust": {
+          "host_path": "/home/murphy/.rustup/toolchains/stable-x86_64-unknown-linux-gnu",
+          "container_mount": "/tools/rust"
+        }
+      },
+      "runtime_bindings": {
+        "container": "Linux bubblewrap; network disabled for checks",
+        "environment": {
+          "CARGO_HOME": "/state/cargo",
+          "CARGO_NET_OFFLINE": "true",
+          "CARGO_TARGET_DIR": "/state/target",
+          "CARGO_INCREMENTAL": "0",
+          "RUSTC": "/tools/rust/bin/rustc"
+        },
+        "tool_versions": {
+          "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)",
+          "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)"
+        }
+      },
+      "source_tree_sha256": "286853b205b2dfa30f70e74245d9b4e32f86a33c2ac0cfb128a3821b4b82e10b",
+      "case_sha256": "3580ae7fd74760eec9ed0e4c0f07a274552949bab76600be5eeb25f72d088915",
+      "reference_review": {
+        "status": "pending",
+        "evidence": "Lead review pending. Readiness v5 passed baseline, expected zero-fuel seed failure, reference public tests for zero/positive/help, and hidden zero/positive acceptance. Reference changes minijinja-cli/src/config.rs and command.rs."
+      }
+    },
+    {
+      "id": "hcl-config",
+      "repo_id": "hcl-config",
+      "url": "https://github.com/hashicorp/hcl.git",
+      "pin": "4a347c448ee961e556dde0fad522a996e04c00c0",
+      "language": "go",
+      "source_root": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/hcl-source",
+      "seed_project": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/work/seed-project",
+      "seed_digest": "28893caee13b3b5a54118948e02c0dc528e9117e53eca1518ce43892eb2dffa3",
+      "readiness_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/readiness.json",
+      "dependencies": {
+        "go-mod-cache": {
+          "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_hcl_go-mod-cache",
+          "container_mount": "/deps/go-mod-cache",
+          "sha256": "d5786c23facd1162171bb5462cb4b01fbd4003ab8cddedbecc6beb2aa70bd3c6"
+        }
+      },
+      "tools": {},
+      "runtime_bindings": {
+        "container": "Linux bubblewrap; network disabled for checks",
+        "environment": {
+          "GOMODCACHE": "/state/go-mod-cache",
+          "GOCACHE": "/state/go-cache"
+        },
+        "system_executable": "/usr/lib/golang/bin/go",
+        "system_runtime_version": "go version go1.26.10-X:nodwarf5 linux/amd64"
+      },
+      "source_tree_sha256": "8ff36484a1c2f3868e37ae605a4f709aad796d9c6c58c699a792c625ffa82373",
+      "case_sha256": "37fdb1ef7267ae6d9165a9fb54623b71a428f753b5881c67c56dcf6c26540079",
+      "reference_review": {
+        "status": "pending",
+        "evidence": "Lead review pending. Readiness v5 passed baseline suites, expected seeded native failure, native/JSON public tests with exact and wrong-case assertions, and both hidden acceptances. The request identifies the case-insensitive behavior as a task-snapshot mutation. Reference changes ops.go and json/structure.go."
+      }
+    }
+  ]
+}

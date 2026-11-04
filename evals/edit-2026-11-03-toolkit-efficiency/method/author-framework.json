@@ -1,0 +1,132 @@
+{
+  "schema": 1,
+  "cases": [
+    {
+      "id": "flask-config",
+      "repo_id": "flask-config",
+      "url": "https://github.com/pallets/flask.git",
+      "pin": "d73fa1cdcbd8b1465c151db8924ba58b1dd14e35",
+      "language": "python",
+      "source_root": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/sources/flask",
+      "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-11-03-toolkit-efficiency/seeds/flask-config",
+      "seed_digest": "fc0b9965e6330ffa0d84577f4d787080eec7ced43c00c8307d6cc6da03d48ead",
+      "readiness_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/readiness.json",
+      "case_sha256": "00bb6dec8edcd93059ae3e1ce670331f7448e2a0dc8962706fc0e2d64478b5c4",
+      "readiness_status": "ready",
+      "dependencies": {
+        "python-site": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-11-03-toolkit-efficiency/artifacts/flask-python-site",
+          "runtime_path": "/state/python-site",
+          "sha256": "5117e25ba3fedef8fa8fb13cc85c068343cfbd90fb1a387c3beedfe24eddcbb6",
+          "packages": {
+            "pytest": "9.2.0",
+            "Flask source": "3.1.x at pinned checkout",
+            "Werkzeug": "3.1.9",
+            "Jinja2": "3.1.6",
+            "itsdangerous": "2.2.0",
+            "click": "8.5.0",
+            "blinker": "1.9.0"
+          }
+        }
+      },
+      "reference_review": {
+        "status": "passed",
+        "evidence": [
+          "Reviewed pinned src/flask/app.py default config and src/flask/sessions.py SessionInterface.get_expiration_time; reference replaces seed SESSION_COOKIE_MAX_AGE=0 with None and validates only when permanent expiry is calculated.",
+          "Reference changes src/flask/app.py and src/flask/sessions.py and adds tests/test_session_cookie_max_age.py; live request tests cover configured expiry, default lifetime, non-permanent cookie despite invalid config, and invalid permanent value.",
+          "Readiness-5 baseline public passed (1 test), reference public passed (5 tests), seed hidden failed with the expected diagnostic, reference hidden passed (1 test).",
+          "Historical eval search found no SESSION_COOKIE_MAX_AGE or matching session-max-age task outside the current campaign."
+        ],
+        "public_test_files": [
+          "tests/test_session_cookie_max_age.py"
+        ],
+        "production_files": [
+          "src/flask/app.py",
+          "src/flask/sessions.py"
+        ]
+      },
+      "seed_git": {
+        "commit": "18e6c28ec37e078aea9290f6d8dc30e1ecd65d37",
+        "commit_count": 1,
+        "clean": true,
+        "remotes": []
+      },
+      "readiness_evidence": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/evidence",
+      "corpus_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/flask-config/corpus.json",
+      "source_version": "Flask 3.2.0.dev",
+      "reference_digest": "76830730a19cd58ebf9e3f818da8666daf371c81e4d5268969b5d2ec60c00062",
+      "tools": {},
+      "tool_inputs": [],
+      "runtime_bindings": {
+        "runtime": "Python 3.14.8 at /usr/bin/python3",
+        "test_runner": "pytest 9.2.0 via /usr/bin/python3 -m pytest",
+        "network": "disabled during readiness execution",
+        "public_command_id": "focused_public_regressions",
+        "hidden_command_id": "session_max_age"
+      }
+    },
+    {
+      "id": "express-route",
+      "repo_id": "express-route",
+      "url": "https://github.com/expressjs/express.git",
+      "pin": "bed501c695a61886399ee622875f3be933c716d8",
+      "language": "javascript",
+      "source_root": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/sources/express",
+      "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-11-03-toolkit-efficiency/seeds/express-route-readiness-6",
+      "seed_digest": "ad2fb07c2954951a089b29f3f8f0ec9356fac82259d13009890343770b1e455a",
+      "readiness_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/readiness.json",
+      "case_sha256": "92bd3e7736b45473f4c2a904c224d3234e45bca8068604738f26a69cf573e3b5",
+      "readiness_status": "ready",
+      "dependencies": {
+        "node-modules": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-11-03-toolkit-efficiency/artifacts/express-node-modules",
+          "runtime_path": "/state/node-modules",
+          "sha256": "9d088d16e158b0fdf10ec95c6538484d2685661959fe3ebc2d33fb16ec604731",
+          "packages": {
+            "mocha": "11.8.0",
+            "supertest": "6.3.4",
+            "qs": "6.17.1"
+          }
+        }
+      },
+      "reference_review": {
+        "status": "passed",
+        "evidence": [
+          "Reviewed pinned lib/application.js app.defaultConfiguration/app.set and lib/utils.js compileQueryParser/parseExtendedQueryString; reference installs default depth 5, validates before mutation, recompiles on setting changes, and passes depth only to the built-in extended qs parser.",
+          "Reference changes lib/application.js and lib/utils.js and adds test/query-parser-depth.js; public route test proves the nesting limit and invalid-value tests confirm setting remains 5.",
+          "Readiness-6 baseline public passed; reference public passed (11 tests); seed hidden failed with the expected assertion diagnostic; reference hidden passed (7 tests), covering depth 0, later depth changes, and simple, disabled, and custom parsers.",
+          "Historical eval search found no query-parser-depth task outside the current campaign."
+        ],
+        "public_test_files": [
+          "test/query-parser-depth.js"
+        ],
+        "production_files": [
+          "lib/application.js",
+          "lib/utils.js"
+        ],
+        "hidden_test_file": "checks/test_query_parser_depth.js",
+        "hidden_destination": "test/query-parser-depth-hidden.js"
+      },
+      "seed_git": {
+        "commit": "40848a87c2f34eefea80665d799ebe572e26144b",
+        "commit_count": 1,
+        "clean": true,
+        "remotes": []
+      },
+      "readiness_evidence": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/evidence",
+      "corpus_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/express-route/corpus.json",
+      "source_version": "Express 5.2.1",
+      "reference_digest": "5a8186af1bc2d4cbadf6719b860c9980b08c8de9d91a7950aba3a208a3e6aa6c",
+      "tools": {},
+      "tool_inputs": [],
+      "runtime_bindings": {
+        "runtime": "Node.js v24.18.1 at /usr/bin/node",
+        "test_runner": "Mocha 11.8.0 loaded from /state/node-modules",
+        "http_assertions": "Supertest 6.3.4 loaded from /state/node-modules",
+        "network": "disabled during readiness execution",
+        "public_command_id": "focused_public_regressions",
+        "hidden_command_id": "query_parser_depth"
+      }
+    }
+  ]
+}
