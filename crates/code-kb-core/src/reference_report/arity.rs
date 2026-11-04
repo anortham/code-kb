@@ -231,6 +231,9 @@ pub(super) fn widened_by_ancestors(
     let (conn, root) = (accounting.conn, accounting.root);
     let mut range = own;
     for method in &inherited {
+        if range.language == "typescript" && method.body_start_byte.is_none() {
+            return Ok(None);
+        }
         let Some(arity) = definition_arity(conn, root, method, false, false)? else {
             return Ok(None);
         };

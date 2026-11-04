@@ -86,6 +86,16 @@ const PHP_NAMESPACE_SQL: &str =
 const CPP_NAMESPACE_SQL: &str = "SELECT 1 FROM symbols
      WHERE name = ?1 AND kind = 'namespace' AND language IN ('cpp', 'c') LIMIT 1";
 
+const POWERSHELL_EXPORTS_NAME_SQL: &str = "SELECT
+    NOT EXISTS(SELECT 1 FROM identifiers
+        WHERE path = ?1 AND language = 'powershell' AND kind = 'call'
+          AND name = 'Export-ModuleMember' COLLATE NOCASE)
+    OR EXISTS(SELECT 1 FROM symbols
+        WHERE path = ?1 AND language = 'powershell' AND kind = 'export'
+          AND parent_symbol_id IS NULL AND json_valid(metadata_json)
+          AND json_extract(metadata_json, '$.export_kind') = 'function'
+          AND (name = ?2 COLLATE NOCASE OR name = '*'))";
+
 /// One import, include, load, or export row of a file.
 #[derive(Clone, Debug)]
 pub(super) struct LoadRow {
@@ -694,7 +704,16 @@ impl<'a> Accounting<'a> {
     /// The files that `importer` loads, directly or through the files it loads, up to four
     /// steps and 64 files.
     fn load_scope(&mut self, importer: &str) -> Result<Rc<LoadScope>, QueryError> {
-        if let Some(scope) = self.loads.scopes.get(importer) {
+        self.load_named_scope(importer, None)
+    }
+
+    fn load_named_scope(
+        &mut self,
+        importer: &str,
+        name: Option<&str>,
+    ) -> Result<Rc<LoadScope>, QueryError> {
+        let key = format!("{importer}\0{}", name.unwrap_or_default());
+        if let Some(scope) = self.loads.scopes.get(&key) {
             return Ok(scope.clone());
         }
         let mut seen: HashSet<String> = HashSet::from([importer.to_string()]);
@@ -715,6 +734,16 @@ impl<'a> Accounting<'a> {
                         }
                     };
                     for path in found {
+                        if row.language == "powershell"
+                            && matches!(row.form.as_str(), "Import-Module" | "using module")
+                            && let Some(name) = name
+                            && !self.with_statement(POWERSHELL_EXPORTS_NAME_SQL, |stmt| {
+                                stmt.query_row(params![path, name], |row| row.get::<_, bool>(0))
+                            })?
+                        {
+                            complete = false;
+                            continue;
+                        }
                         if !seen.insert(path.clone()) {
                             continue;
                         }
@@ -738,9 +767,7 @@ impl<'a> Accounting<'a> {
             complete = false;
         }
         let scope = Rc::new(LoadScope { files, complete });
-        self.loads
-            .scopes
-            .insert(importer.to_string(), scope.clone());
+        self.loads.scopes.insert(key, scope.clone());
         Ok(scope)
     }
 
@@ -847,7 +874,8 @@ impl<'a> Accounting<'a> {
         if !loads_into_global_scope(&row.language) || !row.is_bare_use() || !row.is_call() {
             return Ok(None);
         }
-        let scope = self.load_scope(&row.path)?;
+        let name_filter = (row.language == "powershell").then_some(name);
+        let scope = self.load_named_scope(&row.path, name_filter)?;
         if !scope.complete || scope.files.is_empty() {
             return Ok(None);
         }

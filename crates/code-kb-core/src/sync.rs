@@ -55,9 +55,8 @@ pub enum SyncError {
 
 pub const PINNED_JULIE_VERSION: &str = "3.12.0";
 
-/// Extraction level code-kb asks for on a new artifact: the call and variable-reference
-/// identifiers with their call metadata, without the annotations and complexity metrics of `full`,
-/// which code-kb never reads.
+/// Extraction level for new artifacts: facts, call and variable-reference identifiers,
+/// call metadata, and annotations, without full-level metrics or source regions.
 pub const EXTRACTION_LEVEL: &str = "references";
 
 static CACHED_JULIE_BIN: std::sync::OnceLock<Option<(PathBuf, String)>> =

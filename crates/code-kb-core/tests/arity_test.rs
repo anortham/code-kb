@@ -951,6 +951,34 @@ fn a_typescript_override_of_an_abstract_or_interface_method_has_no_range() {
 }
 
 #[test]
+fn tsx_bodyless_ancestors_leave_ranges_unknown_and_concrete_ancestors_still_widen_them() {
+    let repo = scanned_repo(&[
+        (
+            "src/handler.tsx",
+            "export abstract class Handler {\n    abstract handle(req: string, res: number): void;\n}\nexport interface Cb {\n    run(a: number, b: number): void;\n}\nexport class Concrete {\n    process(a: number, b: number = 1): void {}\n}\n",
+        ),
+        (
+            "src/impl.tsx",
+            "import { Handler, Cb, Concrete } from './handler';\nexport class Impl extends Handler {\n    handle(req: string): void {}\n}\nexport class CbImpl implements Cb {\n    run(a: number): void {}\n}\nexport class ConcreteImpl extends Concrete {\n    process(a: number): void {}\n}\n",
+        ),
+        (
+            "src/use.tsx",
+            "export function go() {\n    const h = make();\n    h.handle('r', 1, 2);\n    h.handle();\n    h.run(1, 2, 3);\n    h.run();\n    h.process(1, 2);\n    h.process();\n    h.process(1, 2, 3);\n}\n",
+        ),
+    ]);
+    let handle = report(&repo, "handle", "src/impl.tsx");
+    assert_kept(&handle, "src/use.tsx", 3);
+    assert_kept(&handle, "src/use.tsx", 4);
+    let run = report(&repo, "run", "src/impl.tsx");
+    assert_kept(&run, "src/use.tsx", 5);
+    assert_kept(&run, "src/use.tsx", 6);
+    let process = report(&repo, "process", "src/impl.tsx");
+    assert_kept(&process, "src/use.tsx", 7);
+    assert_excluded(&process, "src/use.tsx", 8, "0 args; `process` takes 1-2");
+    assert_excluded(&process, "src/use.tsx", 9, "3 args; `process` takes 1-2");
+}
+
+#[test]
 fn a_base_method_keeps_its_own_range_when_an_override_takes_another_count() {
     let repo = scanned_repo(&[
         (
