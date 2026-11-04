@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "model_trials_completed_before_repair": 1,
+  "unexposed_setup_failure": {
+    "path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/current/attempts/002-flask-config-code-kb-r1/attempt.json",
+    "sha256": "57472a663279100cbe0a713596fdcafb4e5a5c6199eef8f7fcbac3a8b624f8ee",
+    "status": "preindex_failed",
+    "dispatch_started": false,
+    "reason": "managed .code-kb generated root omitted from framework cases"
+  },
+  "tmp_quota": {
+    "observed_limit_mib": 13108,
+    "observed_usage_mib": 13108,
+    "resolved": true,
+    "relocation_receipt": "../setup-v2/host-setup/tmp-relocation.json"
+  },
+  "repair": "../setup-v2/protocol-amendment.md",
+  "no_completed_model_rerun": true,
+  "fixed_model_trial_count": 36
+}

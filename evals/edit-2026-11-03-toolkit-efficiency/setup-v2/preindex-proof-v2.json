@@ -1,0 +1,249 @@
+{
+  "schema": 1,
+  "scored": false,
+  "model_dispatches": 0,
+  "setup_parent": "preindex-proof.json",
+  "correction": "Preserve symlinks exactly as the frozen campaign runner does; reuse successful framework proofs.",
+  "records": [
+    {
+      "case_id": "flask-config",
+      "case_sha256": "6aa02c23c4f04ae6516c8d226755687cac42927fff4926e4a0c56bb8c446a271",
+      "receipt": {
+        "status": "completed",
+        "elapsed_seconds": 0.665715,
+        "source_digest_before": "fc0b9965e6330ffa0d84577f4d787080eec7ced43c00c8307d6cc6da03d48ead",
+        "source_digest_after": "fc0b9965e6330ffa0d84577f4d787080eec7ced43c00c8307d6cc6da03d48ead",
+        "exit_status": 0,
+        "timed_out": false,
+        "process_cleanup": {
+          "attempted": false,
+          "complete": true,
+          "signal": null
+        },
+        "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex/flask-config/evidence/indexing/stdout.log",
+        "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex/flask-config/evidence/indexing/stderr.log",
+        "stdout_redaction": {
+          "status": "complete",
+          "original_sha256": "c1affe1ab1aaeea538e389e7a7907d0c0b097af125e47fc1671eb54f8f49ca04",
+          "redacted_sha256": "c1affe1ab1aaeea538e389e7a7907d0c0b097af125e47fc1671eb54f8f49ca04",
+          "changed": false,
+          "original_bytes": 109,
+          "redacted_bytes": 109,
+          "path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex/flask-config/evidence/indexing/stdout.log",
+          "raw_retained": false
+        },
+        "stderr_redaction": {
+          "status": "complete",
+          "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "redacted_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "changed": false,
+          "original_bytes": 0,
+          "redacted_bytes": 0,
+          "path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex/flask-config/evidence/indexing/stderr.log",
+          "raw_retained": false
+        },
+        "error": null
+      }
+    },
+    {
+      "case_id": "express-route",
+      "case_sha256": "5eb6b0c77d26d70b8eeceff5967b04db18afbe6f0f3faf8339138a09aac6bc1b",
+      "receipt": {
+        "status": "completed",
+        "elapsed_seconds": 0.665659,
+        "source_digest_before": "ad2fb07c2954951a089b29f3f8f0ec9356fac82259d13009890343770b1e455a",
+        "source_digest_after": "ad2fb07c2954951a089b29f3f8f0ec9356fac82259d13009890343770b1e455a",
+        "exit_status": 0,
+        "timed_out": false,
+        "process_cleanup": {
+          "attempted": false,
+          "complete": true,
+          "signal": null
+        },
+        "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex/express-route/evidence/indexing/stdout.log",
+        "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex/express-route/evidence/indexing/stderr.log",
+        "stdout_redaction": {
+          "status": "complete",
+          "original_sha256": "c1affe1ab1aaeea538e389e7a7907d0c0b097af125e47fc1671eb54f8f49ca04",
+          "redacted_sha256": "c1affe1ab1aaeea538e389e7a7907d0c0b097af125e47fc1671eb54f8f49ca04",
+          "changed": false,
+          "original_bytes": 109,
+          "redacted_bytes": 109,
+          "path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex/express-route/evidence/indexing/stdout.log",
+          "raw_retained": false
+        },
+        "stderr_redaction": {
+          "status": "complete",
+          "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "redacted_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "changed": false,
+          "original_bytes": 0,
+          "redacted_bytes": 0,
+          "path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex/express-route/evidence/indexing/stderr.log",
+          "raw_retained": false
+        },
+        "error": null
+      }
+    },
+    {
+      "case_id": "minijinja-config",
+      "case_sha256": "3580ae7fd74760eec9ed0e4c0f07a274552949bab76600be5eeb25f72d088915",
+      "receipt": {
+        "status": "completed",
+        "elapsed_seconds": 2.974667,
+        "source_digest_before": "e70f8d055dff7a54758b5fd4661ab5dbf08e8a2484f8fc7f8498f3245114ed72",
+        "source_digest_after": "e70f8d055dff7a54758b5fd4661ab5dbf08e8a2484f8fc7f8498f3245114ed72",
+        "exit_status": 0,
+        "timed_out": false,
+        "process_cleanup": {
+          "attempted": false,
+          "complete": true,
+          "signal": null
+        },
+        "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex-recovery/minijinja-config/evidence/indexing/stdout.log",
+        "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex-recovery/minijinja-config/evidence/indexing/stderr.log",
+        "stdout_redaction": {
+          "status": "complete",
+          "original_sha256": "c1affe1ab1aaeea538e389e7a7907d0c0b097af125e47fc1671eb54f8f49ca04",
+          "redacted_sha256": "c1affe1ab1aaeea538e389e7a7907d0c0b097af125e47fc1671eb54f8f49ca04",
+          "changed": false,
+          "original_bytes": 109,
+          "redacted_bytes": 109,
+          "path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex-recovery/minijinja-config/evidence/indexing/stdout.log",
+          "raw_retained": false
+        },
+        "stderr_redaction": {
+          "status": "complete",
+          "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "redacted_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "changed": false,
+          "original_bytes": 0,
+          "redacted_bytes": 0,
+          "path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex-recovery/minijinja-config/evidence/indexing/stderr.log",
+          "raw_retained": false
+        },
+        "error": null
+      }
+    },
+    {
+      "case_id": "hcl-config",
+      "case_sha256": "37fdb1ef7267ae6d9165a9fb54623b71a428f753b5881c67c56dcf6c26540079",
+      "receipt": {
+        "status": "completed",
+        "elapsed_seconds": 1.720098,
+        "source_digest_before": "28893caee13b3b5a54118948e02c0dc528e9117e53eca1518ce43892eb2dffa3",
+        "source_digest_after": "28893caee13b3b5a54118948e02c0dc528e9117e53eca1518ce43892eb2dffa3",
+        "exit_status": 0,
+        "timed_out": false,
+        "process_cleanup": {
+          "attempted": false,
+          "complete": true,
+          "signal": null
+        },
+        "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex-recovery/hcl-config/evidence/indexing/stdout.log",
+        "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex-recovery/hcl-config/evidence/indexing/stderr.log",
+        "stdout_redaction": {
+          "status": "complete",
+          "original_sha256": "c1affe1ab1aaeea538e389e7a7907d0c0b097af125e47fc1671eb54f8f49ca04",
+          "redacted_sha256": "c1affe1ab1aaeea538e389e7a7907d0c0b097af125e47fc1671eb54f8f49ca04",
+          "changed": false,
+          "original_bytes": 109,
+          "redacted_bytes": 109,
+          "path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex-recovery/hcl-config/evidence/indexing/stdout.log",
+          "raw_retained": false
+        },
+        "stderr_redaction": {
+          "status": "complete",
+          "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "redacted_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "changed": false,
+          "original_bytes": 0,
+          "redacted_bytes": 0,
+          "path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex-recovery/hcl-config/evidence/indexing/stderr.log",
+          "raw_retained": false
+        },
+        "error": null
+      }
+    },
+    {
+      "case_id": "commons-lang",
+      "case_sha256": "f5bcc4a9f9f1c631d17a5934ffc91de72cf4157bdbf1b8b2cacf784cfe21960f",
+      "receipt": {
+        "status": "completed",
+        "elapsed_seconds": 4.526544,
+        "source_digest_before": "45360d445c673c6a4ecbd8d32de4afaa701841fd9638caa6668846f10af5b3e3",
+        "source_digest_after": "45360d445c673c6a4ecbd8d32de4afaa701841fd9638caa6668846f10af5b3e3",
+        "exit_status": 0,
+        "timed_out": false,
+        "process_cleanup": {
+          "attempted": false,
+          "complete": true,
+          "signal": null
+        },
+        "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex-recovery/commons-lang/evidence/indexing/stdout.log",
+        "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex-recovery/commons-lang/evidence/indexing/stderr.log",
+        "stdout_redaction": {
+          "status": "complete",
+          "original_sha256": "c1affe1ab1aaeea538e389e7a7907d0c0b097af125e47fc1671eb54f8f49ca04",
+          "redacted_sha256": "c1affe1ab1aaeea538e389e7a7907d0c0b097af125e47fc1671eb54f8f49ca04",
+          "changed": false,
+          "original_bytes": 109,
+          "redacted_bytes": 109,
+          "path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex-recovery/commons-lang/evidence/indexing/stdout.log",
+          "raw_retained": false
+        },
+        "stderr_redaction": {
+          "status": "complete",
+          "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "redacted_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "changed": false,
+          "original_bytes": 0,
+          "redacted_bytes": 0,
+          "path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex-recovery/commons-lang/evidence/indexing/stderr.log",
+          "raw_retained": false
+        },
+        "error": null
+      }
+    },
+    {
+      "case_id": "nodatime",
+      "case_sha256": "a55ab9b83e8b0a45c9ed8bcbaf79a6f3350c9cb89232a04662993a7bfd05ab43",
+      "receipt": {
+        "status": "completed",
+        "elapsed_seconds": 1.869145,
+        "source_digest_before": "7609d88901825bf2f4f5020e2f6b190377fe5e49712b5c522de0e5f6d3f3ca7c",
+        "source_digest_after": "7609d88901825bf2f4f5020e2f6b190377fe5e49712b5c522de0e5f6d3f3ca7c",
+        "exit_status": 0,
+        "timed_out": false,
+        "process_cleanup": {
+          "attempted": false,
+          "complete": true,
+          "signal": null
+        },
+        "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex-recovery/nodatime/evidence/indexing/stdout.log",
+        "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex-recovery/nodatime/evidence/indexing/stderr.log",
+        "stdout_redaction": {
+          "status": "complete",
+          "original_sha256": "c1affe1ab1aaeea538e389e7a7907d0c0b097af125e47fc1671eb54f8f49ca04",
+          "redacted_sha256": "c1affe1ab1aaeea538e389e7a7907d0c0b097af125e47fc1671eb54f8f49ca04",
+          "changed": false,
+          "original_bytes": 109,
+          "redacted_bytes": 109,
+          "path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex-recovery/nodatime/evidence/indexing/stdout.log",
+          "raw_retained": false
+        },
+        "stderr_redaction": {
+          "status": "complete",
+          "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "redacted_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "changed": false,
+          "original_bytes": 0,
+          "redacted_bytes": 0,
+          "path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex-recovery/nodatime/evidence/indexing/stderr.log",
+          "raw_retained": false
+        },
+        "error": null
+      }
+    }
+  ]
+}

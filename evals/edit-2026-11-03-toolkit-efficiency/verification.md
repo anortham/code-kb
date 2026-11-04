@@ -22,3 +22,7 @@ and completed patches against the frozen acceptance criteria.
 ## K2 candidate
 
 Source `3dc4d5d` passes the expected red/green handshake test, all 66 MCP tests, formatting, and the release build. Real baseline/candidate handshakes have equal tool definitions and initialize results except the 480-to-158-character shared instructions. Candidate runtime, source, binary hash, controls, and zero-dispatch compatibility are bound in `runtime-candidate.json`, `schema-comparison.json`, and `control-candidate.json`. This is an unretained candidate pending K3, not a savings result.
+
+## K3 setup repair
+
+Ordinal 1 native completed with accepted source and 19 added tests passing on the trusted fresh public replay (20 public checks total). Ordinal 2 current stopped before exposure: the framework cases lacked the managed `.code-kb` root. Versioned metadata-only corrections preserve prompts, source, checks, protected inputs and seeds; all six real preindex paths pass. Original records are unchanged. Host `/tmp` quota was relieved through the specifically approved, hash-verified cache relocation. See `setup-v2/protocol-amendment.md` and `results/infrastructure.json`. Continue the unchanged schedule at ordinal 2; no completed model is rerun.

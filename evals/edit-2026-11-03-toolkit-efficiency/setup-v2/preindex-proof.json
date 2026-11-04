@@ -1,0 +1,98 @@
+{
+  "schema": 1,
+  "scored": false,
+  "model_dispatches": 0,
+  "records": [
+    {
+      "case_id": "flask-config",
+      "case_sha256": "6aa02c23c4f04ae6516c8d226755687cac42927fff4926e4a0c56bb8c446a271",
+      "receipt": {
+        "status": "completed",
+        "elapsed_seconds": 0.665715,
+        "source_digest_before": "fc0b9965e6330ffa0d84577f4d787080eec7ced43c00c8307d6cc6da03d48ead",
+        "source_digest_after": "fc0b9965e6330ffa0d84577f4d787080eec7ced43c00c8307d6cc6da03d48ead",
+        "exit_status": 0,
+        "timed_out": false,
+        "process_cleanup": {
+          "attempted": false,
+          "complete": true,
+          "signal": null
+        },
+        "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex/flask-config/evidence/indexing/stdout.log",
+        "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex/flask-config/evidence/indexing/stderr.log",
+        "stdout_redaction": {
+          "status": "complete",
+          "original_sha256": "c1affe1ab1aaeea538e389e7a7907d0c0b097af125e47fc1671eb54f8f49ca04",
+          "redacted_sha256": "c1affe1ab1aaeea538e389e7a7907d0c0b097af125e47fc1671eb54f8f49ca04",
+          "changed": false,
+          "original_bytes": 109,
+          "redacted_bytes": 109,
+          "path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex/flask-config/evidence/indexing/stdout.log",
+          "raw_retained": false
+        },
+        "stderr_redaction": {
+          "status": "complete",
+          "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "redacted_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "changed": false,
+          "original_bytes": 0,
+          "redacted_bytes": 0,
+          "path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex/flask-config/evidence/indexing/stderr.log",
+          "raw_retained": false
+        },
+        "error": null
+      }
+    },
+    {
+      "case_id": "express-route",
+      "case_sha256": "5eb6b0c77d26d70b8eeceff5967b04db18afbe6f0f3faf8339138a09aac6bc1b",
+      "receipt": {
+        "status": "completed",
+        "elapsed_seconds": 0.665659,
+        "source_digest_before": "ad2fb07c2954951a089b29f3f8f0ec9356fac82259d13009890343770b1e455a",
+        "source_digest_after": "ad2fb07c2954951a089b29f3f8f0ec9356fac82259d13009890343770b1e455a",
+        "exit_status": 0,
+        "timed_out": false,
+        "process_cleanup": {
+          "attempted": false,
+          "complete": true,
+          "signal": null
+        },
+        "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex/express-route/evidence/indexing/stdout.log",
+        "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex/express-route/evidence/indexing/stderr.log",
+        "stdout_redaction": {
+          "status": "complete",
+          "original_sha256": "c1affe1ab1aaeea538e389e7a7907d0c0b097af125e47fc1671eb54f8f49ca04",
+          "redacted_sha256": "c1affe1ab1aaeea538e389e7a7907d0c0b097af125e47fc1671eb54f8f49ca04",
+          "changed": false,
+          "original_bytes": 109,
+          "redacted_bytes": 109,
+          "path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex/express-route/evidence/indexing/stdout.log",
+          "raw_retained": false
+        },
+        "stderr_redaction": {
+          "status": "complete",
+          "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "redacted_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "changed": false,
+          "original_bytes": 0,
+          "redacted_bytes": 0,
+          "path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/setup-v2-preindex/express-route/evidence/indexing/stderr.log",
+          "raw_retained": false
+        },
+        "error": null
+      }
+    },
+    {
+      "case_id": "minijinja-config",
+      "case_sha256": "3580ae7fd74760eec9ed0e4c0f07a274552949bab76600be5eeb25f72d088915",
+      "receipt": {
+        "status": "failed",
+        "elapsed_seconds": null,
+        "source_digest_before": "e360e07e04149979564c567e82593c2cf485dc097e012df38ac9ed911a023775",
+        "source_digest_after": null,
+        "failure": "agent project changed before code-kb preindex"
+      }
+    }
+  ]
+}

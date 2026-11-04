@@ -1,0 +1,11 @@
+{
+  "source": "/tmp/code-kb-perf-20261031",
+  "backup": "/home/murphy/.cache/code-kb-perf-20261031",
+  "verified": {
+    "sha256": "15784887bcc5e22aee418b9846deaa3bd508891af488f2da0df682d14a1579fd",
+    "files": 1584,
+    "bytes": 1846503404
+  },
+  "source_unchanged": true,
+  "relocation_authorized": false
+}
