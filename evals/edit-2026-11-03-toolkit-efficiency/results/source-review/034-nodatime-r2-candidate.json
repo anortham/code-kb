@@ -1,0 +1,91 @@
+{
+  "schema": 1,
+  "ordinal": 34,
+  "case_id": "nodatime",
+  "repeat": 2,
+  "runtime": "candidate",
+  "attempt_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/candidate-v2/attempts/023-nodatime-code-kb-r2/attempt.json",
+  "attempt_sha256": "c6e10a0f5724ecc676ce6de359f7001918f5baabe8ef340344f61cfb8b0a1f67",
+  "bundle_json_sha256": "ef5ebdd69c80b7c954dd40f769f07d423eb05689730dadbb107d3cd5bbd1c50c",
+  "source_review": "passed",
+  "source_behavior_passed": true,
+  "accepted": true,
+  "trial_completed": true,
+  "behavioral_pass": true,
+  "protection_status": "unchanged",
+  "review_note": "results/source-review/provisional-java-csharp-r2/attempt-034-nodatime-candidate-r2.json",
+  "review_note_sha256": "98ca54360921163c6e5b4076eac0bc552f5f14950cc2f43a8da1c91aa523dbc9",
+  "lead_review": "Reviewed production diffs against seeds and source-review rationale; old entrypoints stay unchanged. A fresh trusted public replay used the actual added test classes, no hidden overlay and the identical patch digest. Its observed execution and pass/fail result below determine acceptance. Style observations on immutable model data are unscored.",
+  "added_tests": {
+    "fresh_public_replay": true,
+    "executed": true,
+    "passed": true,
+    "executed_count": 27,
+    "selector": "FullyQualifiedName~NodaTime.Test.DateTimeOffsetConversionTest",
+    "command": [
+      "/usr/bin/env",
+      "DOTNET_CLI_HOME=/state/dotnet",
+      "NUGET_PACKAGES=/state/nodatime-nuget",
+      "DOTNET_CLI_TELEMETRY_OPTOUT=1",
+      "DOTNET_NOLOGO=1",
+      "/tools/dotnet/dotnet",
+      "test",
+      "src/NodaTime.Test/NodaTime.Test.csproj",
+      "--framework",
+      "net10.0",
+      "--no-restore",
+      "--filter",
+      "FullyQualifiedName~NodaTime.Test.DateTimeOffsetConversionTest",
+      "--results-directory",
+      "/state/results",
+      "--logger",
+      "console;verbosity=normal",
+      "-p:PublicSign=true"
+    ],
+    "observed_names": [
+      "Instant_BclBoundaries",
+      "Instant_DateOutOfRange",
+      "Instant_Success",
+      "Instant_TruncatesPrecisionTowardStartOfTime(100)",
+      "Instant_TruncatesPrecisionTowardStartOfTime(1900)",
+      "Instant_TruncatesPrecisionTowardStartOfTime(2900)",
+      "OffsetDateTime_BclBoundariesWithTruncatedOffset(False)",
+      "OffsetDateTime_BclBoundariesWithTruncatedOffset(True)",
+      "OffsetDateTime_DateOutOfRange(0,12,31,False)",
+      "OffsetDateTime_DateOutOfRange(1,1,2,True)",
+      "OffsetDateTime_JulianCalendar(1,1,3)",
+      "OffsetDateTime_JulianCalendar(2012,10,6)",
+      "OffsetDateTime_JulianCalendar(9998,12,31)",
+      "OffsetDateTime_OffsetOutOfRange(-15)",
+      "OffsetDateTime_OffsetOutOfRange(15)",
+      "OffsetDateTime_SuccessAndOffsetTruncation(-1859)",
+      "OffsetDateTime_SuccessAndOffsetTruncation(-3600)",
+      "OffsetDateTime_SuccessAndOffsetTruncation(-50459)",
+      "OffsetDateTime_SuccessAndOffsetTruncation(0)",
+      "OffsetDateTime_SuccessAndOffsetTruncation(1859)",
+      "OffsetDateTime_SuccessAndOffsetTruncation(3600)",
+      "OffsetDateTime_SuccessAndOffsetTruncation(50459)",
+      "OffsetDateTime_TruncatesPrecisionTowardStartOfTime(100)",
+      "OffsetDateTime_TruncatesPrecisionTowardStartOfTime(1900)",
+      "OffsetDateTime_TruncatesPrecisionTowardStartOfTime(2900)",
+      "OffsetDateTime_UtcDateOutOfRange(False)",
+      "OffsetDateTime_UtcDateOutOfRange(True)"
+    ],
+    "receipt": {
+      "path": "results/source-review/replay-nodatime/nodatime-r2-candidate/receipt.json",
+      "sha256": "35b9eab36b4aaa992937971eb2ed932330d454db1e96bc289905c6182af9b956"
+    },
+    "logs": [
+      {
+        "path": "results/source-review/replay-nodatime/nodatime-r2-candidate/stdout.trusted.log",
+        "sha256": "8b09b4df84f8fd556a0432338190636d98128118d65a993dcc259ca74404277a"
+      },
+      {
+        "path": "results/source-review/replay-nodatime/nodatime-r1-native/stderr.trusted.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ]
+  },
+  "rejection_reasons": [],
+  "original_record_unchanged": true
+}

@@ -1,0 +1,2075 @@
+=== RUN   TestNameSuggestion
+=== RUN   TestNameSuggestion/true
+=== RUN   TestNameSuggestion/false
+=== RUN   TestNameSuggestion/null
+=== RUN   TestNameSuggestion/bananas
+=== RUN   TestNameSuggestion/NaN
+=== RUN   TestNameSuggestion/Inf
+=== RUN   TestNameSuggestion/Infinity
+=== RUN   TestNameSuggestion/void
+=== RUN   TestNameSuggestion/undefined
+=== RUN   TestNameSuggestion/ture
+=== RUN   TestNameSuggestion/tru
+=== RUN   TestNameSuggestion/tre
+=== RUN   TestNameSuggestion/treu
+=== RUN   TestNameSuggestion/rtue
+=== RUN   TestNameSuggestion/flase
+=== RUN   TestNameSuggestion/fales
+=== RUN   TestNameSuggestion/flse
+=== RUN   TestNameSuggestion/fasle
+=== RUN   TestNameSuggestion/fasel
+=== RUN   TestNameSuggestion/flue
+=== RUN   TestNameSuggestion/nil
+=== RUN   TestNameSuggestion/nul
+=== RUN   TestNameSuggestion/unll
+=== RUN   TestNameSuggestion/nll
+--- PASS: TestNameSuggestion (0.00s)
+    --- PASS: TestNameSuggestion/true (0.00s)
+    --- PASS: TestNameSuggestion/false (0.00s)
+    --- PASS: TestNameSuggestion/null (0.00s)
+    --- PASS: TestNameSuggestion/bananas (0.00s)
+    --- PASS: TestNameSuggestion/NaN (0.00s)
+    --- PASS: TestNameSuggestion/Inf (0.00s)
+    --- PASS: TestNameSuggestion/Infinity (0.00s)
+    --- PASS: TestNameSuggestion/void (0.00s)
+    --- PASS: TestNameSuggestion/undefined (0.00s)
+    --- PASS: TestNameSuggestion/ture (0.00s)
+    --- PASS: TestNameSuggestion/tru (0.00s)
+    --- PASS: TestNameSuggestion/tre (0.00s)
+    --- PASS: TestNameSuggestion/treu (0.00s)
+    --- PASS: TestNameSuggestion/rtue (0.00s)
+    --- PASS: TestNameSuggestion/flase (0.00s)
+    --- PASS: TestNameSuggestion/fales (0.00s)
+    --- PASS: TestNameSuggestion/flse (0.00s)
+    --- PASS: TestNameSuggestion/fasle (0.00s)
+    --- PASS: TestNameSuggestion/fasel (0.00s)
+    --- PASS: TestNameSuggestion/flue (0.00s)
+    --- PASS: TestNameSuggestion/nil (0.00s)
+    --- PASS: TestNameSuggestion/nul (0.00s)
+    --- PASS: TestNameSuggestion/unll (0.00s)
+    --- PASS: TestNameSuggestion/nll (0.00s)
+=== RUN   TestTraversalStatic
+--- PASS: TestTraversalStatic (0.00s)
+=== RUN   TestTupleStatic
+--- PASS: TestTupleStatic (0.00s)
+=== RUN   TestMapStatic
+--- PASS: TestMapStatic (0.00s)
+=== RUN   TestTemplateExprParseAndValue
+=== RUN   TestTemplateExprParseAndValue/1
+=== RUN   TestTemplateExprParseAndValue/(1)
+=== RUN   TestTemplateExprParseAndValue/true
+=== RUN   TestTemplateExprParseAndValue/_hello_world_
+=== RUN   TestTemplateExprParseAndValue/hello_${"world"}
+=== RUN   TestTemplateExprParseAndValue/hello\nworld
+=== RUN   TestTemplateExprParseAndValue/hello_${12.5}
+=== RUN   TestTemplateExprParseAndValue/silly_${"${"nesting"}"}
+=== RUN   TestTemplateExprParseAndValue/silly_${"${true}"}
+=== RUN   TestTemplateExprParseAndValue/hello_$${escaped}
+=== RUN   TestTemplateExprParseAndValue/hello_$$nonescape
+=== RUN   TestTemplateExprParseAndValue/hello_%${"world"}
+=== RUN   TestTemplateExprParseAndValue/${true}
+=== RUN   TestTemplateExprParseAndValue/trim_${~_"trim"}
+=== RUN   TestTemplateExprParseAndValue/${"trim"_~}_trim
+=== RUN   TestTemplateExprParseAndValue/trim_${~"trim"~}_trim
+=== RUN   TestTemplateExprParseAndValue/_${~_true_~}_
+=== RUN   TestTemplateExprParseAndValue/${"hello_"}${~"trim"~}${"_hello"}
+=== RUN   TestTemplateExprParseAndValue/${true}${~"trim"~}${true}
+=== RUN   TestTemplateExprParseAndValue/%{_if_true_~}_hello_%{~_endif_}
+=== RUN   TestTemplateExprParseAndValue/%{_if_false_~}_hello_%{~_endif}
+=== RUN   TestTemplateExprParseAndValue/%{_if_true_~}_hello_%{~_else_~}_goodbye_%{~_endif_}
+=== RUN   TestTemplateExprParseAndValue/%{_if_false_~}_hello_%{~_else_~}_goodbye_%{~_endif_}
+=== RUN   TestTemplateExprParseAndValue/%{_if_true_~}_%{~_if_false_~}_hello_%{~_else_~}_goodbye_%{~_endif_~}_%{~_endif_}
+=== RUN   TestTemplateExprParseAndValue/%{_if_false_~}_%{~_if_false_~}_hello_%{~_else_~}_goodbye_%{~_endif_~}_%{~_endif_}
+=== RUN   TestTemplateExprParseAndValue/%{_of_true_~}_hello_%{~_endif}
+=== RUN   TestTemplateExprParseAndValue/%{_for_v_in_["a",_"b",_"c"]_}${v}%{_endfor_}
+=== RUN   TestTemplateExprParseAndValue/%{_for_v_in_["a",_"b",_"c"]_}_${v}_%{_endfor_}
+=== RUN   TestTemplateExprParseAndValue/%{_for_v_in_["a",_"b",_"c"]_~}_${v}_%{~_endfor_}
+=== RUN   TestTemplateExprParseAndValue/%{_for_v_in_[]_}${v}%{_endfor_}
+=== RUN   TestTemplateExprParseAndValue/%{_for_i,_v_in_["a",_"b",_"c"]_}${i}${v}%{_endfor_}
+=== RUN   TestTemplateExprParseAndValue/%{_for_k,_v_in_{"A"_=_"a",_"B"_=_"b",_"C"_=_"c"}_}${k}${v}%{_endfor_}
+=== RUN   TestTemplateExprParseAndValue/%{_for_v_in_["a",_"b",_"c"]_}${v}${nl}%{_endfor_}
+=== RUN   TestTemplateExprParseAndValue/\n
+=== RUN   TestTemplateExprParseAndValue/\uu1234
+=== RUN   TestTemplateExprParseAndValue/$
+=== RUN   TestTemplateExprParseAndValue/$$
+=== RUN   TestTemplateExprParseAndValue/%
+=== RUN   TestTemplateExprParseAndValue/%%
+=== RUN   TestTemplateExprParseAndValue/hello_%%{_if_true_}world%%{_endif_}
+=== RUN   TestTemplateExprParseAndValue/hello_$%{_if_true_}world%{_endif_}
+=== RUN   TestTemplateExprParseAndValue/%{_endif_}
+=== RUN   TestTemplateExprParseAndValue/%{_endfor_}
+=== RUN   TestTemplateExprParseAndValue/test_${unknown}
+=== RUN   TestTemplateExprParseAndValue/test_${known}_${unknown}
+=== RUN   TestTemplateExprParseAndValue/__________________________________________________________________________________________________________________________________${unknown}
+=== RUN   TestTemplateExprParseAndValue/hello%{_if_false_}_${target}%{_endif_}
+=== RUN   TestTemplateExprParseAndValue/${greeting}_${target}
+=== RUN   TestTemplateExprParseAndValue/Authenticate_with_"${secrets.passphrase}"
+=== RUN   TestTemplateExprParseAndValue/%{_for_s_in_secrets_}${s}%{_endfor_}
+=== RUN   TestTemplateExprParseAndValue/%{_for_s_in_secrets_}${s}%{_endfor_}#01
+=== RUN   TestTemplateExprParseAndValue/%{_for_s_in_secrets_}${s}%{_endfor_}#02
+=== RUN   TestTemplateExprParseAndValue/test_${target}
+--- PASS: TestTemplateExprParseAndValue (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/1 (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/(1) (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/true (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/_hello_world_ (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/hello_${"world"} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/hello\nworld (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/hello_${12.5} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/silly_${"${"nesting"}"} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/silly_${"${true}"} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/hello_$${escaped} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/hello_$$nonescape (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/hello_%${"world"} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/${true} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/trim_${~_"trim"} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/${"trim"_~}_trim (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/trim_${~"trim"~}_trim (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/_${~_true_~}_ (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/${"hello_"}${~"trim"~}${"_hello"} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/${true}${~"trim"~}${true} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/%{_if_true_~}_hello_%{~_endif_} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/%{_if_false_~}_hello_%{~_endif} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/%{_if_true_~}_hello_%{~_else_~}_goodbye_%{~_endif_} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/%{_if_false_~}_hello_%{~_else_~}_goodbye_%{~_endif_} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/%{_if_true_~}_%{~_if_false_~}_hello_%{~_else_~}_goodbye_%{~_endif_~}_%{~_endif_} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/%{_if_false_~}_%{~_if_false_~}_hello_%{~_else_~}_goodbye_%{~_endif_~}_%{~_endif_} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/%{_of_true_~}_hello_%{~_endif} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/%{_for_v_in_["a",_"b",_"c"]_}${v}%{_endfor_} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/%{_for_v_in_["a",_"b",_"c"]_}_${v}_%{_endfor_} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/%{_for_v_in_["a",_"b",_"c"]_~}_${v}_%{~_endfor_} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/%{_for_v_in_[]_}${v}%{_endfor_} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/%{_for_i,_v_in_["a",_"b",_"c"]_}${i}${v}%{_endfor_} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/%{_for_k,_v_in_{"A"_=_"a",_"B"_=_"b",_"C"_=_"c"}_}${k}${v}%{_endfor_} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/%{_for_v_in_["a",_"b",_"c"]_}${v}${nl}%{_endfor_} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/\n (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/\uu1234 (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/$ (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/$$ (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/% (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/%% (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/hello_%%{_if_true_}world%%{_endif_} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/hello_$%{_if_true_}world%{_endif_} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/%{_endif_} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/%{_endfor_} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/test_${unknown} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/test_${known}_${unknown} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/__________________________________________________________________________________________________________________________________${unknown} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/hello%{_if_false_}_${target}%{_endif_} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/${greeting}_${target} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/Authenticate_with_"${secrets.passphrase}" (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/%{_for_s_in_secrets_}${s}%{_endfor_} (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/%{_for_s_in_secrets_}${s}%{_endfor_}#01 (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/%{_for_s_in_secrets_}${s}%{_endfor_}#02 (0.00s)
+    --- PASS: TestTemplateExprParseAndValue/test_${target} (0.00s)
+=== RUN   TestTemplateExprGracefulValue
+--- PASS: TestTemplateExprGracefulValue (0.00s)
+=== RUN   TestTemplateExprWrappedGracefulValue
+--- PASS: TestTemplateExprWrappedGracefulValue (0.00s)
+=== RUN   TestTemplateExprIsStringLiteral
+=== RUN   TestTemplateExprIsStringLiteral/a
+=== RUN   TestTemplateExprIsStringLiteral/a_b
+=== RUN   TestTemplateExprIsStringLiteral/a$${"b"}
+=== RUN   TestTemplateExprIsStringLiteral/${1}
+=== RUN   TestTemplateExprIsStringLiteral/a${"b"}
+=== RUN   TestTemplateExprIsStringLiteral/a$b
+=== RUN   TestTemplateExprIsStringLiteral/a%%b
+=== RUN   TestTemplateExprIsStringLiteral/${"b"}
+=== RUN   TestTemplateExprIsStringLiteral/a${1}
+--- PASS: TestTemplateExprIsStringLiteral (0.00s)
+    --- PASS: TestTemplateExprIsStringLiteral/a (0.00s)
+    --- PASS: TestTemplateExprIsStringLiteral/a_b (0.00s)
+    --- PASS: TestTemplateExprIsStringLiteral/a$${"b"} (0.00s)
+    --- PASS: TestTemplateExprIsStringLiteral/${1} (0.00s)
+    --- PASS: TestTemplateExprIsStringLiteral/a${"b"} (0.00s)
+    --- PASS: TestTemplateExprIsStringLiteral/a$b (0.00s)
+    --- PASS: TestTemplateExprIsStringLiteral/a%%b (0.00s)
+    --- PASS: TestTemplateExprIsStringLiteral/${"b"} (0.00s)
+    --- PASS: TestTemplateExprIsStringLiteral/a${1} (0.00s)
+=== RUN   TestExpressionParseAndValue
+=== RUN   TestExpressionParseAndValue/1
+=== RUN   TestExpressionParseAndValue/(1)
+=== RUN   TestExpressionParseAndValue/(2+3)
+=== RUN   TestExpressionParseAndValue/2*5+1
+=== RUN   TestExpressionParseAndValue/9%8
+=== RUN   TestExpressionParseAndValue/(2+unk)
+=== RUN   TestExpressionParseAndValue/(2+unk)#01
+=== RUN   TestExpressionParseAndValue/(unk+unk)
+=== RUN   TestExpressionParseAndValue/(2+true)
+=== RUN   TestExpressionParseAndValue/(false+true)
+=== RUN   TestExpressionParseAndValue/(5_==_5)
+=== RUN   TestExpressionParseAndValue/(5_==_4)
+=== RUN   TestExpressionParseAndValue/(1_==_true)
+=== RUN   TestExpressionParseAndValue/("true"_==_true)
+=== RUN   TestExpressionParseAndValue/(true_==_"true")
+=== RUN   TestExpressionParseAndValue/(true_!=_"true")
+=== RUN   TestExpressionParseAndValue/(-_2)
+=== RUN   TestExpressionParseAndValue/(!_true)
+=== RUN   TestExpressionParseAndValue/(_____1_)
+=== RUN   TestExpressionParseAndValue/(1
+=== RUN   TestExpressionParseAndValue/true
+=== RUN   TestExpressionParseAndValue/false
+=== RUN   TestExpressionParseAndValue/null
+=== RUN   TestExpressionParseAndValue/true_true
+=== RUN   TestExpressionParseAndValue/"hello"
+=== RUN   TestExpressionParseAndValue/"hello_`backtick`_world"
+=== RUN   TestExpressionParseAndValue/"hello\nworld"
+=== RUN   TestExpressionParseAndValue/"unclosed
+=== RUN   TestExpressionParseAndValue/"hello_${"world"}"
+=== RUN   TestExpressionParseAndValue/"hello_${12.5}"
+=== RUN   TestExpressionParseAndValue/"silly_${"${"nesting"}"}"
+=== RUN   TestExpressionParseAndValue/"silly_${"${true}"}"
+=== RUN   TestExpressionParseAndValue/"hello_$${escaped}"
+=== RUN   TestExpressionParseAndValue/"hello_$$nonescape"
+=== RUN   TestExpressionParseAndValue/"$"
+=== RUN   TestExpressionParseAndValue/"%"
+=== RUN   TestExpressionParseAndValue/upper("foo")
+=== RUN   TestExpressionParseAndValue/_upper(_____"foo"_)_
+=== RUN   TestExpressionParseAndValue/upper(["foo"]...)
+=== RUN   TestExpressionParseAndValue/upper("foo",_[]...)
+=== RUN   TestExpressionParseAndValue/upper("foo",_"bar")
+=== RUN   TestExpressionParseAndValue/upper(["foo",_"bar"]...)
+=== RUN   TestExpressionParseAndValue/concat([1,_null]...)
+=== RUN   TestExpressionParseAndValue/concat(var.unknownlist...)
+=== RUN   TestExpressionParseAndValue/foo::upper("foo")
+=== RUN   TestExpressionParseAndValue/foo_::_upper("foo")
+=== RUN   TestExpressionParseAndValue/::upper("foo")
+=== RUN   TestExpressionParseAndValue/double::::upper("foo")
+=== RUN   TestExpressionParseAndValue/missing::("foo")
+=== RUN   TestExpressionParseAndValue/misbehave()
+=== RUN   TestExpressionParseAndValue/misbehave()_/*_variadic_*/
+=== RUN   TestExpressionParseAndValue/misbehave([]...)
+=== RUN   TestExpressionParseAndValue/argerrorexpand(["a",_"b"]...)
+=== RUN   TestExpressionParseAndValue/[]
+=== RUN   TestExpressionParseAndValue/[1]
+=== RUN   TestExpressionParseAndValue/[1,]
+=== RUN   TestExpressionParseAndValue/[1,true]
+=== RUN   TestExpressionParseAndValue/[___1,___true_]
+=== RUN   TestExpressionParseAndValue/{}
+=== RUN   TestExpressionParseAndValue/{"hello":_"world"}
+=== RUN   TestExpressionParseAndValue/{"hello"_=_"world"}
+=== RUN   TestExpressionParseAndValue/{hello_=_"world"}
+=== RUN   TestExpressionParseAndValue/{hello:_"world"}
+=== RUN   TestExpressionParseAndValue/{true:_"yes"}
+=== RUN   TestExpressionParseAndValue/{false:_"yes"}
+=== RUN   TestExpressionParseAndValue/{null:_"yes"}
+=== RUN   TestExpressionParseAndValue/{15:_"yes"}
+=== RUN   TestExpressionParseAndValue/{[]:_"yes"}
+=== RUN   TestExpressionParseAndValue/{"centos_7.2_ap-south-1"_=_"ami-abc123"}
+=== RUN   TestExpressionParseAndValue/{foo.bar_=_"ami-abc123"}
+=== RUN   TestExpressionParseAndValue/{centos_7.2_ap-south-1_=_"ami-abc123"}
+=== RUN   TestExpressionParseAndValue/{var.greeting_=_"world"}
+=== RUN   TestExpressionParseAndValue/{(var.greeting)_=_"world"}
+=== RUN   TestExpressionParseAndValue/{(var.greeting)_=_"world",_"goodbye"_=_"earth"}
+=== RUN   TestExpressionParseAndValue/{"${var.greeting}"_=_"world"}
+=== RUN   TestExpressionParseAndValue/{"hello"_=_"world",_"goodbye"_=_"cruel_world"}
+=== RUN   TestExpressionParseAndValue/{___"hello"_=_"world"_}
+=== RUN   TestExpressionParseAndValue/{___"hello"_=_"world"___"goodbye"_=_"cruel_world"_}
+=== RUN   TestExpressionParseAndValue/{___"hello"_=_"world",___"goodbye"_=_"cruel_world"_}
+=== RUN   TestExpressionParseAndValue/{___"hello"_=_"world",___"goodbye"_=_"cruel_world",_}
+=== RUN   TestExpressionParseAndValue/{___for_k,_v_in_{hello:_"world"}:_k_=>_v_}
+=== RUN   TestExpressionParseAndValue/{___a_=_{___for_k,_v_in_{hello:_"world"}:_k_=>_v___}_}
+=== RUN   TestExpressionParseAndValue/{for_k,_v_in_{hello:_"world"}:_k_=>_v_if_k_==_"hello"}
+=== RUN   TestExpressionParseAndValue/{for_k,_v_in_{hello:_"world"}:_upper(k)_=>_upper(v)_if_k_==_"hello"}
+=== RUN   TestExpressionParseAndValue/{for_k,_v_in_["world"]:_k_=>_v_if_k_==_0}
+=== RUN   TestExpressionParseAndValue/{for_v_in_["world"]:_v_=>_v}
+=== RUN   TestExpressionParseAndValue/{for_k,_v_in_{hello:_"world"}:_k_=>_v_if_k_==_"foo"}
+=== RUN   TestExpressionParseAndValue/{for_k,_v_in_{hello:_"world"}:_5_=>_v}
+=== RUN   TestExpressionParseAndValue/{for_k,_v_in_{hello:_"world"}:_[]_=>_v}
+=== RUN   TestExpressionParseAndValue/{for_k,_v_in_{hello:_"world"}:_k_=>_k_if_k_==_"hello"}
+=== RUN   TestExpressionParseAndValue/{for_k,_v_in_{hello:_"world"}:_k_=>_foo}
+=== RUN   TestExpressionParseAndValue/[for_k,_v_in_{hello:_"world"}:_"${k}=${v}"]
+=== RUN   TestExpressionParseAndValue/[for_k,_v_in_{hello:_"world"}:_k_=>_v]
+=== RUN   TestExpressionParseAndValue/{for_v_in_{hello:_"world"}:_v}
+=== RUN   TestExpressionParseAndValue/{for_i,_v_in_["a",_"b",_"c",_"b",_"d"]:_v_=>_i...}
+=== RUN   TestExpressionParseAndValue/{for_i,_v_in_["a",_"b",_"c",_"b",_"d"]:_v_=>_i..._if_i_<=_2}
+=== RUN   TestExpressionParseAndValue/{for_i,_v_in_["a",_"b",_"c",_"b",_"d"]:_v_=>_i}
+=== RUN   TestExpressionParseAndValue/[for_v_in_{hello:_"world"}:_v...]
+=== RUN   TestExpressionParseAndValue/[for_v_in_"hello":_v]
+=== RUN   TestExpressionParseAndValue/[for_v_in_null:_v]
+=== RUN   TestExpressionParseAndValue/[for_v_in_unk:_v]
+=== RUN   TestExpressionParseAndValue/[for_v_in_unk:_v]#01
+=== RUN   TestExpressionParseAndValue/[for_v_in_unk:_v]#02
+=== RUN   TestExpressionParseAndValue/[for_v_in_["a",_"b"]:_v_if_unkbool]
+=== RUN   TestExpressionParseAndValue/[for_v_in_["a",_"b"]:_v_if_nullbool]
+=== RUN   TestExpressionParseAndValue/[for_v_in_["a",_"b"]:_v_if_dyn]
+=== RUN   TestExpressionParseAndValue/[for_v_in_["a",_"b"]:_v_if_unknum]
+=== RUN   TestExpressionParseAndValue/[for_i,_v_in_["a",_"b"]:_v_if_i_+_i]
+=== RUN   TestExpressionParseAndValue/[for_v_in_["a",_"b"]:_unkstr]
+=== RUN   TestExpressionParseAndValue/[for_x_in_things:_x_if_x_!=_""]
+=== RUN   TestExpressionParseAndValue/{for_k,_v_in_things:_k_=>_!v}
+=== RUN   TestExpressionParseAndValue/{for_k,_v_in_things:_k_=>_!v}#01
+=== RUN   TestExpressionParseAndValue/{for_v_in_things:_v_=>_"${v}-friend"}
+=== RUN   TestExpressionParseAndValue/{for_v_in_things:_v_=>_"${v}-friend"}#01
+=== RUN   TestExpressionParseAndValue/[for_x_in_things:_x_if_x_!=_secret]
+=== RUN   TestExpressionParseAndValue/{_for_k,_v_in_things:_k_=>_v_if_k_!=_secret_}
+=== RUN   TestExpressionParseAndValue/{_for_k,_v_in_things:_k_=>_v_if_k_!=_unknown_secret_}
+=== RUN   TestExpressionParseAndValue/[_for_v_in_things:_v_if_v_!=_unknown_secret_]
+=== RUN   TestExpressionParseAndValue/[_for_v_in_things:_v_if_v_!=_secret_]
+=== RUN   TestExpressionParseAndValue/[{name:_"Steve"},_{name:_"Ermintrude"}].*.name
+=== RUN   TestExpressionParseAndValue/{name:_"Steve"}.*.name
+=== RUN   TestExpressionParseAndValue/null[*]
+=== RUN   TestExpressionParseAndValue/{name:_"Steve"}[*].name
+=== RUN   TestExpressionParseAndValue/set.*.name
+=== RUN   TestExpressionParseAndValue/unkstr[*]
+=== RUN   TestExpressionParseAndValue/unkstr[*]#01
+=== RUN   TestExpressionParseAndValue/unkstr.*.name
+=== RUN   TestExpressionParseAndValue/dyn.*.name
+=== RUN   TestExpressionParseAndValue/unkobj.*.name
+=== RUN   TestExpressionParseAndValue/unkobj.*.name#01
+=== RUN   TestExpressionParseAndValue/unkobj.*.names
+=== RUN   TestExpressionParseAndValue/unklistobj.*.name
+=== RUN   TestExpressionParseAndValue/unklistobj.*.name#01
+=== RUN   TestExpressionParseAndValue/unktupleobj.*.name
+=== RUN   TestExpressionParseAndValue/nullobj.*.name
+=== RUN   TestExpressionParseAndValue/nulllist.*.name
+=== RUN   TestExpressionParseAndValue/listofobj[*].scalar[*]
+=== RUN   TestExpressionParseAndValue/listofobj[*].scalar[*]#01
+=== RUN   TestExpressionParseAndValue/["hello",_"goodbye"].*
+=== RUN   TestExpressionParseAndValue/"hello".*
+=== RUN   TestExpressionParseAndValue/[["hello"],_["world",_"unused"]].*.0
+=== RUN   TestExpressionParseAndValue/[[{name:"foo"}],_[{name:"bar"},_{name:"baz"}]].*.0.name
+=== RUN   TestExpressionParseAndValue/[[[{name:"foo"}]],_[[{name:"bar"}],_[{name:"baz"}]]].*.0.0.name
+=== RUN   TestExpressionParseAndValue/[{name:_"Steve"},_{name:_"Ermintrude"}].*.name[0]
+=== RUN   TestExpressionParseAndValue/[{names:_["Steve"]},_{names:_["Ermintrude"]}][*].names[0]
+=== RUN   TestExpressionParseAndValue/[[{name:_"Steve"}],_[{name:_"Ermintrude"}]][*][0].name
+=== RUN   TestExpressionParseAndValue/[[{name:_"Steve"}],_[{name:_"Ermintrude"}]][*][*].name
+=== RUN   TestExpressionParseAndValue/[["hello"],_["goodbye"]].*.*
+=== RUN   TestExpressionParseAndValue/maps.*.enabled
+=== RUN   TestExpressionParseAndValue/maps.*.enabled#01
+=== RUN   TestExpressionParseAndValue/not_a_list.*
+=== RUN   TestExpressionParseAndValue/maps.*.enabled#02
+=== RUN   TestExpressionParseAndValue/maps.*.x
+=== RUN   TestExpressionParseAndValue/["hello"][0]
+=== RUN   TestExpressionParseAndValue/["hello"].0
+=== RUN   TestExpressionParseAndValue/[["hello"]].0.0
+=== RUN   TestExpressionParseAndValue/[{greeting_=_"hello"}].0.greeting
+=== RUN   TestExpressionParseAndValue/[][0]
+=== RUN   TestExpressionParseAndValue/["hello"][negate(0)]
+=== RUN   TestExpressionParseAndValue/[][negate(0)]
+=== RUN   TestExpressionParseAndValue/["hello"]["0"]
+=== RUN   TestExpressionParseAndValue/["boop"].foo[index]
+=== RUN   TestExpressionParseAndValue/foo
+=== RUN   TestExpressionParseAndValue/bar
+=== RUN   TestExpressionParseAndValue/foo.bar
+=== RUN   TestExpressionParseAndValue/foo.baz
+=== RUN   TestExpressionParseAndValue/foo["baz"]
+=== RUN   TestExpressionParseAndValue/foo[true]
+=== RUN   TestExpressionParseAndValue/foo[0].baz
+=== RUN   TestExpressionParseAndValue/_<<EOT_Foo_Bar_Baz_EOT_
+=== RUN   TestExpressionParseAndValue/_<<EOT_Foo_${bar}_Baz_EOT_
+=== RUN   TestExpressionParseAndValue/_<<EOT_Foo_%{for_x_in_bars}${x}%{endfor}_Baz_EOT_
+=== RUN   TestExpressionParseAndValue/[___<<EOT___Foo___Bar___Baz___EOT_]_
+=== RUN   TestExpressionParseAndValue/[___<<-EOT___Foo___Bar___Baz___EOT_]_
+=== RUN   TestExpressionParseAndValue/[___<<-EOT___Foo_____Bar_____Baz___EOT_]_
+=== RUN   TestExpressionParseAndValue/[___<<-EOT_____Foo___Bar_____Baz___EOT_]_
+=== RUN   TestExpressionParseAndValue/[___<<-EOT_____Foo___${bar}_____Baz_____EOT_]_
+=== RUN   TestExpressionParseAndValue/[___<<EOT___Foo____Bar____Baz___EOT_]_
+=== RUN   TestExpressionParseAndValue/[___<<-EOT___Foo____Bar____Baz___EOT_]_
+=== RUN   TestExpressionParseAndValue/unk["baz"]
+=== RUN   TestExpressionParseAndValue/unk["boop"]
+=== RUN   TestExpressionParseAndValue/dyn["boop"]
+=== RUN   TestExpressionParseAndValue/nullstr_==_"foo"
+=== RUN   TestExpressionParseAndValue/nullstr_==_nullstr
+=== RUN   TestExpressionParseAndValue/nullstr_==_null
+=== RUN   TestExpressionParseAndValue/nullstr_==_nullnum
+=== RUN   TestExpressionParseAndValue/""_==_nulldyn
+=== RUN   TestExpressionParseAndValue/nullobj_!=_null_&&_nullobj.is_thingy
+=== RUN   TestExpressionParseAndValue/unknown_<_4_&&_list[zero]
+=== RUN   TestExpressionParseAndValue/nullobj_==_null_||_nullobj.is_thingy
+=== RUN   TestExpressionParseAndValue/unknown_>_4_||_list[zero]
+=== RUN   TestExpressionParseAndValue/lhsTrue_||_rhsUnknown
+=== RUN   TestExpressionParseAndValue/lhsUnknown_||_rhsTrue
+=== RUN   TestExpressionParseAndValue/lhsUnknown_&&_rhsFalse
+=== RUN   TestExpressionParseAndValue/lhsFalse_&&_rhsUnknown
+=== RUN   TestExpressionParseAndValue/true_?_var_:_null
+=== RUN   TestExpressionParseAndValue/true_?_var_:_null#01
+=== RUN   TestExpressionParseAndValue/true_?_["a",_"b"]_:_null
+=== RUN   TestExpressionParseAndValue/true_?_null:_["a",_"b"]
+=== RUN   TestExpressionParseAndValue/false_?_["a",_"b"]_:_null
+=== RUN   TestExpressionParseAndValue/false_?_null:_["a",_"b"]
+=== RUN   TestExpressionParseAndValue/false_?_null:_null
+=== RUN   TestExpressionParseAndValue/false_?_var:_{a_=_"b"}
+=== RUN   TestExpressionParseAndValue/true_?_["a",_"b"]:_var
+=== RUN   TestExpressionParseAndValue/false_?_["a",_"b"]:_var
+=== RUN   TestExpressionParseAndValue/false_?_["a",_"b"]:_var#01
+=== RUN   TestExpressionParseAndValue/unknown_?_1_:_0
+=== RUN   TestExpressionParseAndValue/unknown_?_0_:_1
+=== RUN   TestExpressionParseAndValue/unknown_?_i_:_j
+=== RUN   TestExpressionParseAndValue/unknown_?_im_:_jm
+=== RUN   TestExpressionParseAndValue/unknown_?_im_:_jm#01
+=== RUN   TestExpressionParseAndValue/unknown_?_ix_:_jx
+=== RUN   TestExpressionParseAndValue/unknown_?_ir_:_jr
+=== RUN   TestExpressionParseAndValue/unknown_?_a_:_b
+=== RUN   TestExpressionParseAndValue/unknown_?_al_:_bl
+=== RUN   TestExpressionParseAndValue/unknown_?_am_:_bm
+=== RUN   TestExpressionParseAndValue/unknown_?_ar_:_br
+=== RUN   TestExpressionParseAndValue/unknown_?_arn_:_brn
+=== RUN   TestExpressionParseAndValue/unknown_?_amr_:_bmr
+=== RUN   TestExpressionParseAndValue/unknown_?_a_:_b#01
+=== RUN   TestExpressionParseAndValue/unknown_?_a_:_b#02
+=== RUN   TestExpressionParseAndValue/var.foo_?_1_:_0
+=== RUN   TestExpressionParseAndValue/true_?_listOf1Tuple_:_listOf0Tuple
+=== RUN   TestExpressionParseAndValue/true_?_setOf1Tuple_:_setOf0Tuple
+=== RUN   TestExpressionParseAndValue/min(xs...)
+=== RUN   TestExpressionParseAndValue/test_?_sensitiveString_:_""
+=== RUN   TestExpressionParseAndValue/foo(value)_&&_true
+=== RUN   TestExpressionParseAndValue/foo(value)_&&_false
+=== RUN   TestExpressionParseAndValue/foo(value)_||_false
+=== RUN   TestExpressionParseAndValue/foo(value)_||_true
+--- PASS: TestExpressionParseAndValue (0.01s)
+    --- PASS: TestExpressionParseAndValue/1 (0.00s)
+    --- PASS: TestExpressionParseAndValue/(1) (0.00s)
+    --- PASS: TestExpressionParseAndValue/(2+3) (0.00s)
+    --- PASS: TestExpressionParseAndValue/2*5+1 (0.00s)
+    --- PASS: TestExpressionParseAndValue/9%8 (0.00s)
+    --- PASS: TestExpressionParseAndValue/(2+unk) (0.00s)
+    --- PASS: TestExpressionParseAndValue/(2+unk)#01 (0.00s)
+    --- PASS: TestExpressionParseAndValue/(unk+unk) (0.00s)
+    --- PASS: TestExpressionParseAndValue/(2+true) (0.00s)
+    --- PASS: TestExpressionParseAndValue/(false+true) (0.00s)
+    --- PASS: TestExpressionParseAndValue/(5_==_5) (0.00s)
+    --- PASS: TestExpressionParseAndValue/(5_==_4) (0.00s)
+    --- PASS: TestExpressionParseAndValue/(1_==_true) (0.00s)
+    --- PASS: TestExpressionParseAndValue/("true"_==_true) (0.00s)
+    --- PASS: TestExpressionParseAndValue/(true_==_"true") (0.00s)
+    --- PASS: TestExpressionParseAndValue/(true_!=_"true") (0.00s)
+    --- PASS: TestExpressionParseAndValue/(-_2) (0.00s)
+    --- PASS: TestExpressionParseAndValue/(!_true) (0.00s)
+    --- PASS: TestExpressionParseAndValue/(_____1_) (0.00s)
+    --- PASS: TestExpressionParseAndValue/(1 (0.00s)
+    --- PASS: TestExpressionParseAndValue/true (0.00s)
+    --- PASS: TestExpressionParseAndValue/false (0.00s)
+    --- PASS: TestExpressionParseAndValue/null (0.00s)
+    --- PASS: TestExpressionParseAndValue/true_true (0.00s)
+    --- PASS: TestExpressionParseAndValue/"hello" (0.00s)
+    --- PASS: TestExpressionParseAndValue/"hello_`backtick`_world" (0.00s)
+    --- PASS: TestExpressionParseAndValue/"hello\nworld" (0.00s)
+    --- PASS: TestExpressionParseAndValue/"unclosed (0.00s)
+    --- PASS: TestExpressionParseAndValue/"hello_${"world"}" (0.00s)
+    --- PASS: TestExpressionParseAndValue/"hello_${12.5}" (0.00s)
+    --- PASS: TestExpressionParseAndValue/"silly_${"${"nesting"}"}" (0.00s)
+    --- PASS: TestExpressionParseAndValue/"silly_${"${true}"}" (0.00s)
+    --- PASS: TestExpressionParseAndValue/"hello_$${escaped}" (0.00s)
+    --- PASS: TestExpressionParseAndValue/"hello_$$nonescape" (0.00s)
+    --- PASS: TestExpressionParseAndValue/"$" (0.00s)
+    --- PASS: TestExpressionParseAndValue/"%" (0.00s)
+    --- PASS: TestExpressionParseAndValue/upper("foo") (0.00s)
+    --- PASS: TestExpressionParseAndValue/_upper(_____"foo"_)_ (0.00s)
+    --- PASS: TestExpressionParseAndValue/upper(["foo"]...) (0.00s)
+    --- PASS: TestExpressionParseAndValue/upper("foo",_[]...) (0.00s)
+    --- PASS: TestExpressionParseAndValue/upper("foo",_"bar") (0.00s)
+    --- PASS: TestExpressionParseAndValue/upper(["foo",_"bar"]...) (0.00s)
+    --- PASS: TestExpressionParseAndValue/concat([1,_null]...) (0.00s)
+    --- PASS: TestExpressionParseAndValue/concat(var.unknownlist...) (0.00s)
+    --- PASS: TestExpressionParseAndValue/foo::upper("foo") (0.00s)
+    --- PASS: TestExpressionParseAndValue/foo_::_upper("foo") (0.00s)
+    --- PASS: TestExpressionParseAndValue/::upper("foo") (0.00s)
+    --- PASS: TestExpressionParseAndValue/double::::upper("foo") (0.00s)
+    --- PASS: TestExpressionParseAndValue/missing::("foo") (0.00s)
+    --- PASS: TestExpressionParseAndValue/misbehave() (0.00s)
+    --- PASS: TestExpressionParseAndValue/misbehave()_/*_variadic_*/ (0.00s)
+    --- PASS: TestExpressionParseAndValue/misbehave([]...) (0.00s)
+    --- PASS: TestExpressionParseAndValue/argerrorexpand(["a",_"b"]...) (0.00s)
+    --- PASS: TestExpressionParseAndValue/[] (0.00s)
+    --- PASS: TestExpressionParseAndValue/[1] (0.00s)
+    --- PASS: TestExpressionParseAndValue/[1,] (0.00s)
+    --- PASS: TestExpressionParseAndValue/[1,true] (0.00s)
+    --- PASS: TestExpressionParseAndValue/[___1,___true_] (0.00s)
+    --- PASS: TestExpressionParseAndValue/{} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{"hello":_"world"} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{"hello"_=_"world"} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{hello_=_"world"} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{hello:_"world"} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{true:_"yes"} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{false:_"yes"} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{null:_"yes"} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{15:_"yes"} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{[]:_"yes"} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{"centos_7.2_ap-south-1"_=_"ami-abc123"} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{foo.bar_=_"ami-abc123"} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{centos_7.2_ap-south-1_=_"ami-abc123"} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{var.greeting_=_"world"} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{(var.greeting)_=_"world"} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{(var.greeting)_=_"world",_"goodbye"_=_"earth"} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{"${var.greeting}"_=_"world"} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{"hello"_=_"world",_"goodbye"_=_"cruel_world"} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{___"hello"_=_"world"_} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{___"hello"_=_"world"___"goodbye"_=_"cruel_world"_} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{___"hello"_=_"world",___"goodbye"_=_"cruel_world"_} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{___"hello"_=_"world",___"goodbye"_=_"cruel_world",_} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{___for_k,_v_in_{hello:_"world"}:_k_=>_v_} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{___a_=_{___for_k,_v_in_{hello:_"world"}:_k_=>_v___}_} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{for_k,_v_in_{hello:_"world"}:_k_=>_v_if_k_==_"hello"} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{for_k,_v_in_{hello:_"world"}:_upper(k)_=>_upper(v)_if_k_==_"hello"} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{for_k,_v_in_["world"]:_k_=>_v_if_k_==_0} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{for_v_in_["world"]:_v_=>_v} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{for_k,_v_in_{hello:_"world"}:_k_=>_v_if_k_==_"foo"} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{for_k,_v_in_{hello:_"world"}:_5_=>_v} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{for_k,_v_in_{hello:_"world"}:_[]_=>_v} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{for_k,_v_in_{hello:_"world"}:_k_=>_k_if_k_==_"hello"} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{for_k,_v_in_{hello:_"world"}:_k_=>_foo} (0.00s)
+    --- PASS: TestExpressionParseAndValue/[for_k,_v_in_{hello:_"world"}:_"${k}=${v}"] (0.00s)
+    --- PASS: TestExpressionParseAndValue/[for_k,_v_in_{hello:_"world"}:_k_=>_v] (0.00s)
+    --- PASS: TestExpressionParseAndValue/{for_v_in_{hello:_"world"}:_v} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{for_i,_v_in_["a",_"b",_"c",_"b",_"d"]:_v_=>_i...} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{for_i,_v_in_["a",_"b",_"c",_"b",_"d"]:_v_=>_i..._if_i_<=_2} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{for_i,_v_in_["a",_"b",_"c",_"b",_"d"]:_v_=>_i} (0.00s)
+    --- PASS: TestExpressionParseAndValue/[for_v_in_{hello:_"world"}:_v...] (0.00s)
+    --- PASS: TestExpressionParseAndValue/[for_v_in_"hello":_v] (0.00s)
+    --- PASS: TestExpressionParseAndValue/[for_v_in_null:_v] (0.00s)
+    --- PASS: TestExpressionParseAndValue/[for_v_in_unk:_v] (0.00s)
+    --- PASS: TestExpressionParseAndValue/[for_v_in_unk:_v]#01 (0.00s)
+    --- PASS: TestExpressionParseAndValue/[for_v_in_unk:_v]#02 (0.00s)
+    --- PASS: TestExpressionParseAndValue/[for_v_in_["a",_"b"]:_v_if_unkbool] (0.00s)
+    --- PASS: TestExpressionParseAndValue/[for_v_in_["a",_"b"]:_v_if_nullbool] (0.00s)
+    --- PASS: TestExpressionParseAndValue/[for_v_in_["a",_"b"]:_v_if_dyn] (0.00s)
+    --- PASS: TestExpressionParseAndValue/[for_v_in_["a",_"b"]:_v_if_unknum] (0.00s)
+    --- PASS: TestExpressionParseAndValue/[for_i,_v_in_["a",_"b"]:_v_if_i_+_i] (0.00s)
+    --- PASS: TestExpressionParseAndValue/[for_v_in_["a",_"b"]:_unkstr] (0.00s)
+    --- PASS: TestExpressionParseAndValue/[for_x_in_things:_x_if_x_!=_""] (0.00s)
+    --- PASS: TestExpressionParseAndValue/{for_k,_v_in_things:_k_=>_!v} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{for_k,_v_in_things:_k_=>_!v}#01 (0.00s)
+    --- PASS: TestExpressionParseAndValue/{for_v_in_things:_v_=>_"${v}-friend"} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{for_v_in_things:_v_=>_"${v}-friend"}#01 (0.00s)
+    --- PASS: TestExpressionParseAndValue/[for_x_in_things:_x_if_x_!=_secret] (0.00s)
+    --- PASS: TestExpressionParseAndValue/{_for_k,_v_in_things:_k_=>_v_if_k_!=_secret_} (0.00s)
+    --- PASS: TestExpressionParseAndValue/{_for_k,_v_in_things:_k_=>_v_if_k_!=_unknown_secret_} (0.00s)
+    --- PASS: TestExpressionParseAndValue/[_for_v_in_things:_v_if_v_!=_unknown_secret_] (0.00s)
+    --- PASS: TestExpressionParseAndValue/[_for_v_in_things:_v_if_v_!=_secret_] (0.00s)
+    --- PASS: TestExpressionParseAndValue/[{name:_"Steve"},_{name:_"Ermintrude"}].*.name (0.00s)
+    --- PASS: TestExpressionParseAndValue/{name:_"Steve"}.*.name (0.00s)
+    --- PASS: TestExpressionParseAndValue/null[*] (0.00s)
+    --- PASS: TestExpressionParseAndValue/{name:_"Steve"}[*].name (0.00s)
+    --- PASS: TestExpressionParseAndValue/set.*.name (0.00s)
+    --- PASS: TestExpressionParseAndValue/unkstr[*] (0.00s)
+    --- PASS: TestExpressionParseAndValue/unkstr[*]#01 (0.00s)
+    --- PASS: TestExpressionParseAndValue/unkstr.*.name (0.00s)
+    --- PASS: TestExpressionParseAndValue/dyn.*.name (0.00s)
+    --- PASS: TestExpressionParseAndValue/unkobj.*.name (0.00s)
+    --- PASS: TestExpressionParseAndValue/unkobj.*.name#01 (0.00s)
+    --- PASS: TestExpressionParseAndValue/unkobj.*.names (0.00s)
+    --- PASS: TestExpressionParseAndValue/unklistobj.*.name (0.00s)
+    --- PASS: TestExpressionParseAndValue/unklistobj.*.name#01 (0.00s)
+    --- PASS: TestExpressionParseAndValue/unktupleobj.*.name (0.00s)
+    --- PASS: TestExpressionParseAndValue/nullobj.*.name (0.00s)
+    --- PASS: TestExpressionParseAndValue/nulllist.*.name (0.00s)
+    --- PASS: TestExpressionParseAndValue/listofobj[*].scalar[*] (0.00s)
+    --- PASS: TestExpressionParseAndValue/listofobj[*].scalar[*]#01 (0.00s)
+    --- PASS: TestExpressionParseAndValue/["hello",_"goodbye"].* (0.00s)
+    --- PASS: TestExpressionParseAndValue/"hello".* (0.00s)
+    --- PASS: TestExpressionParseAndValue/[["hello"],_["world",_"unused"]].*.0 (0.00s)
+    --- PASS: TestExpressionParseAndValue/[[{name:"foo"}],_[{name:"bar"},_{name:"baz"}]].*.0.name (0.00s)
+    --- PASS: TestExpressionParseAndValue/[[[{name:"foo"}]],_[[{name:"bar"}],_[{name:"baz"}]]].*.0.0.name (0.00s)
+    --- PASS: TestExpressionParseAndValue/[{name:_"Steve"},_{name:_"Ermintrude"}].*.name[0] (0.00s)
+    --- PASS: TestExpressionParseAndValue/[{names:_["Steve"]},_{names:_["Ermintrude"]}][*].names[0] (0.00s)
+    --- PASS: TestExpressionParseAndValue/[[{name:_"Steve"}],_[{name:_"Ermintrude"}]][*][0].name (0.00s)
+    --- PASS: TestExpressionParseAndValue/[[{name:_"Steve"}],_[{name:_"Ermintrude"}]][*][*].name (0.00s)
+    --- PASS: TestExpressionParseAndValue/[["hello"],_["goodbye"]].*.* (0.00s)
+    --- PASS: TestExpressionParseAndValue/maps.*.enabled (0.00s)
+    --- PASS: TestExpressionParseAndValue/maps.*.enabled#01 (0.00s)
+    --- PASS: TestExpressionParseAndValue/not_a_list.* (0.00s)
+    --- PASS: TestExpressionParseAndValue/maps.*.enabled#02 (0.00s)
+    --- PASS: TestExpressionParseAndValue/maps.*.x (0.00s)
+    --- PASS: TestExpressionParseAndValue/["hello"][0] (0.00s)
+    --- PASS: TestExpressionParseAndValue/["hello"].0 (0.00s)
+    --- PASS: TestExpressionParseAndValue/[["hello"]].0.0 (0.00s)
+    --- PASS: TestExpressionParseAndValue/[{greeting_=_"hello"}].0.greeting (0.00s)
+    --- PASS: TestExpressionParseAndValue/[][0] (0.00s)
+    --- PASS: TestExpressionParseAndValue/["hello"][negate(0)] (0.00s)
+    --- PASS: TestExpressionParseAndValue/[][negate(0)] (0.00s)
+    --- PASS: TestExpressionParseAndValue/["hello"]["0"] (0.00s)
+    --- PASS: TestExpressionParseAndValue/["boop"].foo[index] (0.00s)
+    --- PASS: TestExpressionParseAndValue/foo (0.00s)
+    --- PASS: TestExpressionParseAndValue/bar (0.00s)
+    --- PASS: TestExpressionParseAndValue/foo.bar (0.00s)
+    --- PASS: TestExpressionParseAndValue/foo.baz (0.00s)
+    --- PASS: TestExpressionParseAndValue/foo["baz"] (0.00s)
+    --- PASS: TestExpressionParseAndValue/foo[true] (0.00s)
+    --- PASS: TestExpressionParseAndValue/foo[0].baz (0.00s)
+    --- PASS: TestExpressionParseAndValue/_<<EOT_Foo_Bar_Baz_EOT_ (0.00s)
+    --- PASS: TestExpressionParseAndValue/_<<EOT_Foo_${bar}_Baz_EOT_ (0.00s)
+    --- PASS: TestExpressionParseAndValue/_<<EOT_Foo_%{for_x_in_bars}${x}%{endfor}_Baz_EOT_ (0.00s)
+    --- PASS: TestExpressionParseAndValue/[___<<EOT___Foo___Bar___Baz___EOT_]_ (0.00s)
+    --- PASS: TestExpressionParseAndValue/[___<<-EOT___Foo___Bar___Baz___EOT_]_ (0.00s)
+    --- PASS: TestExpressionParseAndValue/[___<<-EOT___Foo_____Bar_____Baz___EOT_]_ (0.00s)
+    --- PASS: TestExpressionParseAndValue/[___<<-EOT_____Foo___Bar_____Baz___EOT_]_ (0.00s)
+    --- PASS: TestExpressionParseAndValue/[___<<-EOT_____Foo___${bar}_____Baz_____EOT_]_ (0.00s)
+    --- PASS: TestExpressionParseAndValue/[___<<EOT___Foo____Bar____Baz___EOT_]_ (0.00s)
+    --- PASS: TestExpressionParseAndValue/[___<<-EOT___Foo____Bar____Baz___EOT_]_ (0.00s)
+    --- PASS: TestExpressionParseAndValue/unk["baz"] (0.00s)
+    --- PASS: TestExpressionParseAndValue/unk["boop"] (0.00s)
+    --- PASS: TestExpressionParseAndValue/dyn["boop"] (0.00s)
+    --- PASS: TestExpressionParseAndValue/nullstr_==_"foo" (0.00s)
+    --- PASS: TestExpressionParseAndValue/nullstr_==_nullstr (0.00s)
+    --- PASS: TestExpressionParseAndValue/nullstr_==_null (0.00s)
+    --- PASS: TestExpressionParseAndValue/nullstr_==_nullnum (0.00s)
+    --- PASS: TestExpressionParseAndValue/""_==_nulldyn (0.00s)
+    --- PASS: TestExpressionParseAndValue/nullobj_!=_null_&&_nullobj.is_thingy (0.00s)
+    --- PASS: TestExpressionParseAndValue/unknown_<_4_&&_list[zero] (0.00s)
+    --- PASS: TestExpressionParseAndValue/nullobj_==_null_||_nullobj.is_thingy (0.00s)
+    --- PASS: TestExpressionParseAndValue/unknown_>_4_||_list[zero] (0.00s)
+    --- PASS: TestExpressionParseAndValue/lhsTrue_||_rhsUnknown (0.00s)
+    --- PASS: TestExpressionParseAndValue/lhsUnknown_||_rhsTrue (0.00s)
+    --- PASS: TestExpressionParseAndValue/lhsUnknown_&&_rhsFalse (0.00s)
+    --- PASS: TestExpressionParseAndValue/lhsFalse_&&_rhsUnknown (0.00s)
+    --- PASS: TestExpressionParseAndValue/true_?_var_:_null (0.00s)
+    --- PASS: TestExpressionParseAndValue/true_?_var_:_null#01 (0.00s)
+    --- PASS: TestExpressionParseAndValue/true_?_["a",_"b"]_:_null (0.00s)
+    --- PASS: TestExpressionParseAndValue/true_?_null:_["a",_"b"] (0.00s)
+    --- PASS: TestExpressionParseAndValue/false_?_["a",_"b"]_:_null (0.00s)
+    --- PASS: TestExpressionParseAndValue/false_?_null:_["a",_"b"] (0.00s)
+    --- PASS: TestExpressionParseAndValue/false_?_null:_null (0.00s)
+    --- PASS: TestExpressionParseAndValue/false_?_var:_{a_=_"b"} (0.00s)
+    --- PASS: TestExpressionParseAndValue/true_?_["a",_"b"]:_var (0.00s)
+    --- PASS: TestExpressionParseAndValue/false_?_["a",_"b"]:_var (0.00s)
+    --- PASS: TestExpressionParseAndValue/false_?_["a",_"b"]:_var#01 (0.00s)
+    --- PASS: TestExpressionParseAndValue/unknown_?_1_:_0 (0.00s)
+    --- PASS: TestExpressionParseAndValue/unknown_?_0_:_1 (0.00s)
+    --- PASS: TestExpressionParseAndValue/unknown_?_i_:_j (0.00s)
+    --- PASS: TestExpressionParseAndValue/unknown_?_im_:_jm (0.00s)
+    --- PASS: TestExpressionParseAndValue/unknown_?_im_:_jm#01 (0.00s)
+    --- PASS: TestExpressionParseAndValue/unknown_?_ix_:_jx (0.00s)
+    --- PASS: TestExpressionParseAndValue/unknown_?_ir_:_jr (0.00s)
+    --- PASS: TestExpressionParseAndValue/unknown_?_a_:_b (0.00s)
+    --- PASS: TestExpressionParseAndValue/unknown_?_al_:_bl (0.00s)
+    --- PASS: TestExpressionParseAndValue/unknown_?_am_:_bm (0.00s)
+    --- PASS: TestExpressionParseAndValue/unknown_?_ar_:_br (0.00s)
+    --- PASS: TestExpressionParseAndValue/unknown_?_arn_:_brn (0.00s)
+    --- PASS: TestExpressionParseAndValue/unknown_?_amr_:_bmr (0.00s)
+    --- PASS: TestExpressionParseAndValue/unknown_?_a_:_b#01 (0.00s)
+    --- PASS: TestExpressionParseAndValue/unknown_?_a_:_b#02 (0.00s)
+    --- PASS: TestExpressionParseAndValue/var.foo_?_1_:_0 (0.00s)
+    --- PASS: TestExpressionParseAndValue/true_?_listOf1Tuple_:_listOf0Tuple (0.00s)
+    --- PASS: TestExpressionParseAndValue/true_?_setOf1Tuple_:_setOf0Tuple (0.00s)
+    --- PASS: TestExpressionParseAndValue/min(xs...) (0.00s)
+    --- PASS: TestExpressionParseAndValue/test_?_sensitiveString_:_"" (0.00s)
+    --- PASS: TestExpressionParseAndValue/foo(value)_&&_true (0.00s)
+    --- PASS: TestExpressionParseAndValue/foo(value)_&&_false (0.00s)
+    --- PASS: TestExpressionParseAndValue/foo(value)_||_false (0.00s)
+    --- PASS: TestExpressionParseAndValue/foo(value)_||_true (0.00s)
+=== RUN   TestExpressionErrorMessages
+=== RUN   TestExpressionErrorMessages/true_?_1_:_true
+=== RUN   TestExpressionErrorMessages/true_?_[1]_:_[true]
+=== RUN   TestExpressionErrorMessages/true_?_[1]_:_[1,_true]
+=== RUN   TestExpressionErrorMessages/true_?_{_a_=_1_}_:_{_a_=_true_}
+=== RUN   TestExpressionErrorMessages/true_?_{_a_=_true,_b_=_1_}_:_{_a_=_true_}
+=== RUN   TestExpressionErrorMessages/true_?_{_a_=_true_}_:_{_a_=_true,_b_=_1_}
+=== RUN   TestExpressionErrorMessages/true_?_listOf2Tuple_:_listOf1Tuple
+=== RUN   TestExpressionErrorMessages/true_?_setOf2Tuple_:_setOf1Tuple
+=== RUN   TestExpressionErrorMessages/true_?_mapOf1Tuple_:_mapOf2Tuple
+=== RUN   TestExpressionErrorMessages/true_?_listOfListOf2Tuple_:_listOfListOf1Tuple
+=== RUN   TestExpressionErrorMessages/notobj_!=_null_&&_notobj.foo
+=== RUN   TestExpressionErrorMessages/notobj_==_null_||_notobj.foo
+=== RUN   TestExpressionErrorMessages/notlist_!=_null_&&_notlist[0]
+=== RUN   TestExpressionErrorMessages/value_!=_null_&&_valeu
+=== RUN   TestExpressionErrorMessages/unknown_&&_"value"
+=== RUN   TestExpressionErrorMessages/value_&&_"value"
+=== RUN   TestExpressionErrorMessages/foo(value)_&&_true
+=== RUN   TestExpressionErrorMessages/map_!=_null_||_map["key"]_==_"value"
+--- PASS: TestExpressionErrorMessages (0.00s)
+    --- PASS: TestExpressionErrorMessages/true_?_1_:_true (0.00s)
+    --- PASS: TestExpressionErrorMessages/true_?_[1]_:_[true] (0.00s)
+    --- PASS: TestExpressionErrorMessages/true_?_[1]_:_[1,_true] (0.00s)
+    --- PASS: TestExpressionErrorMessages/true_?_{_a_=_1_}_:_{_a_=_true_} (0.00s)
+    --- PASS: TestExpressionErrorMessages/true_?_{_a_=_true,_b_=_1_}_:_{_a_=_true_} (0.00s)
+    --- PASS: TestExpressionErrorMessages/true_?_{_a_=_true_}_:_{_a_=_true,_b_=_1_} (0.00s)
+    --- PASS: TestExpressionErrorMessages/true_?_listOf2Tuple_:_listOf1Tuple (0.00s)
+    --- PASS: TestExpressionErrorMessages/true_?_setOf2Tuple_:_setOf1Tuple (0.00s)
+    --- PASS: TestExpressionErrorMessages/true_?_mapOf1Tuple_:_mapOf2Tuple (0.00s)
+    --- PASS: TestExpressionErrorMessages/true_?_listOfListOf2Tuple_:_listOfListOf1Tuple (0.00s)
+    --- PASS: TestExpressionErrorMessages/notobj_!=_null_&&_notobj.foo (0.00s)
+    --- PASS: TestExpressionErrorMessages/notobj_==_null_||_notobj.foo (0.00s)
+    --- PASS: TestExpressionErrorMessages/notlist_!=_null_&&_notlist[0] (0.00s)
+    --- PASS: TestExpressionErrorMessages/value_!=_null_&&_valeu (0.00s)
+    --- PASS: TestExpressionErrorMessages/unknown_&&_"value" (0.00s)
+    --- PASS: TestExpressionErrorMessages/value_&&_"value" (0.00s)
+    --- PASS: TestExpressionErrorMessages/foo(value)_&&_true (0.00s)
+    --- PASS: TestExpressionErrorMessages/map_!=_null_||_map["key"]_==_"value" (0.00s)
+=== RUN   TestFunctionCallExprValue
+=== RUN   TestFunctionCallExprValue/unknown_function
+=== RUN   TestFunctionCallExprValue/valid_call_with_no_conversions
+=== RUN   TestFunctionCallExprValue/valid_call_with_arg_conversion
+=== RUN   TestFunctionCallExprValue/invalid_arg_type
+=== RUN   TestFunctionCallExprValue/error_in_function
+=== RUN   TestFunctionCallExprValue/valid_call_with_unknown_arg
+=== RUN   TestFunctionCallExprValue/valid_call_with_unknown_arg_needing_conversion
+=== RUN   TestFunctionCallExprValue/valid_call_with_dynamic_arg
+=== RUN   TestFunctionCallExprValue/function_with_dynamic_return_type
+=== RUN   TestFunctionCallExprValue/function_with_dynamic_return_type_unknown_arg
+--- PASS: TestFunctionCallExprValue (0.00s)
+    --- PASS: TestFunctionCallExprValue/unknown_function (0.00s)
+    --- PASS: TestFunctionCallExprValue/valid_call_with_no_conversions (0.00s)
+    --- PASS: TestFunctionCallExprValue/valid_call_with_arg_conversion (0.00s)
+    --- PASS: TestFunctionCallExprValue/invalid_arg_type (0.00s)
+    --- PASS: TestFunctionCallExprValue/error_in_function (0.00s)
+    --- PASS: TestFunctionCallExprValue/valid_call_with_unknown_arg (0.00s)
+    --- PASS: TestFunctionCallExprValue/valid_call_with_unknown_arg_needing_conversion (0.00s)
+    --- PASS: TestFunctionCallExprValue/valid_call_with_dynamic_arg (0.00s)
+    --- PASS: TestFunctionCallExprValue/function_with_dynamic_return_type (0.00s)
+    --- PASS: TestFunctionCallExprValue/function_with_dynamic_return_type_unknown_arg (0.00s)
+=== RUN   TestExpressionAsTraversal
+--- PASS: TestExpressionAsTraversal (0.00s)
+=== RUN   TestExpressionAsTraversalPattern
+=== RUN   TestExpressionAsTraversalPattern/foo
+=== RUN   TestExpressionAsTraversalPattern/foo.bar
+=== RUN   TestExpressionAsTraversalPattern/foo[0]
+=== RUN   TestExpressionAsTraversalPattern/foo["bar"]
+=== RUN   TestExpressionAsTraversalPattern/foo[true]
+=== RUN   TestExpressionAsTraversalPattern/foo[0].bar
+=== RUN   TestExpressionAsTraversalPattern/foo[*]
+=== RUN   TestExpressionAsTraversalPattern/foo[*].bar
+=== RUN   TestExpressionAsTraversalPattern/foo[*][0]
+=== RUN   TestExpressionAsTraversalPattern/foo[*].bar[*]
+=== RUN   TestExpressionAsTraversalPattern/foo[*].bar[*].baz
+=== RUN   TestExpressionAsTraversalPattern/foo[*][*].bar
+=== RUN   TestExpressionAsTraversalPattern/foo.*
+=== RUN   TestExpressionAsTraversalPattern/foo[*].bar.*.baz
+--- PASS: TestExpressionAsTraversalPattern (0.00s)
+    --- PASS: TestExpressionAsTraversalPattern/foo (0.00s)
+    --- PASS: TestExpressionAsTraversalPattern/foo.bar (0.00s)
+    --- PASS: TestExpressionAsTraversalPattern/foo[0] (0.00s)
+    --- PASS: TestExpressionAsTraversalPattern/foo["bar"] (0.00s)
+    --- PASS: TestExpressionAsTraversalPattern/foo[true] (0.00s)
+    --- PASS: TestExpressionAsTraversalPattern/foo[0].bar (0.00s)
+    --- PASS: TestExpressionAsTraversalPattern/foo[*] (0.00s)
+    --- PASS: TestExpressionAsTraversalPattern/foo[*].bar (0.00s)
+    --- PASS: TestExpressionAsTraversalPattern/foo[*][0] (0.00s)
+    --- PASS: TestExpressionAsTraversalPattern/foo[*].bar[*] (0.00s)
+    --- PASS: TestExpressionAsTraversalPattern/foo[*].bar[*].baz (0.00s)
+    --- PASS: TestExpressionAsTraversalPattern/foo[*][*].bar (0.00s)
+    --- PASS: TestExpressionAsTraversalPattern/foo.* (0.00s)
+    --- PASS: TestExpressionAsTraversalPattern/foo[*].bar.*.baz (0.00s)
+=== RUN   TestStaticExpressionList
+--- PASS: TestStaticExpressionList (0.00s)
+=== RUN   TestParseExpression_traversalsAndSplats
+=== RUN   TestParseExpression_traversalsAndSplats/foo
+=== RUN   TestParseExpression_traversalsAndSplats/foo.bar
+=== RUN   TestParseExpression_traversalsAndSplats/foo[0]
+=== RUN   TestParseExpression_traversalsAndSplats/foo["bar"]
+=== RUN   TestParseExpression_traversalsAndSplats/foo[true]
+=== RUN   TestParseExpression_traversalsAndSplats/foo[0].bar
+=== RUN   TestParseExpression_traversalsAndSplats/foo[*]
+=== RUN   TestParseExpression_traversalsAndSplats/foo[*].bar
+=== RUN   TestParseExpression_traversalsAndSplats/foo[*][0]
+=== RUN   TestParseExpression_traversalsAndSplats/foo[*].bar[*]
+=== RUN   TestParseExpression_traversalsAndSplats/foo[*].bar[*].baz
+=== RUN   TestParseExpression_traversalsAndSplats/foo[*][*].bar
+--- PASS: TestParseExpression_traversalsAndSplats (0.00s)
+    --- PASS: TestParseExpression_traversalsAndSplats/foo (0.00s)
+    --- PASS: TestParseExpression_traversalsAndSplats/foo.bar (0.00s)
+    --- PASS: TestParseExpression_traversalsAndSplats/foo[0] (0.00s)
+    --- PASS: TestParseExpression_traversalsAndSplats/foo["bar"] (0.00s)
+    --- PASS: TestParseExpression_traversalsAndSplats/foo[true] (0.00s)
+    --- PASS: TestParseExpression_traversalsAndSplats/foo[0].bar (0.00s)
+    --- PASS: TestParseExpression_traversalsAndSplats/foo[*] (0.00s)
+    --- PASS: TestParseExpression_traversalsAndSplats/foo[*].bar (0.00s)
+    --- PASS: TestParseExpression_traversalsAndSplats/foo[*][0] (0.00s)
+    --- PASS: TestParseExpression_traversalsAndSplats/foo[*].bar[*] (0.00s)
+    --- PASS: TestParseExpression_traversalsAndSplats/foo[*].bar[*].baz (0.00s)
+    --- PASS: TestParseExpression_traversalsAndSplats/foo[*][*].bar (0.00s)
+=== RUN   TestParseExpression_incompleteFunctionCall
+=== RUN   TestParseExpression_incompleteFunctionCall/0
+=== RUN   TestParseExpression_incompleteFunctionCall/1
+=== RUN   TestParseExpression_incompleteFunctionCall/2
+=== RUN   TestParseExpression_incompleteFunctionCall/3
+=== RUN   TestParseExpression_incompleteFunctionCall/4
+=== RUN   TestParseExpression_incompleteFunctionCall/5
+--- PASS: TestParseExpression_incompleteFunctionCall (0.00s)
+    --- PASS: TestParseExpression_incompleteFunctionCall/0 (0.00s)
+    --- PASS: TestParseExpression_incompleteFunctionCall/1 (0.00s)
+    --- PASS: TestParseExpression_incompleteFunctionCall/2 (0.00s)
+    --- PASS: TestParseExpression_incompleteFunctionCall/3 (0.00s)
+    --- PASS: TestParseExpression_incompleteFunctionCall/4 (0.00s)
+    --- PASS: TestParseExpression_incompleteFunctionCall/5 (0.00s)
+=== RUN   TestAllBoolExpressions
+=== RUN   TestAllBoolExpressions/true_||_false_&&_unknown
+=== RUN   TestAllBoolExpressions/false_||_true_&&_unknown
+=== RUN   TestAllBoolExpressions/false_||_unknown_||_unknown
+=== RUN   TestAllBoolExpressions/false_&&_true_||_false
+=== RUN   TestAllBoolExpressions/false_||_false_&&_false
+=== RUN   TestAllBoolExpressions/unknown_&&_true_&&_false
+=== RUN   TestAllBoolExpressions/unknown_||_false_||_false
+=== RUN   TestAllBoolExpressions/true_||_true
+=== RUN   TestAllBoolExpressions/false_&&_unknown_||_false
+=== RUN   TestAllBoolExpressions/false_&&_unknown_&&_unknown
+=== RUN   TestAllBoolExpressions/false_&&_false
+=== RUN   TestAllBoolExpressions/false_||_true_||_unknown
+=== RUN   TestAllBoolExpressions/false_&&_false_||_unknown
+=== RUN   TestAllBoolExpressions/true_&&_true_&&_false
+=== RUN   TestAllBoolExpressions/true_||_unknown_||_unknown
+=== RUN   TestAllBoolExpressions/false_&&_true_&&_true
+=== RUN   TestAllBoolExpressions/unknown_&&_unknown_||_unknown
+=== RUN   TestAllBoolExpressions/true_&&_false_&&_false
+=== RUN   TestAllBoolExpressions/false_&&_true_&&_false
+=== RUN   TestAllBoolExpressions/unknown_||_(true_&&_false)
+=== RUN   TestAllBoolExpressions/false_&&_true_||_unknown
+=== RUN   TestAllBoolExpressions/false_&&_false_||_false
+=== RUN   TestAllBoolExpressions/unknown_||_true_||_false
+=== RUN   TestAllBoolExpressions/false_||_true
+=== RUN   TestAllBoolExpressions/true_&&_true_&&_true
+=== RUN   TestAllBoolExpressions/true_&&_false_&&_true
+=== RUN   TestAllBoolExpressions/unknown_&&_true_&&_true
+=== RUN   TestAllBoolExpressions/false_||_false
+=== RUN   TestAllBoolExpressions/true_&&_unknown_||_unknown
+=== RUN   TestAllBoolExpressions/false_&&_unknown_||_true
+=== RUN   TestAllBoolExpressions/(false_&&_unknown)_||_unknown
+=== RUN   TestAllBoolExpressions/unknown_||_false_&&_false
+=== RUN   TestAllBoolExpressions/unknown_||_unknown_&&_true
+=== RUN   TestAllBoolExpressions/true_&&_true
+=== RUN   TestAllBoolExpressions/true_&&_false_||_unknown
+=== RUN   TestAllBoolExpressions/false_&&_true_||_true
+=== RUN   TestAllBoolExpressions/unknown_&&_true_&&_unknown
+=== RUN   TestAllBoolExpressions/true_||_false
+=== RUN   TestAllBoolExpressions/true_&&_true_&&_unknown
+=== RUN   TestAllBoolExpressions/unknown_&&_true_||_unknown
+=== RUN   TestAllBoolExpressions/unknown_&&_unknown_&&_false
+=== RUN   TestAllBoolExpressions/unknown_||_true
+=== RUN   TestAllBoolExpressions/true_||_true_&&_unknown
+=== RUN   TestAllBoolExpressions/(false_&&_true)_||_unknown
+=== RUN   TestAllBoolExpressions/false_&&_unknown_&&_false
+=== RUN   TestAllBoolExpressions/false_&&_true
+=== RUN   TestAllBoolExpressions/true_&&_true_||_unknown
+=== RUN   TestAllBoolExpressions/true_||_unknown_&&_true
+=== RUN   TestAllBoolExpressions/true_||_unknown_||_false
+=== RUN   TestAllBoolExpressions/unknown_||_unknown_&&_false
+=== RUN   TestAllBoolExpressions/true_&&_false
+=== RUN   TestAllBoolExpressions/unknown_||_false
+=== RUN   TestAllBoolExpressions/true_&&_false_||_false
+=== RUN   TestAllBoolExpressions/true_||_unknown_||_true
+=== RUN   TestAllBoolExpressions/true_&&_unknown_&&_false
+=== RUN   TestAllBoolExpressions/(false_&&_true)_||_true
+=== RUN   TestAllBoolExpressions/true_||_true_||_true
+=== RUN   TestAllBoolExpressions/unknown_||_true_||_true
+=== RUN   TestAllBoolExpressions/unknown_||_false_&&_true
+=== RUN   TestAllBoolExpressions/false_||_false_||_true
+=== RUN   TestAllBoolExpressions/false_&&_unknown_&&_true
+=== RUN   TestAllBoolExpressions/unknown_&&_true_||_true
+=== RUN   TestAllBoolExpressions/unknown_||_unknown_||_true
+=== RUN   TestAllBoolExpressions/true_&&_true_||_false
+=== RUN   TestAllBoolExpressions/false_||_false_&&_true
+=== RUN   TestAllBoolExpressions/false_||_unknown_&&_unknown
+=== RUN   TestAllBoolExpressions/true_||_false_||_unknown
+=== RUN   TestAllBoolExpressions/unknown_||_true_&&_false
+=== RUN   TestAllBoolExpressions/unknown_&&_false_||_unknown
+=== RUN   TestAllBoolExpressions/unknown_&&_unknown_&&_unknown
+=== RUN   TestAllBoolExpressions/true_||_true_&&_false
+=== RUN   TestAllBoolExpressions/false_||_true_&&_false
+=== RUN   TestAllBoolExpressions/false_&&_false_&&_unknown
+=== RUN   TestAllBoolExpressions/false_&&_unknown_||_unknown
+=== RUN   TestAllBoolExpressions/(unknown_&&_false)_||_true
+=== RUN   TestAllBoolExpressions/unknown_&&_false_&&_unknown
+=== RUN   TestAllBoolExpressions/true_&&_unknown
+=== RUN   TestAllBoolExpressions/true_||_true_&&_true
+=== RUN   TestAllBoolExpressions/true_||_false_||_true
+=== RUN   TestAllBoolExpressions/false_&&_true_&&_unknown
+=== RUN   TestAllBoolExpressions/false_||_unknown_&&_false
+=== RUN   TestAllBoolExpressions/unknown_||_false_||_true
+=== RUN   TestAllBoolExpressions/true_||_unknown_&&_unknown
+=== RUN   TestAllBoolExpressions/true_&&_false_&&_unknown
+=== RUN   TestAllBoolExpressions/unknown_&&_false_||_false
+=== RUN   TestAllBoolExpressions/unknown_&&_false
+=== RUN   TestAllBoolExpressions/unknown_||_unknown
+=== RUN   TestAllBoolExpressions/true_||_false_||_false
+=== RUN   TestAllBoolExpressions/true_&&_unknown_&&_true
+=== RUN   TestAllBoolExpressions/unknown_&&_false_&&_true
+=== RUN   TestAllBoolExpressions/unknown_&&_unknown
+=== RUN   TestAllBoolExpressions/true_||_true_||_false
+=== RUN   TestAllBoolExpressions/true_&&_unknown_||_true
+=== RUN   TestAllBoolExpressions/true_||_true_||_unknown
+=== RUN   TestAllBoolExpressions/true_&&_false_||_true
+=== RUN   TestAllBoolExpressions/true_&&_unknown_&&_unknown
+=== RUN   TestAllBoolExpressions/unknown_||_true_&&_unknown
+=== RUN   TestAllBoolExpressions/unknown_&&_true
+=== RUN   TestAllBoolExpressions/true_||_false_&&_true
+=== RUN   TestAllBoolExpressions/false_&&_false_&&_true
+=== RUN   TestAllBoolExpressions/(false_&&_false)_||_unknown
+=== RUN   TestAllBoolExpressions/false_||_unknown_&&_true
+=== RUN   TestAllBoolExpressions/unknown_||_unknown_&&_unknown
+=== RUN   TestAllBoolExpressions/false_||_true_&&_true
+=== RUN   TestAllBoolExpressions/false_||_unknown_||_false
+=== RUN   TestAllBoolExpressions/true_&&_true_||_true
+=== RUN   TestAllBoolExpressions/false_||_true_||_false
+=== RUN   TestAllBoolExpressions/false_&&_false_&&_false
+=== RUN   TestAllBoolExpressions/unknown_||_true_||_unknown
+=== RUN   TestAllBoolExpressions/unknown_&&_unknown_&&_true
+=== RUN   TestAllBoolExpressions/unknown_||_unknown_||_false
+=== RUN   TestAllBoolExpressions/false_||_unknown
+=== RUN   TestAllBoolExpressions/false_||_false_||_false
+=== RUN   TestAllBoolExpressions/unknown_||_false_&&_unknown
+=== RUN   TestAllBoolExpressions/unknown_&&_unknown_||_true
+=== RUN   TestAllBoolExpressions/unknown_||_unknown_||_unknown
+=== RUN   TestAllBoolExpressions/false_&&_false_||_true
+=== RUN   TestAllBoolExpressions/false_||_false_&&_unknown
+=== RUN   TestAllBoolExpressions/(false_&&_unknown)_||_true
+=== RUN   TestAllBoolExpressions/unknown_&&_true_||_false
+=== RUN   TestAllBoolExpressions/unknown_&&_unknown_||_false
+=== RUN   TestAllBoolExpressions/false_&&_unknown
+=== RUN   TestAllBoolExpressions/true_||_unknown_&&_false
+=== RUN   TestAllBoolExpressions/false_||_false_||_unknown
+=== RUN   TestAllBoolExpressions/false_||_unknown_||_true
+=== RUN   TestAllBoolExpressions/unknown_&&_false_||_true
+=== RUN   TestAllBoolExpressions/true_&&_unknown_||_false
+=== RUN   TestAllBoolExpressions/false_||_true_||_true
+=== RUN   TestAllBoolExpressions/unknown_||_true_&&_true
+=== RUN   TestAllBoolExpressions/unknown_&&_false_&&_false
+=== RUN   TestAllBoolExpressions/unknown_||_false_||_unknown
+=== RUN   TestAllBoolExpressions/true_||_unknown
+=== RUN   TestAllBoolExpressions/true_||_false_&&_false
+--- PASS: TestAllBoolExpressions (0.00s)
+    --- PASS: TestAllBoolExpressions/true_||_false_&&_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/false_||_true_&&_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/false_||_unknown_||_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/false_&&_true_||_false (0.00s)
+    --- PASS: TestAllBoolExpressions/false_||_false_&&_false (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_&&_true_&&_false (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_||_false_||_false (0.00s)
+    --- PASS: TestAllBoolExpressions/true_||_true (0.00s)
+    --- PASS: TestAllBoolExpressions/false_&&_unknown_||_false (0.00s)
+    --- PASS: TestAllBoolExpressions/false_&&_unknown_&&_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/false_&&_false (0.00s)
+    --- PASS: TestAllBoolExpressions/false_||_true_||_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/false_&&_false_||_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/true_&&_true_&&_false (0.00s)
+    --- PASS: TestAllBoolExpressions/true_||_unknown_||_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/false_&&_true_&&_true (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_&&_unknown_||_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/true_&&_false_&&_false (0.00s)
+    --- PASS: TestAllBoolExpressions/false_&&_true_&&_false (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_||_(true_&&_false) (0.00s)
+    --- PASS: TestAllBoolExpressions/false_&&_true_||_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/false_&&_false_||_false (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_||_true_||_false (0.00s)
+    --- PASS: TestAllBoolExpressions/false_||_true (0.00s)
+    --- PASS: TestAllBoolExpressions/true_&&_true_&&_true (0.00s)
+    --- PASS: TestAllBoolExpressions/true_&&_false_&&_true (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_&&_true_&&_true (0.00s)
+    --- PASS: TestAllBoolExpressions/false_||_false (0.00s)
+    --- PASS: TestAllBoolExpressions/true_&&_unknown_||_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/false_&&_unknown_||_true (0.00s)
+    --- PASS: TestAllBoolExpressions/(false_&&_unknown)_||_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_||_false_&&_false (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_||_unknown_&&_true (0.00s)
+    --- PASS: TestAllBoolExpressions/true_&&_true (0.00s)
+    --- PASS: TestAllBoolExpressions/true_&&_false_||_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/false_&&_true_||_true (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_&&_true_&&_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/true_||_false (0.00s)
+    --- PASS: TestAllBoolExpressions/true_&&_true_&&_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_&&_true_||_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_&&_unknown_&&_false (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_||_true (0.00s)
+    --- PASS: TestAllBoolExpressions/true_||_true_&&_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/(false_&&_true)_||_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/false_&&_unknown_&&_false (0.00s)
+    --- PASS: TestAllBoolExpressions/false_&&_true (0.00s)
+    --- PASS: TestAllBoolExpressions/true_&&_true_||_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/true_||_unknown_&&_true (0.00s)
+    --- PASS: TestAllBoolExpressions/true_||_unknown_||_false (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_||_unknown_&&_false (0.00s)
+    --- PASS: TestAllBoolExpressions/true_&&_false (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_||_false (0.00s)
+    --- PASS: TestAllBoolExpressions/true_&&_false_||_false (0.00s)
+    --- PASS: TestAllBoolExpressions/true_||_unknown_||_true (0.00s)
+    --- PASS: TestAllBoolExpressions/true_&&_unknown_&&_false (0.00s)
+    --- PASS: TestAllBoolExpressions/(false_&&_true)_||_true (0.00s)
+    --- PASS: TestAllBoolExpressions/true_||_true_||_true (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_||_true_||_true (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_||_false_&&_true (0.00s)
+    --- PASS: TestAllBoolExpressions/false_||_false_||_true (0.00s)
+    --- PASS: TestAllBoolExpressions/false_&&_unknown_&&_true (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_&&_true_||_true (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_||_unknown_||_true (0.00s)
+    --- PASS: TestAllBoolExpressions/true_&&_true_||_false (0.00s)
+    --- PASS: TestAllBoolExpressions/false_||_false_&&_true (0.00s)
+    --- PASS: TestAllBoolExpressions/false_||_unknown_&&_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/true_||_false_||_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_||_true_&&_false (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_&&_false_||_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_&&_unknown_&&_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/true_||_true_&&_false (0.00s)
+    --- PASS: TestAllBoolExpressions/false_||_true_&&_false (0.00s)
+    --- PASS: TestAllBoolExpressions/false_&&_false_&&_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/false_&&_unknown_||_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/(unknown_&&_false)_||_true (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_&&_false_&&_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/true_&&_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/true_||_true_&&_true (0.00s)
+    --- PASS: TestAllBoolExpressions/true_||_false_||_true (0.00s)
+    --- PASS: TestAllBoolExpressions/false_&&_true_&&_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/false_||_unknown_&&_false (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_||_false_||_true (0.00s)
+    --- PASS: TestAllBoolExpressions/true_||_unknown_&&_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/true_&&_false_&&_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_&&_false_||_false (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_&&_false (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_||_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/true_||_false_||_false (0.00s)
+    --- PASS: TestAllBoolExpressions/true_&&_unknown_&&_true (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_&&_false_&&_true (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_&&_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/true_||_true_||_false (0.00s)
+    --- PASS: TestAllBoolExpressions/true_&&_unknown_||_true (0.00s)
+    --- PASS: TestAllBoolExpressions/true_||_true_||_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/true_&&_false_||_true (0.00s)
+    --- PASS: TestAllBoolExpressions/true_&&_unknown_&&_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_||_true_&&_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_&&_true (0.00s)
+    --- PASS: TestAllBoolExpressions/true_||_false_&&_true (0.00s)
+    --- PASS: TestAllBoolExpressions/false_&&_false_&&_true (0.00s)
+    --- PASS: TestAllBoolExpressions/(false_&&_false)_||_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/false_||_unknown_&&_true (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_||_unknown_&&_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/false_||_true_&&_true (0.00s)
+    --- PASS: TestAllBoolExpressions/false_||_unknown_||_false (0.00s)
+    --- PASS: TestAllBoolExpressions/true_&&_true_||_true (0.00s)
+    --- PASS: TestAllBoolExpressions/false_||_true_||_false (0.00s)
+    --- PASS: TestAllBoolExpressions/false_&&_false_&&_false (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_||_true_||_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_&&_unknown_&&_true (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_||_unknown_||_false (0.00s)
+    --- PASS: TestAllBoolExpressions/false_||_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/false_||_false_||_false (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_||_false_&&_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_&&_unknown_||_true (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_||_unknown_||_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/false_&&_false_||_true (0.00s)
+    --- PASS: TestAllBoolExpressions/false_||_false_&&_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/(false_&&_unknown)_||_true (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_&&_true_||_false (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_&&_unknown_||_false (0.00s)
+    --- PASS: TestAllBoolExpressions/false_&&_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/true_||_unknown_&&_false (0.00s)
+    --- PASS: TestAllBoolExpressions/false_||_false_||_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/false_||_unknown_||_true (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_&&_false_||_true (0.00s)
+    --- PASS: TestAllBoolExpressions/true_&&_unknown_||_false (0.00s)
+    --- PASS: TestAllBoolExpressions/false_||_true_||_true (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_||_true_&&_true (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_&&_false_&&_false (0.00s)
+    --- PASS: TestAllBoolExpressions/unknown_||_false_||_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/true_||_unknown (0.00s)
+    --- PASS: TestAllBoolExpressions/true_||_false_&&_false (0.00s)
+=== RUN   TestExpressionDiagnosticExtra
+=== RUN   TestExpressionDiagnosticExtra/boop()
+=== RUN   TestExpressionDiagnosticExtra/ns::source::boop()
+=== RUN   TestExpressionDiagnosticExtra/boop()#01
+=== RUN   TestExpressionDiagnosticExtra/boop()#01/unwrapped
+=== RUN   TestExpressionDiagnosticExtra/boop()#01/wrapped
+--- PASS: TestExpressionDiagnosticExtra (0.00s)
+    --- PASS: TestExpressionDiagnosticExtra/boop() (0.00s)
+    --- PASS: TestExpressionDiagnosticExtra/ns::source::boop() (0.00s)
+    --- PASS: TestExpressionDiagnosticExtra/boop()#01 (0.00s)
+        --- PASS: TestExpressionDiagnosticExtra/boop()#01/unwrapped (0.00s)
+        --- PASS: TestExpressionDiagnosticExtra/boop()#01/wrapped (0.00s)
+=== RUN   TestNavigationContextString
+=== RUN   TestNavigationContextString/0
+=== RUN   TestNavigationContextString/2
+=== RUN   TestNavigationContextString/4
+=== RUN   TestNavigationContextString/17
+=== RUN   TestNavigationContextString/25
+=== RUN   TestNavigationContextString/45
+=== RUN   TestNavigationContextString/142
+=== RUN   TestNavigationContextString/180
+=== RUN   TestNavigationContextString/99999
+--- PASS: TestNavigationContextString (0.00s)
+    --- PASS: TestNavigationContextString/0 (0.00s)
+    --- PASS: TestNavigationContextString/2 (0.00s)
+    --- PASS: TestNavigationContextString/4 (0.00s)
+    --- PASS: TestNavigationContextString/17 (0.00s)
+    --- PASS: TestNavigationContextString/25 (0.00s)
+    --- PASS: TestNavigationContextString/45 (0.00s)
+    --- PASS: TestNavigationContextString/142 (0.00s)
+    --- PASS: TestNavigationContextString/180 (0.00s)
+    --- PASS: TestNavigationContextString/99999 (0.00s)
+=== RUN   TestNavigationContextDefRange
+=== RUN   TestNavigationContextDefRange/0
+=== RUN   TestNavigationContextDefRange/2
+=== RUN   TestNavigationContextDefRange/4
+=== RUN   TestNavigationContextDefRange/17
+=== RUN   TestNavigationContextDefRange/25
+=== RUN   TestNavigationContextDefRange/45
+=== RUN   TestNavigationContextDefRange/142
+=== RUN   TestNavigationContextDefRange/180
+=== RUN   TestNavigationContextDefRange/99999
+--- PASS: TestNavigationContextDefRange (0.00s)
+    --- PASS: TestNavigationContextDefRange/0 (0.00s)
+    --- PASS: TestNavigationContextDefRange/2 (0.00s)
+    --- PASS: TestNavigationContextDefRange/4 (0.00s)
+    --- PASS: TestNavigationContextDefRange/17 (0.00s)
+    --- PASS: TestNavigationContextDefRange/25 (0.00s)
+    --- PASS: TestNavigationContextDefRange/45 (0.00s)
+    --- PASS: TestNavigationContextDefRange/142 (0.00s)
+    --- PASS: TestNavigationContextDefRange/180 (0.00s)
+    --- PASS: TestNavigationContextDefRange/99999 (0.00s)
+=== RUN   TestParseTraversalAbs
+=== RUN   TestParseTraversalAbs/#00
+=== RUN   TestParseTraversalAbs/partial_
+=== RUN   TestParseTraversalAbs/foo
+=== RUN   TestParseTraversalAbs/partial_foo
+=== RUN   TestParseTraversalAbs/foo.bar.baz
+=== RUN   TestParseTraversalAbs/partial_foo.bar.baz
+=== RUN   TestParseTraversalAbs/foo[1]
+=== RUN   TestParseTraversalAbs/partial_foo[1]
+=== RUN   TestParseTraversalAbs/foo[1][2]
+=== RUN   TestParseTraversalAbs/partial_foo[1][2]
+=== RUN   TestParseTraversalAbs/foo[1].bar
+=== RUN   TestParseTraversalAbs/partial_foo[1].bar
+=== RUN   TestParseTraversalAbs/foo.
+=== RUN   TestParseTraversalAbs/partial_foo.
+=== RUN   TestParseTraversalAbs/foo[
+=== RUN   TestParseTraversalAbs/partial_foo[
+=== RUN   TestParseTraversalAbs/foo[index]
+=== RUN   TestParseTraversalAbs/partial_foo[index]
+=== RUN   TestParseTraversalAbs/foo[0
+=== RUN   TestParseTraversalAbs/partial_foo[0
+=== RUN   TestParseTraversalAbs/foo_0
+=== RUN   TestParseTraversalAbs/partial_foo_0
+=== RUN   TestParseTraversalAbs/foo[*]
+    parse_traversal_test.go:267: skipping test for unsupported splat syntax
+=== RUN   TestParseTraversalAbs/partial_foo[*]
+=== RUN   TestParseTraversalAbs/foo.*
+=== RUN   TestParseTraversalAbs/partial_foo.*
+=== RUN   TestParseTraversalAbs/foo[*].bar
+=== RUN   TestParseTraversalAbs/partial_foo[*].bar
+    parse_traversal_test.go:291: skipping test that fails for splat syntax
+--- PASS: TestParseTraversalAbs (0.00s)
+    --- PASS: TestParseTraversalAbs/#00 (0.00s)
+    --- PASS: TestParseTraversalAbs/partial_ (0.00s)
+    --- PASS: TestParseTraversalAbs/foo (0.00s)
+    --- PASS: TestParseTraversalAbs/partial_foo (0.00s)
+    --- PASS: TestParseTraversalAbs/foo.bar.baz (0.00s)
+    --- PASS: TestParseTraversalAbs/partial_foo.bar.baz (0.00s)
+    --- PASS: TestParseTraversalAbs/foo[1] (0.00s)
+    --- PASS: TestParseTraversalAbs/partial_foo[1] (0.00s)
+    --- PASS: TestParseTraversalAbs/foo[1][2] (0.00s)
+    --- PASS: TestParseTraversalAbs/partial_foo[1][2] (0.00s)
+    --- PASS: TestParseTraversalAbs/foo[1].bar (0.00s)
+    --- PASS: TestParseTraversalAbs/partial_foo[1].bar (0.00s)
+    --- PASS: TestParseTraversalAbs/foo. (0.00s)
+    --- PASS: TestParseTraversalAbs/partial_foo. (0.00s)
+    --- PASS: TestParseTraversalAbs/foo[ (0.00s)
+    --- PASS: TestParseTraversalAbs/partial_foo[ (0.00s)
+    --- PASS: TestParseTraversalAbs/foo[index] (0.00s)
+    --- PASS: TestParseTraversalAbs/partial_foo[index] (0.00s)
+    --- PASS: TestParseTraversalAbs/foo[0 (0.00s)
+    --- PASS: TestParseTraversalAbs/partial_foo[0 (0.00s)
+    --- PASS: TestParseTraversalAbs/foo_0 (0.00s)
+    --- PASS: TestParseTraversalAbs/partial_foo_0 (0.00s)
+    --- SKIP: TestParseTraversalAbs/foo[*] (0.00s)
+    --- PASS: TestParseTraversalAbs/partial_foo[*] (0.00s)
+    --- PASS: TestParseTraversalAbs/foo.* (0.00s)
+    --- PASS: TestParseTraversalAbs/partial_foo.* (0.00s)
+    --- PASS: TestParseTraversalAbs/foo[*].bar (0.00s)
+    --- SKIP: TestParseTraversalAbs/partial_foo[*].bar (0.00s)
+=== RUN   TestParseConfig
+=== RUN   TestParseConfig/#00
+    parser_test.go:2760: 
+=== RUN   TestParseConfig/block_{}_
+    parser_test.go:2760: 
+        block {}
+=== RUN   TestParseConfig/block_{}
+    parser_test.go:2760: 
+        block {}
+=== RUN   TestParseConfig/block_{}block_{}_
+    parser_test.go:2760: 
+        block {}block {}
+=== RUN   TestParseConfig/block_{_block_{}_}_
+    parser_test.go:2760: 
+        block { block {} }
+=== RUN   TestParseConfig/block_"foo"_{}_
+    parser_test.go:2760: 
+        block "foo" {}
+=== RUN   TestParseConfig/block_foo_{}_
+    parser_test.go:2760: 
+        block foo {}
+=== RUN   TestParseConfig/block_"invalid_${not_allowed_here}_foo"_{}_
+    parser_test.go:2760: 
+        block "invalid ${not_allowed_here} foo" {}
+=== RUN   TestParseConfig/_block_"invalid"_1.2_{}_block_"valid"_{}_
+    parser_test.go:2760: 
+        
+        block "invalid" 1.2 {}
+        block "valid" {}
+=== RUN   TestParseConfig/block_"f\o"_{}_
+    parser_test.go:2760: 
+        block "f\o" {}
+=== RUN   TestParseConfig/block_"f\n"_{}_
+    parser_test.go:2760: 
+        block "f\n" {}
+=== RUN   TestParseConfig/a_=_1_
+    parser_test.go:2760: 
+        a = 1
+=== RUN   TestParseConfig/a_=_1
+    parser_test.go:2760: 
+        a = 1
+=== RUN   TestParseConfig/a_=_"hello_${true}"_
+    parser_test.go:2760: 
+        a = "hello ${true}"
+=== RUN   TestParseConfig/a_=_"hello_$${true}"_
+    parser_test.go:2760: 
+        a = "hello $${true}"
+=== RUN   TestParseConfig/a_=_"hello_%%{true}"_
+    parser_test.go:2760: 
+        a = "hello %%{true}"
+=== RUN   TestParseConfig/a_=_"hello_$$"_
+    parser_test.go:2760: 
+        a = "hello $$"
+=== RUN   TestParseConfig/a_=_"hello_$"_
+    parser_test.go:2760: 
+        a = "hello $"
+=== RUN   TestParseConfig/a_=_"hello_%%"_
+    parser_test.go:2760: 
+        a = "hello %%"
+=== RUN   TestParseConfig/a_=_"hello_%"_
+    parser_test.go:2760: 
+        a = "hello %"
+=== RUN   TestParseConfig/a_=_"hello!"_
+    parser_test.go:2760: 
+        a = "hello!"
+=== RUN   TestParseConfig/a_=_"\u2022"_
+    parser_test.go:2760: 
+        a = "\u2022"
+=== RUN   TestParseConfig/a_=_"\uu2022"_
+    parser_test.go:2760: 
+        a = "\uu2022"
+=== RUN   TestParseConfig/a_=_"\U0001d11e"_
+    parser_test.go:2760: 
+        a = "\U0001d11e"
+=== RUN   TestParseConfig/a_=_"\u0001d11e"_
+    parser_test.go:2760: 
+        a = "\u0001d11e"
+=== RUN   TestParseConfig/a_=_"\U2022"_
+    parser_test.go:2760: 
+        a = "\U2022"
+=== RUN   TestParseConfig/a_=_"\u20m2"_
+    parser_test.go:2760: 
+        a = "\u20m2"
+=== RUN   TestParseConfig/a_=_"\U00300000"_
+    parser_test.go:2760: 
+        a = "\U00300000"
+=== RUN   TestParseConfig/a_=_"\Ub2705550"_
+    parser_test.go:2760: 
+        a = "\Ub2705550"
+=== RUN   TestParseConfig/a_=_<<EOT_Hello_EOT_b_=_"Hi"
+    parser_test.go:2760: 
+        a = <<EOT
+        Hello
+        EOT
+        b = "Hi"
+=== RUN   TestParseConfig/a_=_foo.bar_
+    parser_test.go:2760: 
+        a = foo.bar
+=== RUN   TestParseConfig/a_=_foo.0.1.baz_
+    parser_test.go:2760: 
+        a = foo.0.1.baz
+=== RUN   TestParseConfig/a_=_"${var.public_subnets[count.index]}"_
+    parser_test.go:2760: 
+        a = "${var.public_subnets[count.index]}"
+=== RUN   TestParseConfig/a_=_"${var.public_subnets[*]}"_
+    parser_test.go:2760: 
+        a = "${var.public_subnets[*]}"
+=== RUN   TestParseConfig/a_=_1_#_line_comment_
+    parser_test.go:2760: 
+        a = 1 # line comment
+=== RUN   TestParseConfig/a_=_[for_k,_v_in_foo:_v_if_true]_
+    parser_test.go:2760: 
+        a = [for k, v in foo: v if true]
+=== RUN   TestParseConfig/a_=_[for_k,_v_in_foo:_k_=>_v..._if_true]_
+    parser_test.go:2760: 
+        a = [for k, v in foo: k => v... if true]
+=== RUN   TestParseConfig/_
+    parser_test.go:2760: 
+        	
+=== RUN   TestParseConfig/\x81
+    parser_test.go:2760: 
+        \x81
+=== RUN   TestParseConfig/a_=_1,
+    parser_test.go:2760: 
+        a = 1,
+=== RUN   TestParseConfig/a_=_`str`
+    parser_test.go:2760: 
+        a = `str`
+=== RUN   TestParseConfig/a_=_'str'
+    parser_test.go:2760: 
+        a = 'str'
+=== RUN   TestParseConfig/a_=_sort(data.first.ref.attr)[count.index]_
+    parser_test.go:2760: 
+        a = sort(data.first.ref.attr)[count.index]
+=== RUN   TestParseConfig/block_"unterminated_string_"name"_{}
+    parser_test.go:2760: 
+        block "unterminated_string "name" {}
+=== RUN   TestParseConfig/a_=_a::namespaced::func(data.first.ref.attr)_
+    parser_test.go:2760: 
+        a = a::namespaced::func(data.first.ref.attr)
+=== RUN   TestParseConfig/a_=_partial::namespaced_
+    parser_test.go:2760: 
+        a = partial::namespaced
+=== RUN   TestParseConfig/a_=_partial::_
+    parser_test.go:2760: 
+        a = partial::
+=== RUN   TestParseConfig/a_=_{_b_=_c._}
+    parser_test.go:2760: 
+        a = { b = c. }
+--- PASS: TestParseConfig (0.00s)
+    --- PASS: TestParseConfig/#00 (0.00s)
+    --- PASS: TestParseConfig/block_{}_ (0.00s)
+    --- PASS: TestParseConfig/block_{} (0.00s)
+    --- PASS: TestParseConfig/block_{}block_{}_ (0.00s)
+    --- PASS: TestParseConfig/block_{_block_{}_}_ (0.00s)
+    --- PASS: TestParseConfig/block_"foo"_{}_ (0.00s)
+    --- PASS: TestParseConfig/block_foo_{}_ (0.00s)
+    --- PASS: TestParseConfig/block_"invalid_${not_allowed_here}_foo"_{}_ (0.00s)
+    --- PASS: TestParseConfig/_block_"invalid"_1.2_{}_block_"valid"_{}_ (0.00s)
+    --- PASS: TestParseConfig/block_"f\o"_{}_ (0.00s)
+    --- PASS: TestParseConfig/block_"f\n"_{}_ (0.00s)
+    --- PASS: TestParseConfig/a_=_1_ (0.00s)
+    --- PASS: TestParseConfig/a_=_1 (0.00s)
+    --- PASS: TestParseConfig/a_=_"hello_${true}"_ (0.00s)
+    --- PASS: TestParseConfig/a_=_"hello_$${true}"_ (0.00s)
+    --- PASS: TestParseConfig/a_=_"hello_%%{true}"_ (0.00s)
+    --- PASS: TestParseConfig/a_=_"hello_$$"_ (0.00s)
+    --- PASS: TestParseConfig/a_=_"hello_$"_ (0.00s)
+    --- PASS: TestParseConfig/a_=_"hello_%%"_ (0.00s)
+    --- PASS: TestParseConfig/a_=_"hello_%"_ (0.00s)
+    --- PASS: TestParseConfig/a_=_"hello!"_ (0.00s)
+    --- PASS: TestParseConfig/a_=_"\u2022"_ (0.00s)
+    --- PASS: TestParseConfig/a_=_"\uu2022"_ (0.00s)
+    --- PASS: TestParseConfig/a_=_"\U0001d11e"_ (0.00s)
+    --- PASS: TestParseConfig/a_=_"\u0001d11e"_ (0.00s)
+    --- PASS: TestParseConfig/a_=_"\U2022"_ (0.00s)
+    --- PASS: TestParseConfig/a_=_"\u20m2"_ (0.00s)
+    --- PASS: TestParseConfig/a_=_"\U00300000"_ (0.00s)
+    --- PASS: TestParseConfig/a_=_"\Ub2705550"_ (0.00s)
+    --- PASS: TestParseConfig/a_=_<<EOT_Hello_EOT_b_=_"Hi" (0.00s)
+    --- PASS: TestParseConfig/a_=_foo.bar_ (0.00s)
+    --- PASS: TestParseConfig/a_=_foo.0.1.baz_ (0.00s)
+    --- PASS: TestParseConfig/a_=_"${var.public_subnets[count.index]}"_ (0.00s)
+    --- PASS: TestParseConfig/a_=_"${var.public_subnets[*]}"_ (0.00s)
+    --- PASS: TestParseConfig/a_=_1_#_line_comment_ (0.00s)
+    --- PASS: TestParseConfig/a_=_[for_k,_v_in_foo:_v_if_true]_ (0.00s)
+    --- PASS: TestParseConfig/a_=_[for_k,_v_in_foo:_k_=>_v..._if_true]_ (0.00s)
+    --- PASS: TestParseConfig/_ (0.00s)
+    --- PASS: TestParseConfig/\x81 (0.00s)
+    --- PASS: TestParseConfig/a_=_1, (0.00s)
+    --- PASS: TestParseConfig/a_=_`str` (0.00s)
+    --- PASS: TestParseConfig/a_=_'str' (0.00s)
+    --- PASS: TestParseConfig/a_=_sort(data.first.ref.attr)[count.index]_ (0.00s)
+    --- PASS: TestParseConfig/block_"unterminated_string_"name"_{} (0.00s)
+    --- PASS: TestParseConfig/a_=_a::namespaced::func(data.first.ref.attr)_ (0.00s)
+    --- PASS: TestParseConfig/a_=_partial::namespaced_ (0.00s)
+    --- PASS: TestParseConfig/a_=_partial::_ (0.00s)
+    --- PASS: TestParseConfig/a_=_{_b_=_c._} (0.00s)
+=== RUN   TestParseConfig_incompleteFunctionCall
+=== RUN   TestParseConfig_incompleteFunctionCall/0
+    parser_test.go:4054: 
+        attr = object({ foo = })
+        attr2 = "foo"
+=== RUN   TestParseConfig_incompleteFunctionCall/1
+    parser_test.go:4054: 
+        block "label" {
+          attr = object(
+=== RUN   TestParseConfig_incompleteFunctionCall/2
+    parser_test.go:4054: 
+        block "label" {
+        		  attr = object({
+=== RUN   TestParseConfig_incompleteFunctionCall/3
+    parser_test.go:4054: 
+        block "label" {
+          attr = object({ foo
+=== RUN   TestParseConfig_incompleteFunctionCall/4
+    parser_test.go:4054: 
+        block "label" {
+          attr = object({ foo =
+=== RUN   TestParseConfig_incompleteFunctionCall/5
+    parser_test.go:4054: 
+        block "label" {
+          attr = object({ foo = }
+=== RUN   TestParseConfig_incompleteFunctionCall/6
+    parser_test.go:4054: 
+        block "label" {
+          attr = object({ foo = })
+=== RUN   TestParseConfig_incompleteFunctionCall/7
+    parser_test.go:4054: 
+        block "label" {
+          attr = object({
+            foo =
+        
+=== RUN   TestParseConfig_incompleteFunctionCall/8
+    parser_test.go:4054: 
+        block "label" {
+          attr = object({
+            foo =
+        
+        another_block {
+        
+        }
+=== RUN   TestParseConfig_incompleteFunctionCall/9
+    parser_test.go:4054: 
+        block "label" {
+          attr = object({
+            foo =
+          }
+=== RUN   TestParseConfig_incompleteFunctionCall/10
+    parser_test.go:4054: 
+        block "label" {
+          attr = object({
+            foo =
+          })
+--- PASS: TestParseConfig_incompleteFunctionCall (0.00s)
+    --- PASS: TestParseConfig_incompleteFunctionCall/0 (0.00s)
+    --- PASS: TestParseConfig_incompleteFunctionCall/1 (0.00s)
+    --- PASS: TestParseConfig_incompleteFunctionCall/2 (0.00s)
+    --- PASS: TestParseConfig_incompleteFunctionCall/3 (0.00s)
+    --- PASS: TestParseConfig_incompleteFunctionCall/4 (0.00s)
+    --- PASS: TestParseConfig_incompleteFunctionCall/5 (0.00s)
+    --- PASS: TestParseConfig_incompleteFunctionCall/6 (0.00s)
+    --- PASS: TestParseConfig_incompleteFunctionCall/7 (0.00s)
+    --- PASS: TestParseConfig_incompleteFunctionCall/8 (0.00s)
+    --- PASS: TestParseConfig_incompleteFunctionCall/9 (0.00s)
+    --- PASS: TestParseConfig_incompleteFunctionCall/10 (0.00s)
+=== RUN   TestParseConfigDiagnostics
+=== RUN   TestParseConfigDiagnostics/unclosed_tuple_constructor_(before_element_separator)
+    parser_test.go:4323: 
+        foo = [ a
+=== RUN   TestParseConfigDiagnostics/unclosed_grouping_parentheses
+    parser_test.go:4323: 
+        foo = (1
+=== RUN   TestParseConfigDiagnostics/unclosed_quoted_template_interpolation_at_closing_quote
+    parser_test.go:4323: 
+        foo = "${a"
+=== RUN   TestParseConfigDiagnostics/unclosed_multi-line_block_(no_contents)
+    parser_test.go:4323: 
+        blah {
+=== RUN   TestParseConfigDiagnostics/unclosed_multi-line_block_(after_one_argument)
+    parser_test.go:4323: 
+        blah {
+          a = 1
+=== RUN   TestParseConfigDiagnostics/unclosed_single-line_block_(after_its_argument)
+    parser_test.go:4323: 
+        blah { a = 1
+=== RUN   TestParseConfigDiagnostics/unclosed_object_constructor_(before_equals)
+    parser_test.go:4323: 
+        foo = { a 
+=== RUN   TestParseConfigDiagnostics/unclosed_function_call
+    parser_test.go:4323: 
+        foo = boop("a"
+=== RUN   TestParseConfigDiagnostics/unclosed_quoted_template_at_literal_part
+    parser_test.go:4323: 
+        foo = "${a}
+=== RUN   TestParseConfigDiagnostics/unclosed_object_constructor_(before_any_expression)
+    parser_test.go:4323: 
+        foo = {
+=== RUN   TestParseConfigDiagnostics/unclosed_object_constructor_(before_element_separator)
+    parser_test.go:4323: 
+        foo = { a = 1
+=== RUN   TestParseConfigDiagnostics/unclosed_template_interpolation_at_EOF
+    parser_test.go:4323: 
+        foo = "${a
+=== RUN   TestParseConfigDiagnostics/unclosed_tuple_constructor_(before_any_expression)
+    parser_test.go:4323: 
+        foo = [
+=== RUN   TestParseConfigDiagnostics/unclosed_function_call_(before_any_argument)
+    parser_test.go:4323: 
+        foo = foo(
+=== RUN   TestParseConfigDiagnostics/unclosed_single-line_block_(no_contents)
+    parser_test.go:4323: 
+        blah {
+--- PASS: TestParseConfigDiagnostics (0.00s)
+    --- PASS: TestParseConfigDiagnostics/unclosed_tuple_constructor_(before_element_separator) (0.00s)
+    --- PASS: TestParseConfigDiagnostics/unclosed_grouping_parentheses (0.00s)
+    --- PASS: TestParseConfigDiagnostics/unclosed_quoted_template_interpolation_at_closing_quote (0.00s)
+    --- PASS: TestParseConfigDiagnostics/unclosed_multi-line_block_(no_contents) (0.00s)
+    --- PASS: TestParseConfigDiagnostics/unclosed_multi-line_block_(after_one_argument) (0.00s)
+    --- PASS: TestParseConfigDiagnostics/unclosed_single-line_block_(after_its_argument) (0.00s)
+    --- PASS: TestParseConfigDiagnostics/unclosed_object_constructor_(before_equals) (0.00s)
+    --- PASS: TestParseConfigDiagnostics/unclosed_function_call (0.00s)
+    --- PASS: TestParseConfigDiagnostics/unclosed_quoted_template_at_literal_part (0.00s)
+    --- PASS: TestParseConfigDiagnostics/unclosed_object_constructor_(before_any_expression) (0.00s)
+    --- PASS: TestParseConfigDiagnostics/unclosed_object_constructor_(before_element_separator) (0.00s)
+    --- PASS: TestParseConfigDiagnostics/unclosed_template_interpolation_at_EOF (0.00s)
+    --- PASS: TestParseConfigDiagnostics/unclosed_tuple_constructor_(before_any_expression) (0.00s)
+    --- PASS: TestParseConfigDiagnostics/unclosed_function_call_(before_any_argument) (0.00s)
+    --- PASS: TestParseConfigDiagnostics/unclosed_single-line_block_(no_contents) (0.00s)
+=== RUN   TestPeeker
+--- PASS: TestPeeker (0.00s)
+=== RUN   TestValidIdentifier
+=== RUN   TestValidIdentifier/#00
+=== RUN   TestValidIdentifier/hello
+=== RUN   TestValidIdentifier/hello.world
+=== RUN   TestValidIdentifier/hello_
+=== RUN   TestValidIdentifier/_hello
+=== RUN   TestValidIdentifier/hello_#01
+=== RUN   TestValidIdentifier/hello_world
+=== RUN   TestValidIdentifier/aws_instance
+=== RUN   TestValidIdentifier/aws.instance
+=== RUN   TestValidIdentifier/foo-bar
+=== RUN   TestValidIdentifier/foo--bar
+=== RUN   TestValidIdentifier/foo_
+=== RUN   TestValidIdentifier/foo-
+=== RUN   TestValidIdentifier/_foobar
+=== RUN   TestValidIdentifier/-foobar
+=== RUN   TestValidIdentifier/blah1
+=== RUN   TestValidIdentifier/blah1blah
+=== RUN   TestValidIdentifier/1blah1blah
+=== RUN   TestValidIdentifier/héllo
+=== RUN   TestValidIdentifier/Χαίρετε
+=== RUN   TestValidIdentifier/звать
+=== RUN   TestValidIdentifier/今日は
+=== RUN   TestValidIdentifier/�
+=== RUN   TestValidIdentifier/a�
+--- PASS: TestValidIdentifier (0.00s)
+    --- PASS: TestValidIdentifier/#00 (0.00s)
+    --- PASS: TestValidIdentifier/hello (0.00s)
+    --- PASS: TestValidIdentifier/hello.world (0.00s)
+    --- PASS: TestValidIdentifier/hello_ (0.00s)
+    --- PASS: TestValidIdentifier/_hello (0.00s)
+    --- PASS: TestValidIdentifier/hello_#01 (0.00s)
+    --- PASS: TestValidIdentifier/hello_world (0.00s)
+    --- PASS: TestValidIdentifier/aws_instance (0.00s)
+    --- PASS: TestValidIdentifier/aws.instance (0.00s)
+    --- PASS: TestValidIdentifier/foo-bar (0.00s)
+    --- PASS: TestValidIdentifier/foo--bar (0.00s)
+    --- PASS: TestValidIdentifier/foo_ (0.00s)
+    --- PASS: TestValidIdentifier/foo- (0.00s)
+    --- PASS: TestValidIdentifier/_foobar (0.00s)
+    --- PASS: TestValidIdentifier/-foobar (0.00s)
+    --- PASS: TestValidIdentifier/blah1 (0.00s)
+    --- PASS: TestValidIdentifier/blah1blah (0.00s)
+    --- PASS: TestValidIdentifier/1blah1blah (0.00s)
+    --- PASS: TestValidIdentifier/héllo (0.00s)
+    --- PASS: TestValidIdentifier/Χαίρετε (0.00s)
+    --- PASS: TestValidIdentifier/звать (0.00s)
+    --- PASS: TestValidIdentifier/今日は (0.00s)
+    --- PASS: TestValidIdentifier/� (0.00s)
+    --- PASS: TestValidIdentifier/a� (0.00s)
+=== RUN   TestScanStringLit
+=== RUN   TestScanStringLit/#00
+=== RUN   TestScanStringLit/#00/quoted
+=== RUN   TestScanStringLit/#00/unquoted
+=== RUN   TestScanStringLit/hello
+=== RUN   TestScanStringLit/hello/quoted
+=== RUN   TestScanStringLit/hello/unquoted
+=== RUN   TestScanStringLit/hello_world
+=== RUN   TestScanStringLit/hello_world/quoted
+=== RUN   TestScanStringLit/hello_world/unquoted
+=== RUN   TestScanStringLit/hello\nworld
+=== RUN   TestScanStringLit/hello\nworld/quoted
+=== RUN   TestScanStringLit/hello\nworld/unquoted
+=== RUN   TestScanStringLit/hello\🥁world
+=== RUN   TestScanStringLit/hello\🥁world/quoted
+=== RUN   TestScanStringLit/hello\🥁world/unquoted
+=== RUN   TestScanStringLit/hello\uabcdworld
+=== RUN   TestScanStringLit/hello\uabcdworld/quoted
+=== RUN   TestScanStringLit/hello\uabcdworld/unquoted
+=== RUN   TestScanStringLit/hello\uabcdabcdworld
+=== RUN   TestScanStringLit/hello\uabcdabcdworld/quoted
+=== RUN   TestScanStringLit/hello\uabcdabcdworld/unquoted
+=== RUN   TestScanStringLit/hello\uabcworld
+=== RUN   TestScanStringLit/hello\uabcworld/quoted
+=== RUN   TestScanStringLit/hello\uabcworld/unquoted
+=== RUN   TestScanStringLit/hello\U01234567world
+=== RUN   TestScanStringLit/hello\U01234567world/quoted
+=== RUN   TestScanStringLit/hello\U01234567world/unquoted
+=== RUN   TestScanStringLit/hello\U012345670123world
+=== RUN   TestScanStringLit/hello\U012345670123world/quoted
+=== RUN   TestScanStringLit/hello\U012345670123world/unquoted
+=== RUN   TestScanStringLit/hello\Uabcdworld
+=== RUN   TestScanStringLit/hello\Uabcdworld/quoted
+=== RUN   TestScanStringLit/hello\Uabcdworld/unquoted
+=== RUN   TestScanStringLit/hello\Uabcworld
+=== RUN   TestScanStringLit/hello\Uabcworld/quoted
+=== RUN   TestScanStringLit/hello\Uabcworld/unquoted
+=== RUN   TestScanStringLit/hello\uworld
+=== RUN   TestScanStringLit/hello\uworld/quoted
+=== RUN   TestScanStringLit/hello\uworld/unquoted
+=== RUN   TestScanStringLit/hello\Uworld
+=== RUN   TestScanStringLit/hello\Uworld/quoted
+=== RUN   TestScanStringLit/hello\Uworld/unquoted
+=== RUN   TestScanStringLit/hello\u
+=== RUN   TestScanStringLit/hello\u/quoted
+=== RUN   TestScanStringLit/hello\u/unquoted
+=== RUN   TestScanStringLit/hello\U
+=== RUN   TestScanStringLit/hello\U/quoted
+=== RUN   TestScanStringLit/hello\U/unquoted
+=== RUN   TestScanStringLit/hello\
+=== RUN   TestScanStringLit/hello\/quoted
+=== RUN   TestScanStringLit/hello\/unquoted
+=== RUN   TestScanStringLit/hello$${world}
+=== RUN   TestScanStringLit/hello$${world}/quoted
+=== RUN   TestScanStringLit/hello$${world}/unquoted
+=== RUN   TestScanStringLit/hello$$world
+=== RUN   TestScanStringLit/hello$$world/quoted
+=== RUN   TestScanStringLit/hello$$world/unquoted
+=== RUN   TestScanStringLit/hello$world
+=== RUN   TestScanStringLit/hello$world/quoted
+=== RUN   TestScanStringLit/hello$world/unquoted
+=== RUN   TestScanStringLit/hello$
+=== RUN   TestScanStringLit/hello$/quoted
+=== RUN   TestScanStringLit/hello$/unquoted
+=== RUN   TestScanStringLit/hello$${
+=== RUN   TestScanStringLit/hello$${/quoted
+=== RUN   TestScanStringLit/hello$${/unquoted
+=== RUN   TestScanStringLit/hello%%{world}
+=== RUN   TestScanStringLit/hello%%{world}/quoted
+=== RUN   TestScanStringLit/hello%%{world}/unquoted
+=== RUN   TestScanStringLit/hello%%world
+=== RUN   TestScanStringLit/hello%%world/quoted
+=== RUN   TestScanStringLit/hello%%world/unquoted
+=== RUN   TestScanStringLit/hello%world
+=== RUN   TestScanStringLit/hello%world/quoted
+=== RUN   TestScanStringLit/hello%world/unquoted
+=== RUN   TestScanStringLit/hello%
+=== RUN   TestScanStringLit/hello%/quoted
+=== RUN   TestScanStringLit/hello%/unquoted
+=== RUN   TestScanStringLit/hello%%{
+=== RUN   TestScanStringLit/hello%%{/quoted
+=== RUN   TestScanStringLit/hello%%{/unquoted
+=== RUN   TestScanStringLit/hello\${world}
+=== RUN   TestScanStringLit/hello\${world}/quoted
+=== RUN   TestScanStringLit/hello\${world}/unquoted
+=== RUN   TestScanStringLit/hello\%{world}
+=== RUN   TestScanStringLit/hello\%{world}/quoted
+=== RUN   TestScanStringLit/hello\%{world}/unquoted
+=== RUN   TestScanStringLit/hello_world#01
+=== RUN   TestScanStringLit/hello_world#01/quoted
+=== RUN   TestScanStringLit/hello_world#01/unquoted
+=== RUN   TestScanStringLit/hello_world#02
+=== RUN   TestScanStringLit/hello_world#02/quoted
+=== RUN   TestScanStringLit/hello_world#02/unquoted
+=== RUN   TestScanStringLit/hello__world
+=== RUN   TestScanStringLit/hello__world/quoted
+=== RUN   TestScanStringLit/hello__world/unquoted
+--- PASS: TestScanStringLit (0.00s)
+    --- PASS: TestScanStringLit/#00 (0.00s)
+        --- PASS: TestScanStringLit/#00/quoted (0.00s)
+        --- PASS: TestScanStringLit/#00/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello (0.00s)
+        --- PASS: TestScanStringLit/hello/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello_world (0.00s)
+        --- PASS: TestScanStringLit/hello_world/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello_world/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello\nworld (0.00s)
+        --- PASS: TestScanStringLit/hello\nworld/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello\nworld/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello\🥁world (0.00s)
+        --- PASS: TestScanStringLit/hello\🥁world/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello\🥁world/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello\uabcdworld (0.00s)
+        --- PASS: TestScanStringLit/hello\uabcdworld/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello\uabcdworld/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello\uabcdabcdworld (0.00s)
+        --- PASS: TestScanStringLit/hello\uabcdabcdworld/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello\uabcdabcdworld/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello\uabcworld (0.00s)
+        --- PASS: TestScanStringLit/hello\uabcworld/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello\uabcworld/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello\U01234567world (0.00s)
+        --- PASS: TestScanStringLit/hello\U01234567world/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello\U01234567world/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello\U012345670123world (0.00s)
+        --- PASS: TestScanStringLit/hello\U012345670123world/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello\U012345670123world/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello\Uabcdworld (0.00s)
+        --- PASS: TestScanStringLit/hello\Uabcdworld/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello\Uabcdworld/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello\Uabcworld (0.00s)
+        --- PASS: TestScanStringLit/hello\Uabcworld/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello\Uabcworld/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello\uworld (0.00s)
+        --- PASS: TestScanStringLit/hello\uworld/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello\uworld/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello\Uworld (0.00s)
+        --- PASS: TestScanStringLit/hello\Uworld/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello\Uworld/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello\u (0.00s)
+        --- PASS: TestScanStringLit/hello\u/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello\u/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello\U (0.00s)
+        --- PASS: TestScanStringLit/hello\U/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello\U/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello\ (0.00s)
+        --- PASS: TestScanStringLit/hello\/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello\/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello$${world} (0.00s)
+        --- PASS: TestScanStringLit/hello$${world}/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello$${world}/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello$$world (0.00s)
+        --- PASS: TestScanStringLit/hello$$world/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello$$world/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello$world (0.00s)
+        --- PASS: TestScanStringLit/hello$world/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello$world/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello$ (0.00s)
+        --- PASS: TestScanStringLit/hello$/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello$/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello$${ (0.00s)
+        --- PASS: TestScanStringLit/hello$${/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello$${/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello%%{world} (0.00s)
+        --- PASS: TestScanStringLit/hello%%{world}/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello%%{world}/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello%%world (0.00s)
+        --- PASS: TestScanStringLit/hello%%world/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello%%world/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello%world (0.00s)
+        --- PASS: TestScanStringLit/hello%world/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello%world/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello% (0.00s)
+        --- PASS: TestScanStringLit/hello%/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello%/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello%%{ (0.00s)
+        --- PASS: TestScanStringLit/hello%%{/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello%%{/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello\${world} (0.00s)
+        --- PASS: TestScanStringLit/hello\${world}/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello\${world}/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello\%{world} (0.00s)
+        --- PASS: TestScanStringLit/hello\%{world}/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello\%{world}/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello_world#01 (0.00s)
+        --- PASS: TestScanStringLit/hello_world#01/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello_world#01/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello_world#02 (0.00s)
+        --- PASS: TestScanStringLit/hello_world#02/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello_world#02/unquoted (0.00s)
+    --- PASS: TestScanStringLit/hello__world (0.00s)
+        --- PASS: TestScanStringLit/hello__world/quoted (0.00s)
+        --- PASS: TestScanStringLit/hello__world/unquoted (0.00s)
+=== RUN   TestScanTokens_normal
+=== RUN   TestScanTokens_normal/#00
+=== RUN   TestScanTokens_normal/_
+=== RUN   TestScanTokens_normal/__
+=== RUN   TestScanTokens_normal/\ufeff
+=== RUN   TestScanTokens_normal/_\ufeff
+=== RUN   TestScanTokens_normal/��
+=== RUN   TestScanTokens_normal/1
+=== RUN   TestScanTokens_normal/12
+=== RUN   TestScanTokens_normal/12.3
+=== RUN   TestScanTokens_normal/1e2
+=== RUN   TestScanTokens_normal/1e+2
+=== RUN   TestScanTokens_normal/hello
+=== RUN   TestScanTokens_normal/_ello
+=== RUN   TestScanTokens_normal/hel_o
+=== RUN   TestScanTokens_normal/hel-o
+=== RUN   TestScanTokens_normal/h3ll0
+=== RUN   TestScanTokens_normal/héllo
+=== RUN   TestScanTokens_normal/::
+=== RUN   TestScanTokens_normal/a::b
+=== RUN   TestScanTokens_normal/""
+=== RUN   TestScanTokens_normal/"hello"
+=== RUN   TestScanTokens_normal/"hello,_\"world\"!"
+=== RUN   TestScanTokens_normal/"hello_$$"
+=== RUN   TestScanTokens_normal/"hello_%%"
+=== RUN   TestScanTokens_normal/"hello_$"
+=== RUN   TestScanTokens_normal/"hello_%"
+=== RUN   TestScanTokens_normal/"hello_$${world}"
+=== RUN   TestScanTokens_normal/"hello_%%{world}"
+=== RUN   TestScanTokens_normal/"hello_%${world}"
+=== RUN   TestScanTokens_normal/"${1}"
+=== RUN   TestScanTokens_normal/"%{a}"
+=== RUN   TestScanTokens_normal/"${{}}"
+=== RUN   TestScanTokens_normal/"${""}"
+=== RUN   TestScanTokens_normal/"${"${a}"}"
+=== RUN   TestScanTokens_normal/"${"${a}_foo"}"
+=== RUN   TestScanTokens_normal/<<EOT_hello_world_EOT_
+=== RUN   TestScanTokens_normal/<<EOT__hello_world__EOT__
+=== RUN   TestScanTokens_normal/<<EOT_hello_${name}_EOT_
+=== RUN   TestScanTokens_normal/<<EOT_${name}EOT_EOT_
+=== RUN   TestScanTokens_normal/<<EOT___hello_world_EOT_
+=== RUN   TestScanTokens_normal/<<-EOT___hello_world_EOT_
+=== RUN   TestScanTokens_normal/<<-EOT___hello_world__EOT_
+=== RUN   TestScanTokens_normal/<<EOF_${<<-EOF_hello_EOF_}_EOF_
+=== RUN   TestScanTokens_normal/<<EOF__hello_EOF_
+=== RUN   TestScanTokens_normal/<<EOF__hello_EOF__
+=== RUN   TestScanTokens_normal/_(1_+_2)_*_3_
+=== RUN   TestScanTokens_normal/9%8
+=== RUN   TestScanTokens_normal/_a_=_1_
+=== RUN   TestScanTokens_normal/#_hello_
+=== RUN   TestScanTokens_normal///_hello_
+=== RUN   TestScanTokens_normal///_hello_//_hello
+=== RUN   TestScanTokens_normal///_hello_foo_//_hello
+=== RUN   TestScanTokens_normal/#_hello_#_hello
+=== RUN   TestScanTokens_normal/#_hello_foo_#_hello
+=== RUN   TestScanTokens_normal//*_hello_*/
+=== RUN   TestScanTokens_normal//*_hello_*/_howdy_/*_hey_*/
+=== RUN   TestScanTokens_normal/🌻
+=== RUN   TestScanTokens_normal/|
+=== RUN   TestScanTokens_normal/�
+=== RUN   TestScanTokens_normal/_��
+=== RUN   TestScanTokens_normal/__#01
+=== RUN   TestScanTokens_normal/locals_{___is_percent_=_percent_sign_==_"%"_?_true_:_false_}_
+--- PASS: TestScanTokens_normal (0.00s)
+    --- PASS: TestScanTokens_normal/#00 (0.00s)
+    --- PASS: TestScanTokens_normal/_ (0.00s)
+    --- PASS: TestScanTokens_normal/__ (0.00s)
+    --- PASS: TestScanTokens_normal/\ufeff (0.00s)
+    --- PASS: TestScanTokens_normal/_\ufeff (0.00s)
+    --- PASS: TestScanTokens_normal/�� (0.00s)
+    --- PASS: TestScanTokens_normal/1 (0.00s)
+    --- PASS: TestScanTokens_normal/12 (0.00s)
+    --- PASS: TestScanTokens_normal/12.3 (0.00s)
+    --- PASS: TestScanTokens_normal/1e2 (0.00s)
+    --- PASS: TestScanTokens_normal/1e+2 (0.00s)
+    --- PASS: TestScanTokens_normal/hello (0.00s)
+    --- PASS: TestScanTokens_normal/_ello (0.00s)
+    --- PASS: TestScanTokens_normal/hel_o (0.00s)
+    --- PASS: TestScanTokens_normal/hel-o (0.00s)
+    --- PASS: TestScanTokens_normal/h3ll0 (0.00s)
+    --- PASS: TestScanTokens_normal/héllo (0.00s)
+    --- PASS: TestScanTokens_normal/:: (0.00s)
+    --- PASS: TestScanTokens_normal/a::b (0.00s)
+    --- PASS: TestScanTokens_normal/"" (0.00s)
+    --- PASS: TestScanTokens_normal/"hello" (0.00s)
+    --- PASS: TestScanTokens_normal/"hello,_\"world\"!" (0.00s)
+    --- PASS: TestScanTokens_normal/"hello_$$" (0.00s)
+    --- PASS: TestScanTokens_normal/"hello_%%" (0.00s)
+    --- PASS: TestScanTokens_normal/"hello_$" (0.00s)
+    --- PASS: TestScanTokens_normal/"hello_%" (0.00s)
+    --- PASS: TestScanTokens_normal/"hello_$${world}" (0.00s)
+    --- PASS: TestScanTokens_normal/"hello_%%{world}" (0.00s)
+    --- PASS: TestScanTokens_normal/"hello_%${world}" (0.00s)
+    --- PASS: TestScanTokens_normal/"${1}" (0.00s)
+    --- PASS: TestScanTokens_normal/"%{a}" (0.00s)
+    --- PASS: TestScanTokens_normal/"${{}}" (0.00s)
+    --- PASS: TestScanTokens_normal/"${""}" (0.00s)
+    --- PASS: TestScanTokens_normal/"${"${a}"}" (0.00s)
+    --- PASS: TestScanTokens_normal/"${"${a}_foo"}" (0.00s)
+    --- PASS: TestScanTokens_normal/<<EOT_hello_world_EOT_ (0.00s)
+    --- PASS: TestScanTokens_normal/<<EOT__hello_world__EOT__ (0.00s)
+    --- PASS: TestScanTokens_normal/<<EOT_hello_${name}_EOT_ (0.00s)
+    --- PASS: TestScanTokens_normal/<<EOT_${name}EOT_EOT_ (0.00s)
+    --- PASS: TestScanTokens_normal/<<EOT___hello_world_EOT_ (0.00s)
+    --- PASS: TestScanTokens_normal/<<-EOT___hello_world_EOT_ (0.00s)
+    --- PASS: TestScanTokens_normal/<<-EOT___hello_world__EOT_ (0.00s)
+    --- PASS: TestScanTokens_normal/<<EOF_${<<-EOF_hello_EOF_}_EOF_ (0.00s)
+    --- PASS: TestScanTokens_normal/<<EOF__hello_EOF_ (0.00s)
+    --- PASS: TestScanTokens_normal/<<EOF__hello_EOF__ (0.00s)
+    --- PASS: TestScanTokens_normal/_(1_+_2)_*_3_ (0.00s)
+    --- PASS: TestScanTokens_normal/9%8 (0.00s)
+    --- PASS: TestScanTokens_normal/_a_=_1_ (0.00s)
+    --- PASS: TestScanTokens_normal/#_hello_ (0.00s)
+    --- PASS: TestScanTokens_normal///_hello_ (0.00s)
+    --- PASS: TestScanTokens_normal///_hello_//_hello (0.00s)
+    --- PASS: TestScanTokens_normal///_hello_foo_//_hello (0.00s)
+    --- PASS: TestScanTokens_normal/#_hello_#_hello (0.00s)
+    --- PASS: TestScanTokens_normal/#_hello_foo_#_hello (0.00s)
+    --- PASS: TestScanTokens_normal//*_hello_*/ (0.00s)
+    --- PASS: TestScanTokens_normal//*_hello_*/_howdy_/*_hey_*/ (0.00s)
+    --- PASS: TestScanTokens_normal/🌻 (0.00s)
+    --- PASS: TestScanTokens_normal/| (0.00s)
+    --- PASS: TestScanTokens_normal/� (0.00s)
+    --- PASS: TestScanTokens_normal/_�� (0.00s)
+    --- PASS: TestScanTokens_normal/__#01 (0.00s)
+    --- PASS: TestScanTokens_normal/locals_{___is_percent_=_percent_sign_==_"%"_?_true_:_false_}_ (0.00s)
+=== RUN   TestScanTokens_template
+=== RUN   TestScanTokens_template/#00
+=== RUN   TestScanTokens_template/_hello_
+=== RUN   TestScanTokens_template/_hello_#01
+=== RUN   TestScanTokens_template/hello_${foo}_hello
+=== RUN   TestScanTokens_template/hello_${~foo~}_hello
+--- PASS: TestScanTokens_template (0.00s)
+    --- PASS: TestScanTokens_template/#00 (0.00s)
+    --- PASS: TestScanTokens_template/_hello_ (0.00s)
+    --- PASS: TestScanTokens_template/_hello_#01 (0.00s)
+    --- PASS: TestScanTokens_template/hello_${foo}_hello (0.00s)
+    --- PASS: TestScanTokens_template/hello_${~foo~}_hello (0.00s)
+=== RUN   TestBlocksAtPos
+=== RUN   TestBlocksAtPos/empty
+=== RUN   TestBlocksAtPos/single_in_body_with_unselected_nested
+=== RUN   TestBlocksAtPos/selected_nested_three_levels
+=== RUN   TestBlocksAtPos/selected_nested_three_levels_with_unselected_sibling_after
+=== RUN   TestBlocksAtPos/selected_nested_three_levels_with_unselected_sibling_before
+=== RUN   TestBlocksAtPos/unterminated
+    structure_at_pos_test.go:157: :1,5-6: Unclosed configuration block; There is no closing brace for this block before the end of the file. This may be caused by incorrect brace nesting elsewhere in this file.
+=== RUN   TestBlocksAtPos/selected_nested_two_levels
+=== RUN   TestBlocksAtPos/unterminated_nested
+    structure_at_pos_test.go:157: :2,8-9: Unclosed configuration block; There is no closing brace for this block before the end of the file. This may be caused by incorrect brace nesting elsewhere in this file.
+=== RUN   TestBlocksAtPos/no_braces_two_labels_newline
+    structure_at_pos_test.go:157: :1,30-2,1: Invalid block definition; A block definition must have block content delimited by "{" and "}", starting on the same line as the block header.
+=== RUN   TestBlocksAtPos/spaces
+=== RUN   TestBlocksAtPos/single_in_body_with_unselected_sibling
+=== RUN   TestBlocksAtPos/no_braces_with_label_newline
+    structure_at_pos_test.go:157: :1,17-2,1: Invalid block definition; A block definition must have block content delimited by "{" and "}", starting on the same line as the block header.
+=== RUN   TestBlocksAtPos/no_braces_two_labels_eof
+    structure_at_pos_test.go:157: :1,30-30: Invalid block definition; Either a quoted string block label or an opening brace ("{") is expected here.
+=== RUN   TestBlocksAtPos/single_in_header
+=== RUN   TestBlocksAtPos/single_in_body
+--- PASS: TestBlocksAtPos (0.00s)
+    --- PASS: TestBlocksAtPos/empty (0.00s)
+    --- PASS: TestBlocksAtPos/single_in_body_with_unselected_nested (0.00s)
+    --- PASS: TestBlocksAtPos/selected_nested_three_levels (0.00s)
+    --- PASS: TestBlocksAtPos/selected_nested_three_levels_with_unselected_sibling_after (0.00s)
+    --- PASS: TestBlocksAtPos/selected_nested_three_levels_with_unselected_sibling_before (0.00s)
+    --- PASS: TestBlocksAtPos/unterminated (0.00s)
+    --- PASS: TestBlocksAtPos/selected_nested_two_levels (0.00s)
+    --- PASS: TestBlocksAtPos/unterminated_nested (0.00s)
+    --- PASS: TestBlocksAtPos/no_braces_two_labels_newline (0.00s)
+    --- PASS: TestBlocksAtPos/spaces (0.00s)
+    --- PASS: TestBlocksAtPos/single_in_body_with_unselected_sibling (0.00s)
+    --- PASS: TestBlocksAtPos/no_braces_with_label_newline (0.00s)
+    --- PASS: TestBlocksAtPos/no_braces_two_labels_eof (0.00s)
+    --- PASS: TestBlocksAtPos/single_in_header (0.00s)
+    --- PASS: TestBlocksAtPos/single_in_body (0.00s)
+=== RUN   TestAttributeAtPos
+=== RUN   TestAttributeAtPos/nested
+=== RUN   TestAttributeAtPos/nested_in_unterminated_block
+    structure_at_pos_test.go:257: :2,8-9: Unclosed configuration block; There is no closing brace for this block before the end of the file. This may be caused by incorrect brace nesting elsewhere in this file.
+=== RUN   TestAttributeAtPos/empty
+=== RUN   TestAttributeAtPos/top-level
+=== RUN   TestAttributeAtPos/top-level_with_ignored_sibling_after
+=== RUN   TestAttributeAtPos/top-level_ignored_sibling_before
+--- PASS: TestAttributeAtPos (0.00s)
+    --- PASS: TestAttributeAtPos/nested (0.00s)
+    --- PASS: TestAttributeAtPos/nested_in_unterminated_block (0.00s)
+    --- PASS: TestAttributeAtPos/empty (0.00s)
+    --- PASS: TestAttributeAtPos/top-level (0.00s)
+    --- PASS: TestAttributeAtPos/top-level_with_ignored_sibling_after (0.00s)
+    --- PASS: TestAttributeAtPos/top-level_ignored_sibling_before (0.00s)
+=== RUN   TestOutermostExprAtPos
+=== RUN   TestOutermostExprAtPos/empty
+=== RUN   TestOutermostExprAtPos/simple_bool
+=== RUN   TestOutermostExprAtPos/simple_reference
+=== RUN   TestOutermostExprAtPos/attribute_reference
+=== RUN   TestOutermostExprAtPos/parens
+=== RUN   TestOutermostExprAtPos/tuple_cons
+=== RUN   TestOutermostExprAtPos/function_call
+--- PASS: TestOutermostExprAtPos (0.00s)
+    --- PASS: TestOutermostExprAtPos/empty (0.00s)
+    --- PASS: TestOutermostExprAtPos/simple_bool (0.00s)
+    --- PASS: TestOutermostExprAtPos/simple_reference (0.00s)
+    --- PASS: TestOutermostExprAtPos/attribute_reference (0.00s)
+    --- PASS: TestOutermostExprAtPos/parens (0.00s)
+    --- PASS: TestOutermostExprAtPos/tuple_cons (0.00s)
+    --- PASS: TestOutermostExprAtPos/function_call (0.00s)
+=== RUN   TestBodyContent
+=== RUN   TestBodyContent/00
+=== RUN   TestBodyContent/01
+=== RUN   TestBodyContent/02
+=== RUN   TestBodyContent/03
+=== RUN   TestBodyContent/04
+=== RUN   TestBodyContent/05
+=== RUN   TestBodyContent/06
+=== RUN   TestBodyContent/07
+=== RUN   TestBodyContent/08
+=== RUN   TestBodyContent/09
+=== RUN   TestBodyContent/10
+=== RUN   TestBodyContent/11
+=== RUN   TestBodyContent/12
+=== RUN   TestBodyContent/13
+=== RUN   TestBodyContent/14
+=== RUN   TestBodyContent/15
+--- PASS: TestBodyContent (0.00s)
+    --- PASS: TestBodyContent/00 (0.00s)
+    --- PASS: TestBodyContent/01 (0.00s)
+    --- PASS: TestBodyContent/02 (0.00s)
+    --- PASS: TestBodyContent/03 (0.00s)
+    --- PASS: TestBodyContent/04 (0.00s)
+    --- PASS: TestBodyContent/05 (0.00s)
+    --- PASS: TestBodyContent/06 (0.00s)
+    --- PASS: TestBodyContent/07 (0.00s)
+    --- PASS: TestBodyContent/08 (0.00s)
+    --- PASS: TestBodyContent/09 (0.00s)
+    --- PASS: TestBodyContent/10 (0.00s)
+    --- PASS: TestBodyContent/11 (0.00s)
+    --- PASS: TestBodyContent/12 (0.00s)
+    --- PASS: TestBodyContent/13 (0.00s)
+    --- PASS: TestBodyContent/14 (0.00s)
+    --- PASS: TestBodyContent/15 (0.00s)
+=== RUN   TestBodyJustAttributes
+=== RUN   TestBodyJustAttributes/00
+=== RUN   TestBodyJustAttributes/01
+=== RUN   TestBodyJustAttributes/02
+=== RUN   TestBodyJustAttributes/03
+=== RUN   TestBodyJustAttributes/04
+=== RUN   TestBodyJustAttributes/05
+--- PASS: TestBodyJustAttributes (0.00s)
+    --- PASS: TestBodyJustAttributes/00 (0.00s)
+    --- PASS: TestBodyJustAttributes/01 (0.00s)
+    --- PASS: TestBodyJustAttributes/02 (0.00s)
+    --- PASS: TestBodyJustAttributes/03 (0.00s)
+    --- PASS: TestBodyJustAttributes/04 (0.00s)
+    --- PASS: TestBodyJustAttributes/05 (0.00s)
+=== RUN   TestCheckInvalidTokensTest
+=== RUN   TestCheckInvalidTokensTest/block_“invalid”_{}
+=== RUN   TestCheckInvalidTokensTest/block_'invalid'_{}
+=== RUN   TestCheckInvalidTokensTest/block_`invalid`_{}
+=== RUN   TestCheckInvalidTokensTest/foo_=_a_&_b
+=== RUN   TestCheckInvalidTokensTest/foo_=_a_|_b
+=== RUN   TestCheckInvalidTokensTest/foo_=_~a
+--- PASS: TestCheckInvalidTokensTest (0.00s)
+    --- PASS: TestCheckInvalidTokensTest/block_“invalid”_{} (0.00s)
+    --- PASS: TestCheckInvalidTokensTest/block_'invalid'_{} (0.00s)
+    --- PASS: TestCheckInvalidTokensTest/block_`invalid`_{} (0.00s)
+    --- PASS: TestCheckInvalidTokensTest/foo_=_a_&_b (0.00s)
+    --- PASS: TestCheckInvalidTokensTest/foo_=_a_|_b (0.00s)
+    --- PASS: TestCheckInvalidTokensTest/foo_=_~a (0.00s)
+=== RUN   TestVariables
+=== RUN   TestVariables/&hclsyntax.LiteralValueExpr{Val:cty.True,_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}}
+=== RUN   TestVariables/&hclsyntax.ScopeTraversalExpr{Traversal:hcl.Traversal{hcl.TraverseRoot{isTraverser:hcl.isTraverser{},_Name:"foo",_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}}},_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}}
+=== RUN   TestVariables/&hclsyntax.BinaryOpExpr{LHS:(*hclsyntax.ScopeTraversalExpr)(0x582b6ce4c60),_Op:(*hclsyntax.Operation)(0xbd7560),_RHS:(*hclsyntax.ScopeTraversalExpr)(0x582b6ce4cc0),_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}}
+=== RUN   TestVariables/&hclsyntax.UnaryOpExpr{Op:(*hclsyntax.Operation)(0xbd7600),_Val:(*hclsyntax.ScopeTraversalExpr)(0x582b6ce4d20),_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}},_SymbolRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}}
+=== RUN   TestVariables/&hclsyntax.ConditionalExpr{Condition:(*hclsyntax.ScopeTraversalExpr)(0x582b6ce4d80),_TrueResult:(*hclsyntax.ScopeTraversalExpr)(0x582b6ce4de0),_FalseResult:(*hclsyntax.ScopeTraversalExpr)(0x582b6ce4e40),_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}}
+=== RUN   TestVariables/&hclsyntax.ForExpr{KeyVar:"k",_ValVar:"v",_CollExpr:(*hclsyntax.ScopeTraversalExpr)(0x582b6ce4ea0),_KeyExpr:(*hclsyntax.BinaryOpExpr)(0x582b6d98310),_ValExpr:(*hclsyntax.BinaryOpExpr)(0x582b6d98380),_CondExpr:(*hclsyntax.BinaryOpExpr)(0x582b6d983f0),_Group:false,_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}},_OpenRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}},_CloseRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}}
+=== RUN   TestVariables/&hclsyntax.ScopeTraversalExpr{Traversal:hcl.Traversal{hcl.TraverseRoot{isTraverser:hcl.isTraverser{},_Name:"data",_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}},_hcl.TraverseAttr{isTraverser:hcl.isTraverser{},_Name:"null_data_source",_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}},_hcl.TraverseAttr{isTraverser:hcl.isTraverser{},_Name:"multi",_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}},_hcl.TraverseIndex{isTraverser:hcl.isTraverser{},_Key:cty.NumberIntVal(0),_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}}},_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}}
+=== RUN   TestVariables/&hclsyntax.RelativeTraversalExpr{Source:(*hclsyntax.FunctionCallExpr)(0x582b6ce2e10),_Traversal:hcl.Traversal{hcl.TraverseIndex{isTraverser:hcl.isTraverser{},_Key:cty.NumberIntVal(0),_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}}},_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}}
+--- PASS: TestVariables (0.00s)
+    --- PASS: TestVariables/&hclsyntax.LiteralValueExpr{Val:cty.True,_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}} (0.00s)
+    --- PASS: TestVariables/&hclsyntax.ScopeTraversalExpr{Traversal:hcl.Traversal{hcl.TraverseRoot{isTraverser:hcl.isTraverser{},_Name:"foo",_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}}},_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}} (0.00s)
+    --- PASS: TestVariables/&hclsyntax.BinaryOpExpr{LHS:(*hclsyntax.ScopeTraversalExpr)(0x582b6ce4c60),_Op:(*hclsyntax.Operation)(0xbd7560),_RHS:(*hclsyntax.ScopeTraversalExpr)(0x582b6ce4cc0),_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}} (0.00s)
+    --- PASS: TestVariables/&hclsyntax.UnaryOpExpr{Op:(*hclsyntax.Operation)(0xbd7600),_Val:(*hclsyntax.ScopeTraversalExpr)(0x582b6ce4d20),_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}},_SymbolRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}} (0.00s)
+    --- PASS: TestVariables/&hclsyntax.ConditionalExpr{Condition:(*hclsyntax.ScopeTraversalExpr)(0x582b6ce4d80),_TrueResult:(*hclsyntax.ScopeTraversalExpr)(0x582b6ce4de0),_FalseResult:(*hclsyntax.ScopeTraversalExpr)(0x582b6ce4e40),_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}} (0.00s)
+    --- PASS: TestVariables/&hclsyntax.ForExpr{KeyVar:"k",_ValVar:"v",_CollExpr:(*hclsyntax.ScopeTraversalExpr)(0x582b6ce4ea0),_KeyExpr:(*hclsyntax.BinaryOpExpr)(0x582b6d98310),_ValExpr:(*hclsyntax.BinaryOpExpr)(0x582b6d98380),_CondExpr:(*hclsyntax.BinaryOpExpr)(0x582b6d983f0),_Group:false,_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}},_OpenRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}},_CloseRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}} (0.00s)
+    --- PASS: TestVariables/&hclsyntax.ScopeTraversalExpr{Traversal:hcl.Traversal{hcl.TraverseRoot{isTraverser:hcl.isTraverser{},_Name:"data",_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}},_hcl.TraverseAttr{isTraverser:hcl.isTraverser{},_Name:"null_data_source",_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}},_hcl.TraverseAttr{isTraverser:hcl.isTraverser{},_Name:"multi",_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}},_hcl.TraverseIndex{isTraverser:hcl.isTraverser{},_Key:cty.NumberIntVal(0),_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}}},_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}} (0.00s)
+    --- PASS: TestVariables/&hclsyntax.RelativeTraversalExpr{Source:(*hclsyntax.FunctionCallExpr)(0x582b6ce2e10),_Traversal:hcl.Traversal{hcl.TraverseIndex{isTraverser:hcl.isTraverser{},_Key:cty.NumberIntVal(0),_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}}},_SrcRange:hcl.Range{Filename:"",_Start:hcl.Pos{Line:0,_Column:0,_Byte:0},_End:hcl.Pos{Line:0,_Column:0,_Byte:0}}} (0.00s)
+=== RUN   TestWalk
+=== RUN   TestWalk/1
+=== RUN   TestWalk/foo
+=== RUN   TestWalk/1_+_1
+=== RUN   TestWalk/(1_+_1)
+=== RUN   TestWalk/a[0]
+=== RUN   TestWalk/0[foo]
+=== RUN   TestWalk/bar()
+=== RUN   TestWalk/bar(1,_a)
+=== RUN   TestWalk/bar(1,_a)[0]
+=== RUN   TestWalk/[for_x_in_foo:_x_+_1_if_x_<_10]
+--- PASS: TestWalk (0.00s)
+    --- PASS: TestWalk/1 (0.00s)
+    --- PASS: TestWalk/foo (0.00s)
+    --- PASS: TestWalk/1_+_1 (0.00s)
+    --- PASS: TestWalk/(1_+_1) (0.00s)
+    --- PASS: TestWalk/a[0] (0.00s)
+    --- PASS: TestWalk/0[foo] (0.00s)
+    --- PASS: TestWalk/bar() (0.00s)
+    --- PASS: TestWalk/bar(1,_a) (0.00s)
+    --- PASS: TestWalk/bar(1,_a)[0] (0.00s)
+    --- PASS: TestWalk/[for_x_in_foo:_x_+_1_if_x_<_10] (0.00s)
+=== RUN   TestExpressionCaseSensitiveLookup
+=== RUN   TestExpressionCaseSensitiveLookup/object.MixedCase
+=== RUN   TestExpressionCaseSensitiveLookup/map.MixedCase
+=== RUN   TestExpressionCaseSensitiveLookup/object["MixedCase"]
+=== RUN   TestExpressionCaseSensitiveLookup/map["MixedCase"]
+=== RUN   TestExpressionCaseSensitiveLookup/(object).MixedCase
+=== RUN   TestExpressionCaseSensitiveLookup/(map).MixedCase
+=== RUN   TestExpressionCaseSensitiveLookup/object.mixedcase
+=== RUN   TestExpressionCaseSensitiveLookup/map.mixedcase
+=== RUN   TestExpressionCaseSensitiveLookup/object["mixedcase"]
+=== RUN   TestExpressionCaseSensitiveLookup/map["mixedcase"]
+=== RUN   TestExpressionCaseSensitiveLookup/(object).mixedcase
+=== RUN   TestExpressionCaseSensitiveLookup/(map).mixedcase
+--- PASS: TestExpressionCaseSensitiveLookup (0.00s)
+    --- PASS: TestExpressionCaseSensitiveLookup/object.MixedCase (0.00s)
+    --- PASS: TestExpressionCaseSensitiveLookup/map.MixedCase (0.00s)
+    --- PASS: TestExpressionCaseSensitiveLookup/object["MixedCase"] (0.00s)
+    --- PASS: TestExpressionCaseSensitiveLookup/map["MixedCase"] (0.00s)
+    --- PASS: TestExpressionCaseSensitiveLookup/(object).MixedCase (0.00s)
+    --- PASS: TestExpressionCaseSensitiveLookup/(map).MixedCase (0.00s)
+    --- PASS: TestExpressionCaseSensitiveLookup/object.mixedcase (0.00s)
+    --- PASS: TestExpressionCaseSensitiveLookup/map.mixedcase (0.00s)
+    --- PASS: TestExpressionCaseSensitiveLookup/object["mixedcase"] (0.00s)
+    --- PASS: TestExpressionCaseSensitiveLookup/map["mixedcase"] (0.00s)
+    --- PASS: TestExpressionCaseSensitiveLookup/(object).mixedcase (0.00s)
+    --- PASS: TestExpressionCaseSensitiveLookup/(map).mixedcase (0.00s)
+PASS
+ok  	github.com/hashicorp/hcl/v2/hclsyntax	0.032s

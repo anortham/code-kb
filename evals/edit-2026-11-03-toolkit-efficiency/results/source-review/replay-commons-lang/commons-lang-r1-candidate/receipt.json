@@ -1,0 +1,126 @@
+{
+  "arm": "candidate",
+  "attempt_id": "commons-lang-r1-candidate",
+  "attempt_metadata_sha256": "8c1d423ffcb2d779f33f8428fe6ee2d5381b1d468b728c8b7745e39761a3af39",
+  "attempt_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/candidate-v2/attempts/010-commons-lang-code-kb-r1",
+  "bundle_json_sha256": "59e7ab8c068debba0f8b30661a5c3bf65744bf2d676b867be1ff77d1c3ddf82c",
+  "bundle_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/candidate-v2/attempts/010-commons-lang-code-kb-r1/bundle",
+  "case_id": "commons-lang",
+  "case_sha256": "f5bcc4a9f9f1c631d17a5934ffc91de72cf4157bdbf1b8b2cacf784cfe21960f",
+  "changed_public_test_paths": [
+    "src/test/java/org/apache/commons/lang3/time/DateZoneIdTest.java"
+  ],
+  "command_result": {
+    "command_id": "selected-added-public-tests",
+    "elapsed_seconds": 15.404213,
+    "exit_status": 0,
+    "expected_output_missing": [],
+    "passed": true,
+    "process_cleanup": {
+      "attempted": false,
+      "complete": true,
+      "signal": null
+    },
+    "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/commons-lang-r1-candidate/evidence/selected-tests/stderr.log",
+    "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/commons-lang-r1-candidate/evidence/selected-tests/stdout.log",
+    "test_execution_observed": true,
+    "timed_out": false
+  },
+  "corpus_sha256": "028067bcd6a7f8668cbe352b6e9215b0ba0751cf5d8883c5dd5ad3628bc80939",
+  "handoff_sha256": "60307f5c6647d94ad4f559e82ce7b0241ea281bbe92e2497d399324702af0971",
+  "hidden_overlay_installed": false,
+  "manifest": "candidate",
+  "observed_test_count": 10,
+  "observed_test_names": [
+    "org.apache.commons.lang3.time.DateZoneIdTest"
+  ],
+  "observed_test_summary": [
+    {
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0,
+      "suite": "org.apache.commons.lang3.time.DateZoneIdTest",
+      "test_count": 10
+    }
+  ],
+  "offline_inputs_sha256": {
+    "dependencies": {
+      "commons-m2": "cd2d5dbf77c5e1e38296de7e5393ae46743b745775eb15c898ddec17c5504f65"
+    },
+    "tools": {
+      "java": "08ebc2d440a5cad30907e51ce2fb7ee250ed5e322a7a63c002b3cfabf7dae9ec",
+      "maven": "5ba787b31abbbe574c3bc55d8fabd2588174f9360f9aab7bc359c24e719d7d44"
+    }
+  },
+  "replay_digest": "c238fbd73d8fd577466d4cce86fc2bc6bbac6910efba66940389ad34e0f7597a",
+  "runtime_setup": [
+    {
+      "command_id": "commons-copy-prepared-maven-cache",
+      "elapsed_seconds": 0.465037,
+      "exit_status": 0,
+      "expected_output_missing": [],
+      "passed": true,
+      "process_cleanup": {
+        "attempted": false,
+        "complete": true,
+        "signal": null
+      },
+      "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/commons-lang-r1-candidate/evidence/runtime-public-replay-00-commons-copy-prepared-maven-cache/stderr.log",
+      "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/commons-lang-r1-candidate/evidence/runtime-public-replay-00-commons-copy-prepared-maven-cache/stdout.log",
+      "test_execution_observed": null,
+      "timed_out": false
+    },
+    {
+      "command_id": "commons-resolve-dependencies-offline",
+      "elapsed_seconds": 3.121586,
+      "exit_status": 0,
+      "expected_output_missing": [],
+      "passed": true,
+      "process_cleanup": {
+        "attempted": false,
+        "complete": true,
+        "signal": null
+      },
+      "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/commons-lang-r1-candidate/evidence/runtime-public-replay-01-commons-resolve-dependencies-offline/stderr.log",
+      "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/commons-lang-r1-candidate/evidence/runtime-public-replay-01-commons-resolve-dependencies-offline/stdout.log",
+      "test_execution_observed": null,
+      "timed_out": false
+    },
+    {
+      "command_id": "commons-surefire-provider-offline-cache",
+      "elapsed_seconds": 1.618138,
+      "exit_status": 0,
+      "expected_output_missing": [],
+      "passed": true,
+      "process_cleanup": {
+        "attempted": false,
+        "complete": true,
+        "signal": null
+      },
+      "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/commons-lang-r1-candidate/evidence/runtime-public-replay-02-commons-surefire-provider-offline-cache/stderr.log",
+      "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/commons-lang-r1-candidate/evidence/runtime-public-replay-02-commons-surefire-provider-offline-cache/stdout.log",
+      "test_execution_observed": null,
+      "timed_out": false
+    }
+  ],
+  "schema": 1,
+  "seed_digest": "45360d445c673c6a4ecbd8d32de4afaa701841fd9638caa6668846f10af5b3e3",
+  "seed_project": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/work/seed-project",
+  "source_pin": "a5d6c5ed8847b2b14dacf062b646f94d6cc61a10",
+  "source_root": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-lang-pinned-source",
+  "status": "passed",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_sha256": "f7f362e5a9f91351d1ee93022776df8af065c42b69f6de825ddea596e275481a",
+  "test_command": [
+    "/usr/bin/env",
+    "JAVA_HOME=/tools/java",
+    "PATH=/tools/java/bin:/tools/maven/bin:/usr/bin:/bin",
+    "/tools/maven/bin/mvn",
+    "-B",
+    "-o",
+    "-Dmaven.repo.local=/state/commons-m2",
+    "-Dtest=org.apache.commons.lang3.time.DateZoneIdTest",
+    "test"
+  ],
+  "test_selector": "org.apache.commons.lang3.time.DateZoneIdTest"
+}

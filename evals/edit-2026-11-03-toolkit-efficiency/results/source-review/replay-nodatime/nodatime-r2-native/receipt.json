@@ -1,0 +1,144 @@
+{
+  "arm": "native",
+  "attempt_id": "nodatime-r2-native",
+  "attempt_metadata_sha256": "e6075f545fd19b354fd656de8e8cf38e1fb8c139206c69c0e6d3737469df310d",
+  "attempt_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/current-v2/attempts/024-nodatime-native-r2",
+  "bundle_json_sha256": "a05f9dbf7f7286bd11543ff0b195d718e0c8d48409f73c1e0a9a3c061ad53a95",
+  "bundle_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/current-v2/attempts/024-nodatime-native-r2/bundle",
+  "case_id": "nodatime",
+  "case_sha256": "a55ab9b83e8b0a45c9ed8bcbaf79a6f3350c9cb89232a04662993a7bfd05ab43",
+  "changed_public_test_paths": [
+    "src/NodaTime.Test/DateTimeOffsetConversionTest.cs"
+  ],
+  "command_result": {
+    "command_id": "selected-added-public-tests",
+    "elapsed_seconds": 12.695006,
+    "exit_status": 0,
+    "expected_output_missing": [],
+    "passed": true,
+    "process_cleanup": {
+      "attempted": false,
+      "complete": true,
+      "signal": null
+    },
+    "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/nodatime-r2-native/evidence/selected-tests/stderr.log",
+    "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/nodatime-r2-native/evidence/selected-tests/stdout.log",
+    "test_execution_observed": true,
+    "timed_out": false
+  },
+  "corpus_sha256": "028067bcd6a7f8668cbe352b6e9215b0ba0751cf5d8883c5dd5ad3628bc80939",
+  "handoff_sha256": "60307f5c6647d94ad4f559e82ce7b0241ea281bbe92e2497d399324702af0971",
+  "hidden_overlay_installed": false,
+  "manifest": "current",
+  "observed_test_count": 31,
+  "observed_test_names": [
+    "Instant_DateOutOfRange",
+    "Instant_MaxValue",
+    "Instant_Success(1)",
+    "Instant_Success(1900)",
+    "Instant_Success(1970)",
+    "Instant_Success(2900)",
+    "Instant_Success(9999)",
+    "Instant_TruncatesTowardStartOfTime(100)",
+    "Instant_TruncatesTowardStartOfTime(1900)",
+    "Instant_TruncatesTowardStartOfTime(2900)",
+    "OffsetDateTime_DateOutOfRange",
+    "OffsetDateTime_DateRangeBoundaries(False)",
+    "OffsetDateTime_DateRangeBoundaries(True)",
+    "OffsetDateTime_NonGregorianCalendar",
+    "OffsetDateTime_NonGregorianDateOutOfRange",
+    "OffsetDateTime_Success(-1)",
+    "OffsetDateTime_Success(-14)",
+    "OffsetDateTime_Success(0)",
+    "OffsetDateTime_Success(1)",
+    "OffsetDateTime_Success(14)",
+    "OffsetDateTime_TruncatesOffsetSeconds(-50459)",
+    "OffsetDateTime_TruncatesOffsetSeconds(-5455)",
+    "OffsetDateTime_TruncatesOffsetSeconds(50459)",
+    "OffsetDateTime_TruncatesOffsetSeconds(5455)",
+    "OffsetDateTime_TruncatesTowardStartOfTime(100)",
+    "OffsetDateTime_TruncatesTowardStartOfTime(1900)",
+    "OffsetDateTime_TruncatesTowardStartOfTime(2900)",
+    "OffsetDateTime_UnsupportedOffset(-15)",
+    "OffsetDateTime_UnsupportedOffset(15)",
+    "OffsetDateTime_UtcDateOutOfRange(False)",
+    "OffsetDateTime_UtcDateOutOfRange(True)"
+  ],
+  "observed_test_summary": {
+    "discovered": 31,
+    "passed": 31,
+    "total": 31
+  },
+  "offline_inputs_sha256": {
+    "dependencies": {
+      "nodatime-nuget": "b33c5d38a4b9541a64ea5105150e5bbcd49ba2b5a7cd583b7cdee8faf9cb11dd"
+    },
+    "tools": {
+      "dotnet": "2be7a815b5bd470fc51789d9c6e510be8df7bf322c81656c24d497ee9fc4bdf4"
+    }
+  },
+  "replay_digest": "d5d6c297e0cc9f3db4bcaf017d6e20af2869a7d8057767fa1877f63d77c34b0f",
+  "runtime_setup": [
+    {
+      "command_id": "nodatime-copy-prepared-nuget-cache",
+      "elapsed_seconds": 0.415568,
+      "exit_status": 0,
+      "expected_output_missing": [],
+      "passed": true,
+      "process_cleanup": {
+        "attempted": false,
+        "complete": true,
+        "signal": null
+      },
+      "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/nodatime-r2-native/evidence/runtime-public-replay-00-nodatime-copy-prepared-nuget-cache/stderr.log",
+      "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/nodatime-r2-native/evidence/runtime-public-replay-00-nodatime-copy-prepared-nuget-cache/stdout.log",
+      "test_execution_observed": null,
+      "timed_out": false
+    },
+    {
+      "command_id": "nodatime-restore-from-local-cache",
+      "elapsed_seconds": 1.818989,
+      "exit_status": 0,
+      "expected_output_missing": [],
+      "passed": true,
+      "process_cleanup": {
+        "attempted": false,
+        "complete": true,
+        "signal": null
+      },
+      "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/nodatime-r2-native/evidence/runtime-public-replay-01-nodatime-restore-from-local-cache/stderr.log",
+      "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/nodatime-r2-native/evidence/runtime-public-replay-01-nodatime-restore-from-local-cache/stdout.log",
+      "test_execution_observed": null,
+      "timed_out": false
+    }
+  ],
+  "schema": 1,
+  "seed_digest": "7609d88901825bf2f4f5020e2f6b190377fe5e49712b5c522de0e5f6d3f3ca7c",
+  "seed_project": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/work/seed-project",
+  "source_pin": "649ce5a1c8ddf439eaed7b3bf9157882363cb937",
+  "source_root": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-pinned-source",
+  "status": "passed",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_sha256": "37ad922a1f08406e8520518d5495d8b2edfbe50ac78749a5fd1291afc3e4cab8",
+  "test_command": [
+    "/usr/bin/env",
+    "DOTNET_CLI_HOME=/state/dotnet",
+    "NUGET_PACKAGES=/state/nodatime-nuget",
+    "DOTNET_CLI_TELEMETRY_OPTOUT=1",
+    "DOTNET_NOLOGO=1",
+    "/tools/dotnet/dotnet",
+    "test",
+    "src/NodaTime.Test/NodaTime.Test.csproj",
+    "--framework",
+    "net10.0",
+    "--no-restore",
+    "--filter",
+    "FullyQualifiedName~NodaTime.Test.DateTimeOffsetConversionTest",
+    "--results-directory",
+    "/state/results",
+    "--logger",
+    "console;verbosity=normal",
+    "-p:PublicSign=true"
+  ],
+  "test_selector": "FullyQualifiedName~NodaTime.Test.DateTimeOffsetConversionTest"
+}

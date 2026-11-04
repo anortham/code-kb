@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "source_head": "98644c4aff7bd5489b59d279cb611471f573b91a",
+  "worktree": "/home/murphy/.codex/worktrees/dd7b/code-kb",
+  "branch": "toolkit-efficiency",
+  "runtime_source_baseline": "f290fdca44cec942ae6f50265e21da9f37fca836",
+  "commands": [
+    {
+      "command": "cargo fmt --all -- --check",
+      "exit_code": 0,
+      "observed_utc": "2026-11-04T04:57:08.993569+00:00",
+      "log": "method/branch-gate/fmt.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "cargo clippy --workspace --all-targets -- -D warnings",
+      "exit_code": 0,
+      "observed_utc": "2026-11-04T04:57:08.993755+00:00",
+      "log": "method/branch-gate/clippy.log",
+      "log_sha256": "4720b083e47ec4959bd5b362af397c7e11fe9b6123595f2042edb6e054888f6c"
+    },
+    {
+      "command": "cargo test --workspace --locked",
+      "exit_code": 0,
+      "observed_utc": "2026-11-04T04:57:09.002660+00:00",
+      "log": "method/branch-gate/rust.log",
+      "log_sha256": "507cdc788d0666e72dfa8adc90109a6f07a788c00145390afbc65de6fcf19c55"
+    },
+    {
+      "command": "python3 -m unittest discover -s scripts -p test_*.py",
+      "exit_code": 0,
+      "observed_utc": "2026-11-04T04:57:09.003387+00:00",
+      "log": "method/branch-gate/python.log",
+      "log_sha256": "03f47cd078a1777f8bb7150b88825a76e8979661750c6e777ce44c5e558e4c2c"
+    },
+    {
+      "command": "node --test tests/plugin/*.test.cjs",
+      "exit_code": 0,
+      "observed_utc": "2026-11-04T04:57:09.003574+00:00",
+      "log": "method/branch-gate/node.log",
+      "log_sha256": "916014ea9e559c4e9b0e906bb328ad6b164e5a910d73f44bbdef19f2493ad925"
+    },
+    {
+      "command": "cmp AGENTS.md CLAUDE.md",
+      "exit_code": 0,
+      "observed_utc": "2026-11-04T04:57:09.003665+00:00",
+      "log": "method/branch-gate/mirrors.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "cargo build --release",
+      "exit_code": 0,
+      "observed_utc": "2026-11-04T04:57:09.003730+00:00",
+      "log": "method/branch-gate/release.log",
+      "log_sha256": "29d4c4db07036359282a68736ce0622c541f2508df8c61ec2f584411cca7483c"
+    }
+  ],
+  "rust_passed": 2418,
+  "rust_failed": 0,
+  "rust_ignored": 0,
+  "python_passed": 305,
+  "node_passed": 20,
+  "local_release_sha256": "d3f913db2025339a3496f85017eeaee98542f78afa2f654aacbdf2cc108221d2",
+  "local_release_matches_frozen_current": true,
+  "historical_trees_unchanged": true,
+  "runtime_source_unchanged": true,
+  "guidance_mirrors_identical": true,
+  "check_edit": {
+    "base": "98644c4",
+    "result": "no symbol changed shape"
+  },
+  "state_before_verification": {
+    "root": "/home/murphy/.codex/worktrees/dd7b/code-kb",
+    "branch": "toolkit-efficiency",
+    "commit": "98644c4aff7bd5489b59d279cb611471f573b91a",
+    "status": "## toolkit-efficiency\n M crates/code-kb-cli/src/mcp/server.rs\n M crates/code-kb-cli/tests/mcp_test.rs\n M evals/edit-2026-11-03-toolkit-efficiency/documentation-audit.md\n M skills/code-kb/SKILL.md\n?? .memories/2026-11-04/033648_e12b.md\n?? .memories/2026-11-04/043136_f2b7.md\n?? evals/edit-2026-11-03-toolkit-efficiency/method/k3/\n?? evals/edit-2026-11-03-toolkit-efficiency/results/archive.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/candidate-disposition.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/candidate.patch\n?? evals/edit-2026-11-03-toolkit-efficiency/results/metrics-before-final-acceptance.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/metrics.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/report.md\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/002-flask-config-r1-current.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/002-public.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/003-flask-config-r1-candidate.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/003-public.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/004-express-route-r1-native.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/004-public.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/005-express-route-r1-current.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/005-public.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/006-express-route-r1-candidate.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/006-public.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/007-minijinja-config-r1-native.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/007-public-0.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/008-minijinja-config-r1-current.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/008-public-0.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/009-minijinja-config-r1-candidate.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/009-public-0.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/010-hcl-config-r1-native.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/010-public-0.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/010-public-1.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/011-hcl-config-r1-current.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/011-public-0.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/011-public-1.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/012-hcl-config-r1-candidate.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/012-public-0.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/012-public-1.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/013-commons-lang-r1-native.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/014-commons-lang-r1-current.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/015-commons-lang-r1-candidate.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/016-nodatime-r1-native.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/017-nodatime-r1-current.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/018-nodatime-r1-candidate.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/019-flask-config-r2-candidate.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/019-public.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/020-flask-config-r2-current.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/020-public.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/021-flask-config-r2-native.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/021-public.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/022-express-route-r2-candidate.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/022-public.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/023-express-route-r2-current.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/023-public.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/024-express-route-r2-native.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/024-public.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/025-minijinja-config-r2-candidate.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/025-public-0.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/026-minijinja-config-r2-current.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/026-public-0.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/027-minijinja-config-r2-native.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/027-public-0.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/028-hcl-config-r2-candidate.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/028-public-0.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/028-public-1.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/029-hcl-config-r2-current.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/029-public-0.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/029-public-1.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/030-hcl-config-r2-native.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/030-public-0.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/030-public-1.log\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/031-commons-lang-r2-candidate.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/032-commons-lang-r2-current.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/033-commons-lang-r2-native.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/034-nodatime-r2-candidate.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/035-nodatime-r2-current.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/036-nodatime-r2-native.json\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/provisional-framework-r2/\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/provisional-framework/\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/provisional-java-csharp-r2/\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/provisional-java-csharp/\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/provisional-rust-go-r2/\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/provisional-rust-go/\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/replay-commons-lang/\n?? evals/edit-2026-11-03-toolkit-efficiency/results/source-review/replay-nodatime/\n?? evals/edit-2026-11-03-toolkit-efficiency/results/trial-metrics.csv",
+    "worktrees": "/home/murphy/source/code-kb                f290fdc [main]\n/home/murphy/.codex/worktrees/dd7b/code-kb 98644c4 [toolkit-efficiency]",
+    "main_status": "## main...origin/main [ahead 1]"
+  }
+}

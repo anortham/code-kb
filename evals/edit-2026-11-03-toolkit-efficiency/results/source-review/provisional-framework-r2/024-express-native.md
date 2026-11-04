@@ -1,0 +1,9 @@
+# Ordinal 24 — Express native, repeat 2
+
+- Provisional source review: **PASS**. Lead owns final acceptance.
+- Attempt: `target/toolkit-efficiency/campaign/current-v2/attempts/016-express-route-native-r2`.
+- Attempt `attempt.json` SHA-256: `15012d5850407f6e44f373478baa55279339af7651bfd69c33a2c91e78b4ac00` (matches `status.json.outcome_sha256`). Bundle JSON SHA-256: `92ecbe23edb924436b4ed632e492ce4901da1dd23eff44e27e26f2c8dcd20443`. Seed digest: `ad2fb07c2954951a089b29f3f8f0ec9356fac82259d13009890343770b1e455a`; replay digest: `cde39cb14473df82740ab43d36455279f90e60d2a75466a771a6816ba061ee48`.
+- Reviewed immutable bundle diff against its seed. It changes only `lib/application.js`, `lib/utils.js`, and new `test/query-parser-depth.js`. Bundle violations are empty, `seed_unchanged` is true, patch is valid, and protection is `unchanged`.
+- Implementation validates before state mutation, applies depth through the extended `qs` parser, recompiles on relevant setting changes, and leaves simple/true/disabled/custom parsers intact.
+- Public tests cover defaults, depth before/after parser selection, later requests, depth zero and above default, app isolation, parser preservation and switching, and invalid inputs with settings/parser preservation. Trusted configured public replay `evidence/grade/grade-008-stdout_log.log` shows all 37 tests passing, including every added module case. Hidden replay `grade-010-stdout_log.log` shows all 7 hidden tests passing.
+- No implementation or acceptance gap found against the frozen request. The answer's public HTTP `EPERM` report describes its own run and can coexist with the separate trusted grader replay passing; acceptance uses the grader replay. Additional utility/in-memory checks are outside configured replay evidence and were not used. No safe/no-caller claim appears.

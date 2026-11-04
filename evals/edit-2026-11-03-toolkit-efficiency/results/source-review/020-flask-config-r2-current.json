@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "ordinal": 20,
+  "case_id": "flask-config",
+  "repeat": 2,
+  "runtime": "current",
+  "attempt_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/current-v2/attempts/013-flask-config-code-kb-r2/attempt.json",
+  "attempt_sha256": "79b34c1c4ac734d9092a5e9686fa04e3d0101614f2e77fd352b5c6de14fc54f2",
+  "bundle_json_sha256": "bc755c8c18f306b0ec492f2d62b0926694feb3f4699492ad1fc0eb0408ce8463",
+  "source_review": "passed",
+  "accepted": true,
+  "trial_completed": true,
+  "behavioral_pass": true,
+  "protection_status": "unchanged",
+  "review_note": "results/source-review/provisional-framework-r2/020-flask-current.md",
+  "review_note_sha256": "5662984da6ce374c3d294e174798b82283ffbd6fabcf776693e31553803b7cdd",
+  "lead_review": "Reviewed production diffs against seeds and the independent source notes; accepted the frozen behavior and edge-case assessment. Verified configured public commands execute the added test modules with trusted configuration.",
+  "added_tests": {
+    "fresh_public_replay": true,
+    "executed": true,
+    "logs": [
+      {
+        "path": "results/source-review/020-public.log",
+        "sha256": "e099086040e50d46bc8aebcc27c6eea522a8d452fc92d148c2a68c3b97dc0e9b"
+      }
+    ]
+  },
+  "original_record_unchanged": true
+}

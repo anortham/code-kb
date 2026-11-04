@@ -1,0 +1,55 @@
+
+
+  req
+    .query
+      ✔ should default to {}
+      ✔ should default to parse simple keys
+      when "query parser" is extended
+        ✔ should parse complex keys
+        ✔ should parse parameters with dots
+      when "query parser" is simple
+        ✔ should not parse complex keys
+      when "query parser" is a function
+        ✔ should parse using function
+      when "query parser" disabled
+        ✔ should not parse query
+      when "query parser" enabled
+        ✔ should not parse complex keys
+      when "query parser" an unknown value
+        ✔ should throw
+
+  query parser depth
+    ✔ should default to 5 while keeping the simple query parser default
+    ✔ should limit the extended parser to five nested keys by default
+    ✔ should use a depth configured before selecting the extended parser
+    ✔ should use depth changes for later requests with the extended parser
+    ✔ should support depths greater than the default
+    ✔ should keep depth settings separate between applications
+    ✔ should preserve the simple parser when depth changes
+    ✔ should preserve the true parser when depth changes
+    ✔ should preserve the false parser when depth changes
+    ✔ should preserve the function (str) { return { raw: str }; } parser when depth changes
+    ✔ should retain the depth when switching back to the extended parser
+    ✔ should reject -1 without changing the setting or parser
+    ✔ should reject -0.5 without changing the setting or parser
+    ✔ should reject 1.5 without changing the setting or parser
+    ✔ should reject NaN without changing the setting or parser
+    ✔ should reject Infinity without changing the setting or parser
+    ✔ should reject -Infinity without changing the setting or parser
+    ✔ should reject 2 without changing the setting or parser
+    ✔ should reject  without changing the setting or parser
+    ✔ should reject true without changing the setting or parser
+    ✔ should reject false without changing the setting or parser
+    ✔ should reject null without changing the setting or parser
+    ✔ should reject undefined without changing the setting or parser
+    ✔ should reject [object Object] without changing the setting or parser
+    ✔ should reject  without changing the setting or parser
+    ✔ should reject 2 without changing the setting or parser
+    ✔ should reject function () {} without changing the setting or parser
+    ✔ should reject Symbol(depth) without changing the setting or parser
+    ✔ should reject 2 without changing the setting or parser
+
+
+  38 passing (72ms)
+
+38 tests passed

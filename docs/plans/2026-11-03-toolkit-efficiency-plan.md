@@ -12,7 +12,7 @@
 
 **Architecture Quality:** Keep context behavior inside existing query and formatter boundaries. Main risk: reducing answer size or calls can hide callers, tests, conventions, uncertainty, or indexing cost that an agent needs.
 
-**Status:** In progress on `toolkit-efficiency` in `/home/murphy/.codex/worktrees/dd7b/code-kb`. The user authorized implementation, useful subagents, verification, and local commits on 2026-11-03. Reviewer choice: none.
+**Status:** Completed and verified on `toolkit-efficiency` in `/home/murphy/.codex/worktrees/dd7b/code-kb`, retained locally without publication. The candidate failed both frozen efficiency gates and was removed. All 36 patches were independently accepted. K4 retains two source-backed skill clarifications. The full branch gate passes; see `evals/edit-2026-11-03-toolkit-efficiency/results/report.md` and `evals/edit-2026-11-03-toolkit-efficiency/verification.md`. Reviewer choice: none.
 
 **Authority:** The implementation request authorizes this plan, necessary model trials, and local commits. Repository `AGENTS.md` authorizes necessary model-evaluation spend; no separate budget gate applies. The user explicitly prohibits pushing or releasing. Publication and global installation changes remain ungranted.
 
@@ -168,10 +168,10 @@ Commit mode for future implementation work: `parallel-lead-commit`. Each worker 
 **Approach:** Use the existing runner, frozen artifacts, and output-isolated campaign path. Keep completed attempts unchanged. Repair only setup failures that occurred before model exposure and run only the affected unexposed slots. Do not tune against the confirmation cases or extend the sample after seeing results.
 
 **Acceptance criteria:**
-- [ ] The report contains all 12 matched sets or marks the affected comparison inconclusive; it does not silently discard missing measurements or failed slots. It identifies every runtime by executable hash/version/source commit.
-- [ ] Acceptance and protected-input/source-review results are primary; all token and timing measures are reported separately.
-- [ ] The candidate-improvement and native-savings gates are reported separately at the Design contract thresholds; a fail/inconclusive outcome makes no corresponding savings claim. A candidate failing the retention gate is not shipped as an optimization.
-- [ ] No completed historical or confirmation attempt is rerun or rewritten; hand the evidence to the lead per `parallel-lead-commit`.
+- [x] The report contains all 12 matched sets or marks the affected comparison inconclusive; it does not silently discard missing measurements or failed slots. It identifies every runtime by executable hash/version/source commit.
+- [x] Acceptance and protected-input/source-review results are primary; all token and timing measures are reported separately.
+- [x] The candidate-improvement and native-savings gates are reported separately at the Design contract thresholds; a fail/inconclusive outcome makes no corresponding savings claim. A candidate failing the retention gate is not shipped as an optimization.
+- [x] No completed historical or confirmation attempt is rerun or rewritten; hand the evidence to the lead per `parallel-lead-commit`.
 
 ### Task K4: Align code-kb guidance with verified behavior
 
@@ -203,10 +203,10 @@ Commit mode for future implementation work: `parallel-lead-commit`. Each worker 
 **Approach:** Compare every changed instruction with current source and K3 evidence, including configuration/framework reference gaps, broader-test guidance, and the advisory fail-open one-shot edit check. If no mismatch exists, leave guidance unchanged. Do not edit Razorback materials or broaden into compiler/dynamic analysis.
 
 **Acceptance criteria:**
-- [ ] Any changed claim is source-backed and agrees with the paired results; a negative result contains no efficiency claim.
-- [ ] `AGENTS.md` and `CLAUDE.md` remain byte-identical if either changes.
-- [ ] Add a regression test only when an actual documentation/runtime mismatch was found; otherwise record the no-change audit.
-- [ ] The owning tests pass and the result is handed to the lead for the coordinator's combined smoke per `parallel-lead-commit`.
+- [x] Any changed claim is source-backed and agrees with the paired results; a negative result contains no efficiency claim.
+- [x] `AGENTS.md` and `CLAUDE.md` remain byte-identical if either changes.
+- [x] Add a regression test only when an actual documentation/runtime mismatch was found; otherwise record the no-change audit.
+- [x] The owning tests pass and the result is handed to the lead for the coordinator's combined smoke per `parallel-lead-commit`.
 
 ## Starting a separate implementation session
 

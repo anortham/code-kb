@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "ordinal": 23,
+  "case_id": "express-route",
+  "repeat": 2,
+  "runtime": "current",
+  "attempt_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/current-v2/attempts/015-express-route-code-kb-r2/attempt.json",
+  "attempt_sha256": "f49ce54a8e0c4bbdcf661ac4e7787f1ccf7aa6ce2e9f7e62a8540b75a0b1b38a",
+  "bundle_json_sha256": "d364e3577b2e91992d51cd64990f30fd8913a266ed6ebf008937213e3efb29db",
+  "source_review": "passed",
+  "accepted": true,
+  "trial_completed": true,
+  "behavioral_pass": true,
+  "protection_status": "unchanged",
+  "review_note": "results/source-review/provisional-framework-r2/023-express-current.md",
+  "review_note_sha256": "60bd34aa578ba74e7866ac147b2054b9d88188c35ba46122cf87584694976a51",
+  "lead_review": "Reviewed production diffs against seeds and the independent source notes; accepted the frozen behavior and edge-case assessment. Verified configured public commands execute the added test modules with trusted configuration.",
+  "added_tests": {
+    "fresh_public_replay": true,
+    "executed": true,
+    "logs": [
+      {
+        "path": "results/source-review/023-public.log",
+        "sha256": "4b1ff8ea239498f4b550a158e5a92810731a1985e706d5fba2bd999f4faee12c"
+      }
+    ]
+  },
+  "original_record_unchanged": true
+}
