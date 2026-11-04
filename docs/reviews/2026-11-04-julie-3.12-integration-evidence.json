@@ -1,11 +1,11 @@
 {
-  "recorded_utc": "2026-11-04T19:00:19.349154+00:00",
+  "recorded_utc": "2026-11-04T19:22:07.410458+00:00",
   "base_commit": "310d6a764bafe06603104e54bbbcf3aff847fa90",
   "source_sha256": {
     "scripts/julie-pins.json": "623c49a048a8ec987ebe0a57df7542a940c1134aea413e7ab773a5fff066b1ea",
     "crates/code-kb-core/src/sync.rs": "bb2ddf90d9a18b38af5a38313b504a83e37e1c4c17c343650e5b2dd8be22ab71",
     "crates/code-kb-core/src/reference_report/arity.rs": "d64ceef00e1288bf8f7d982cdb125a9c3b10ac61d81661fb82d9942c4ca5a4cc",
-    "crates/code-kb-core/src/reference_report/loaded_files.rs": "c48ea0cc4c463719b865c68b9f4db10990d0ba408ffb14f138a8ae5ad664ad34",
+    "crates/code-kb-core/src/reference_report/loaded_files.rs": "45eec66c5ac4acf4bc73d40169ec8b8a00913e4b6dac74bd3dff8994eef2a61d",
     "crates/code-kb-core/tests/arity_test.rs": "b66813d97d0c354ee4375a88d98c36cd9e1b68111ca52facd0d5ac660118e08d",
     "crates/code-kb-core/tests/extractor_312_body_test.rs": "a0dcf43a311fd774c9a850e9eb5aefc7a0a7c1488963a65f7266fd7a5b16d48d",
     "crates/code-kb-core/tests/extractor_312_facts_test.rs": "62d26a6ac53dbc7fd022e260088c31d4f15a6d52f0fc5d81ff188ea905fbbbd4",
@@ -33,10 +33,26 @@
     "powershell-exports-red.log": "e930729cc5fe2f423ae2fdc70af5f1a2d2f53e85f51a283a742c70407bfa5044",
     "powershell-exports-green.log": "fd58cd55c91e3dc4672018f242b302f7d6d1558e063bd0e4b8fcbdf80a901472",
     "typescript-arity-green.log": "3b3d26baae9f4919b8061d10be384f488e087ed52630557284244b857d20b18d",
-    "tsx-arity-green.log": "b037a5cd24782d85062b5b9f48a0b7069324ef8d9de2814357bcaa8c8d253634"
+    "tsx-arity-green.log": "b037a5cd24782d85062b5b9f48a0b7069324ef8d9de2814357bcaa8c8d253634",
+    "workspace-tests-indexed.log": "e0f7f9a1e3609f812a83691f1aacf23a762d2be9e14aba69df554531ae5d11c2",
+    "indexed-clippy.log": "4aa6a40c9f49d6dd722748214e20eb58edc4d5b991fa8937b814a07a07e9fd8c",
+    "indexed-format.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "indexed-export-tests.log": "6a730aa3205464eaa6774fe62fc99274e992914c079b68f334c6a43c537c288d",
+    "release-build-indexed.log": "ec2f2b2d199a0fa5e8b3af20880db8888622f0ed2b54041e249ac23cc8be394a",
+    "windows-sync-final.log": "c02ea63f9229c51676791a88b52ea245a9fd086af6c7f8963372e56ae4425024",
+    "windows-restore.log": "44f0bd805083d4e5dc5ff92dadcc324b3326a944166ed371614fe9c2b253a36c",
+    "windows-identity.log": "2fb5b544065cc3da43f94ad4f9da4901483fcc00dee2ac1f6817a10591843a54",
+    "windows-core.log": "8c63e4c80a23674d465eedcc7d33924289d3a57cf63d18f9d919d101f8035dfc",
+    "windows-cli.log": "7c22e281e03ea0e645bc0c11ce136d893c1f0be617f2ea36f6ae4207bc5b2a27",
+    "windows-release.log": "9a05e4e7a643f0f5897550d989622d42bd28d50a8b2839c5ecf9bb81fb379ce4",
+    "windows-release-identity.log": "a2587fd267ec1b883c87c6cd8f03c425359be48a159ef2914b6f98ebd7753c45",
+    "windows-down.log": "1d2bce6626125a69290567f2ac07d73a993c9bc03bf6d5693848cee74e386d28",
+    "windows-status.log": "fcd0e285e488cb37a042511417db2ac1209ef9656fbfef67d97cad27ae72ab90",
+    "windows-shutdown-fallback.log": "1cca635a2c40d67581f5d8c9a413df021b377eed7a4550742714a7c2133d2114",
+    "final-check-edit.log": "e200af307b44c44c6de168997ff20622b71017000fc82628d00a4a3c30b250e0"
   },
   "linux_extractor_sha256": "872c5004d3b32bb140c47eafbd81bc76cf4bbd8d83f44eb6af1e4367b37f3d8f",
-  "linux_cli_sha256": "bcf8ba829b04e57b7bd524e82c60af9c001e3b08a0188f5e2f17086f1f65c782",
+  "linux_cli_sha256": "ae131d03aebabf97a72296e873444c5c6c8436be1dfa5b24eb64dca09d32ffb7",
   "refresh_smoke": {
     "root": "/home/murphy/.cache/code-kb-julie312/published-refresh-ntzq6uqu",
     "before": {
@@ -196,11 +212,11 @@
     }
   ],
   "memory_final_consumer": {
+    "source_commit": "4953bf6f6f2f6ee6d5ee34b66f48cb01160c4dba",
     "extractor": "3.12.0",
-    "final_consumer": true,
     "root": "/home/murphy/.cache/code-kb-julie312/serve-memory-3dzznbhr/3.12.0",
-    "rss_before_callers_kib": 16552,
-    "rss_after_callers_kib": 23520,
+    "rss_before_callers_kib": 16488,
+    "rss_after_callers_kib": 23044,
     "callers_head": "References to function `scan_workspace` (crates/code-kb-core/src/sync.rs:327)\nSites: 142 \u00b7 proven 16 \u00b7 likely 126 \u00b7 unresolved 0 \u00b7 excluded 0\nText: `scan_workspace` is on 214 lines: 142 sites, 1 definition, 44 imports, 27 text only.\n\nProven (16):\n- `a_panicked_prepare_returns_an_error_and_retries` [crates/code-kb-cli/src/mcp/server.rs:1539] (kind: "
   },
   "powershell_cli_fixed": {
@@ -310,6 +326,68 @@
       "passed": 13,
       "failed": 0
     },
-    "workspace_rerun": "pending"
+    "workspace_rerun": "passed: 2444 tests, 0 failed, 0 ignored"
+  },
+  "previous_linux_workspace": {
+    "source_commit": "30cea30eb5b496373dfe02047a23b7c1b5d8e71d",
+    "result": {
+      "command": "cargo test --workspace --locked --no-fail-fast",
+      "exit_code": 0,
+      "targets": 54,
+      "passed": 2444,
+      "failed": 0,
+      "ignored": 0
+    },
+    "source_sha256": {
+      "scripts/julie-pins.json": "623c49a048a8ec987ebe0a57df7542a940c1134aea413e7ab773a5fff066b1ea",
+      "crates/code-kb-core/src/sync.rs": "bb2ddf90d9a18b38af5a38313b504a83e37e1c4c17c343650e5b2dd8be22ab71",
+      "crates/code-kb-core/src/reference_report/arity.rs": "d64ceef00e1288bf8f7d982cdb125a9c3b10ac61d81661fb82d9942c4ca5a4cc",
+      "crates/code-kb-core/src/reference_report/loaded_files.rs": "c48ea0cc4c463719b865c68b9f4db10990d0ba408ffb14f138a8ae5ad664ad34",
+      "crates/code-kb-core/tests/arity_test.rs": "b66813d97d0c354ee4375a88d98c36cd9e1b68111ca52facd0d5ac660118e08d",
+      "crates/code-kb-core/tests/extractor_312_body_test.rs": "a0dcf43a311fd774c9a850e9eb5aefc7a0a7c1488963a65f7266fd7a5b16d48d",
+      "crates/code-kb-core/tests/extractor_312_facts_test.rs": "62d26a6ac53dbc7fd022e260088c31d4f15a6d52f0fc5d81ff188ea905fbbbd4",
+      "crates/code-kb-core/tests/extractor_312_rename_test.rs": "d8f2ec45fcfdcf78e86b8a5c49c1b359bfc507fed83be1f40a482f140343263d",
+      "crates/code-kb-core/tests/powershell_exports_test.rs": "93225e1584e9c91f2371258e528076ecf65bf5c403822400e0281133627eb9e5"
+    }
+  },
+  "source_commit": "4953bf6f6f2f6ee6d5ee34b66f48cb01160c4dba",
+  "memory_before_indexed_refinement": {
+    "extractor": "3.12.0",
+    "final_consumer": true,
+    "root": "/home/murphy/.cache/code-kb-julie312/serve-memory-3dzznbhr/3.12.0",
+    "rss_before_callers_kib": 16552,
+    "rss_after_callers_kib": 23520,
+    "callers_head": "References to function `scan_workspace` (crates/code-kb-core/src/sync.rs:327)\nSites: 142 \u00b7 proven 16 \u00b7 likely 126 \u00b7 unresolved 0 \u00b7 excluded 0\nText: `scan_workspace` is on 214 lines: 142 sites, 1 definition, 44 imports, 27 text only.\n\nProven (16):\n- `a_panicked_prepare_returns_an_error_and_retries` [crates/code-kb-cli/src/mcp/server.rs:1539] (kind: "
+  },
+  "windows": {
+    "source_commit": "4953bf6f6f2f6ee6d5ee34b66f48cb01160c4dba",
+    "platform": "x86_64-pc-windows-msvc",
+    "archive_sha256": "fd69c83de1fb53fc3879de3d4e209b121237bc57555155cb77b07ccd62b93fe1",
+    "extractor_version": "3.12.0",
+    "extractor_sha256": "bebd1f17183af4c1ecbff6b4b0b9e9896a99b5ab73596c99d8233d394a364d03",
+    "core": {
+      "command": "cargo test -p code-kb-core --locked --test extractor_312_body_test --test extractor_312_facts_test --test extractor_312_rename_test --test powershell_exports_test --test arity_test --test freshness_test --test language_conformance_test --test context_one_call_test",
+      "exit_code": 0,
+      "targets": 8,
+      "passed": 117,
+      "failed": 0,
+      "ignored": 0
+    },
+    "cli": {
+      "command": "cargo test -p code-kb-cli --locked --test cli_test --test mcp_test",
+      "exit_code": 0,
+      "targets": 2,
+      "passed": 117,
+      "failed": 0,
+      "ignored": 0
+    },
+    "release_build": {
+      "command": "cargo build --release --locked",
+      "exit_code": 0,
+      "binary_sha256": "d4c47dadecddf95bd5758ce40d8bdb62fdaa14b07a701cba2f15ab91520c65b3"
+    },
+    "guest_note": "Detached HEAD matches source commit; unrelated untracked test.log left in place.",
+    "guest_final_state": "shut off",
+    "shutdown": "ACPI request did not stop guest; graceful shutdown.exe /s /t 0 succeeded through win-test run."
   }
 }
