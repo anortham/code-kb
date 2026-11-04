@@ -258,5 +258,58 @@
         }
       ]
     }
+  },
+  "indexed_query_update": {
+    "source_sha256": "45eec66c5ac4acf4bc73d40169ec8b8a00913e4b6dac74bd3dff8994eef2a61d",
+    "query_plan": [
+      [
+        1,
+        0,
+        0,
+        "SCAN CONSTANT ROW"
+      ],
+      [
+        4,
+        0,
+        0,
+        "SCALAR SUBQUERY 2"
+      ],
+      [
+        9,
+        4,
+        61,
+        "SEARCH identifiers USING INDEX idx_identifiers_file (file_id=?)"
+      ],
+      [
+        12,
+        4,
+        0,
+        "SCALAR SUBQUERY 1"
+      ],
+      [
+        17,
+        12,
+        39,
+        "SEARCH files USING INDEX sqlite_autoindex_files_2 (path=?)"
+      ],
+      [
+        45,
+        0,
+        0,
+        "SCALAR SUBQUERY 3"
+      ],
+      [
+        50,
+        45,
+        61,
+        "SEARCH symbols USING INDEX idx_symbols_path (path=?)"
+      ]
+    ],
+    "affected_tests": {
+      "command": "cargo test -p code-kb-core --locked --test powershell_exports_test --test extractor_312_facts_test",
+      "passed": 13,
+      "failed": 0
+    },
+    "workspace_rerun": "pending"
   }
 }

@@ -88,7 +88,8 @@ const CPP_NAMESPACE_SQL: &str = "SELECT 1 FROM symbols
 
 const POWERSHELL_EXPORTS_NAME_SQL: &str = "SELECT
     NOT EXISTS(SELECT 1 FROM identifiers
-        WHERE path = ?1 AND language = 'powershell' AND kind = 'call'
+        WHERE file_id = (SELECT file_id FROM files WHERE path = ?1)
+          AND language = 'powershell' AND kind = 'call'
           AND name = 'Export-ModuleMember' COLLATE NOCASE)
     OR EXISTS(SELECT 1 FROM symbols
         WHERE path = ?1 AND language = 'powershell' AND kind = 'export'
