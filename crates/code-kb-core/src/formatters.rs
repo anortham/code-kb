@@ -3472,9 +3472,9 @@ fn format_blast_radius_with_page(
                 ""
             };
             out.push_str(&format!(
-                "The walk stopped at depth {depth}. A `depth` of {} lists {at_least}{more} more {}.\n",
+                "The walk stopped at depth {depth}. A `depth` of {} lists {at_least}{more} additional distinct {}.\n",
                 crate::queries::MAX_BLAST_DEPTH,
-                plural(more, "test")
+                plural(more, "test row")
             ));
         }
 
@@ -3493,13 +3493,13 @@ fn format_blast_radius_with_page(
                 format!("No test reaches it within depth {largest}. Run the full test suite.")
             }
             Some(more) => format!(
-                "No test reaches it within depth {depth}. A `depth` of {largest} lists {}{more} {}.",
+                "No test reaches it within depth {depth}. A `depth` of {largest} lists {}{more} additional distinct {}.",
                 if result.tests_past_depth_cut {
                     "at least "
                 } else {
                     ""
                 },
-                plural(more, "test")
+                plural(more, "test row")
             ),
             None => format!(
                 "No test reaches it within depth {depth}; a larger `depth` may find some. Otherwise run the full test suite."
@@ -5558,6 +5558,43 @@ mod tests {
 
         let formatted = format_blast_radius(&res);
         assert!(formatted.contains("### Downstream Impact (200 returned)\n"));
+    }
+
+    #[test]
+    fn blast_radius_depth_notice_counts_grouped_test_rows() {
+        let res = BlastRadiusResult {
+            seed_type: "file".into(),
+            seeds: vec!["src/app.py".into()],
+            likely_tests: vec![TestTarget {
+                name: "tests/test_app.py".into(),
+                path: "tests/test_app.py".into(),
+                line: 1,
+                reason: "41 tests reach it only through a constructor".into(),
+            }],
+            impacted_symbols: Vec::new(),
+            likely_tests_truncated: false,
+            impacted_symbols_truncated: false,
+            traversal_ceiling_reached: false,
+            limit_at_maximum: false,
+            likely_tests_found: 1,
+            impacted_symbols_found: 0,
+            stopped_at_depth: Some(2),
+            callers_report: None,
+            open_ends: Vec::new(),
+            tests_past_depth: Some(1),
+            tests_past_depth_cut: false,
+            past_depth_tests: vec![("tests/test_more.py".into(), 1)],
+            report_symbols_unchecked: None,
+            report_symbols_failed: None,
+            report_sites_unchecked: None,
+            coverage_gap: None,
+        };
+
+        let formatted = format_blast_radius(&res);
+        assert!(
+            formatted.contains("A `depth` of 5 lists 1 additional distinct test row."),
+            "{formatted}"
+        );
     }
 
     #[test]

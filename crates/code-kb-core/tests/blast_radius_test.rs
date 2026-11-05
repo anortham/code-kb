@@ -1676,9 +1676,9 @@ fn a_method_read_that_the_walk_cannot_follow_is_a_depth_one_impacted_symbol() {
             (
                 "__init_subclass__",
                 1,
-                Some("direct caller (find_references)")
+                Some("direct reference (find_references)")
             ),
-            ("handlers", 1, Some("direct caller (find_references)")),
+            ("handlers", 1, Some("direct reference (find_references)")),
             ("run", 2, None),
         ],
         "{text}"
@@ -1701,6 +1701,10 @@ fn a_method_read_joins_the_callers_the_walk_found_when_no_test_reaches_the_targe
     let result = blast_radius_op(&workspace, &conn, Some("App.handle_error"), None, 2, 20).unwrap();
 
     let text = format_blast_radius(&result);
+    assert!(
+        text.contains("method `__init_subclass__` [line 2] (direct reference (find_references))"),
+        "{text}"
+    );
     assert_eq!(
         impacted(&result),
         [
@@ -1708,9 +1712,9 @@ fn a_method_read_joins_the_callers_the_walk_found_when_no_test_reaches_the_targe
             (
                 "__init_subclass__",
                 1,
-                Some("direct caller (find_references)")
+                Some("direct reference (find_references)")
             ),
-            ("handlers", 1, Some("direct caller (find_references)")),
+            ("handlers", 1, Some("direct reference (find_references)")),
             ("run", 2, None),
         ],
         "{text}"
@@ -1746,9 +1750,9 @@ fn a_method_read_of_a_function_the_diff_changed_is_a_depth_one_impacted_symbol()
             (
                 "__init_subclass__",
                 1,
-                Some("direct caller (find_references)")
+                Some("direct reference (find_references)")
             ),
-            ("handlers", 1, Some("direct caller (find_references)")),
+            ("handlers", 1, Some("direct reference (find_references)")),
             ("run", 2, None),
         ],
         "{text}"
