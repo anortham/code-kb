@@ -5754,8 +5754,13 @@ fn judge_sql(conn: &Connection, absent_target: bool, include_receiver_chain: boo
         parent,
         receiver_chain_status,
     );
-    let evidence =
-        evidence_sql_with_receiver_chain_status(conn, target, parent, receiver_chain_status);
+    let evidence = evidence_sql_with_receiver_chain_status(
+        conn,
+        target,
+        parent,
+        receiver_chain_status,
+        absent_target,
+    );
     format!(
         "SELECT p.src, p.row_id,
                 CASE WHEN p.src = 'I' AND p.kind IN ('type_usage', 'member_access')
@@ -5814,7 +5819,19 @@ fn evidence_sql_with_receiver_chain_status(
     target: &str,
     parent: &str,
     receiver_chain_status: Option<&str>,
+    absent_target: bool,
 ) -> String {
+    // The old file of a removed symbol that now imports its name binds the name to that
+    // import, so the removed definition no longer proves a bare use there (a moved function).
+    let not_imported_in_file = if absent_target {
+        format!(
+            "AND NOT EXISTS (SELECT 1 FROM symbols bound
+                             WHERE bound.kind = 'import' AND bound.path = p.path
+                               AND bound.name = {target}.name)"
+        )
+    } else {
+        String::new()
+    };
     let ns = "json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)";
     let has_namespace = "COALESCE(p.target_namespace_json, '[]') NOT IN ('', '[]')";
     let has_receiver = "COALESCE(p.target_receiver, '') != ''";
@@ -5926,6 +5943,7 @@ fn evidence_sql_with_receiver_chain_status(
             WHEN NOT ({has_receiver}) AND NOT ({has_namespace}) THEN
                 CASE
                     WHEN {target}.parent_symbol_id IS NULL AND {target}.path = p.path
+                         {not_imported_in_file}
                          THEN 'same file'
                     WHEN {target}.parent_symbol_id = p.from_symbol_id THEN 'enclosing scope'
                     WHEN {target}.parent_symbol_id IS NOT NULL AND {in_initializer}

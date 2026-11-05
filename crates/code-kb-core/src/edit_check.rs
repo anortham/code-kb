@@ -871,7 +871,88 @@ fn is_plain_relative(path: &str) -> bool {
             .all(|part| matches!(part, std::path::Component::Normal(_)))
 }
 
+/// The rows of one changed file on both sides, with their pairing.
+struct ComparedFile {
+    before: Vec<Row>,
+    after: Vec<Row>,
+    pairing: Pairing,
+}
+
+/// A removed row of file `from_file` (`old`) that reappears as row `new` of file `to_file`.
+struct Move {
+    from_file: usize,
+    old: usize,
+    to_file: usize,
+    new: usize,
+}
+
+/// The row at `root` and the rows below it, in their order.
+fn subtree(rows: &[Row], root: usize) -> Vec<Row> {
+    let mut inside: HashSet<&str> = HashSet::from([rows[root].symbol.symbol_id.as_str()]);
+    let mut picked = vec![root];
+    let mut grew = true;
+    while grew {
+        grew = false;
+        for (index, row) in rows.iter().enumerate() {
+            let below = row
+                .symbol
+                .parent_symbol_id
+                .as_deref()
+                .is_some_and(|parent| inside.contains(parent));
+            if below && inside.insert(row.symbol.symbol_id.as_str()) {
+                picked.push(index);
+                grew = true;
+            }
+        }
+    }
+    picked.sort_unstable();
+    picked
+        .into_iter()
+        .map(|index| rows[index].clone())
+        .collect()
+}
+
+/// The `package` clause of a Java, Kotlin, or Scala file, which julie records as a top-level
+/// `namespace` row.
+fn package_clause(conn: &Connection, path: &str) -> Result<Option<String>, QueryError> {
+    Ok(conn
+        .query_row(
+            "SELECT name FROM symbols
+             WHERE path = ?1 AND kind = 'namespace' AND parent_symbol_id IS NULL
+               AND signature LIKE 'package %'
+             ORDER BY start_line LIMIT 1",
+            [path],
+            |row| row.get(0),
+        )
+        .optional()?)
+}
+
+/// Whether every symbol that holds `symbol` is a namespace (a C# top-level type).
+fn ancestors_are_namespaces(conn: &Connection, symbol: &Symbol) -> Result<bool, QueryError> {
+    let mut parent = symbol.parent_symbol_id.clone();
+    let mut steps = 0;
+    while let Some(id) = parent {
+        steps += 1;
+        if steps > 32 {
+            return Ok(false);
+        }
+        let row: Option<(String, Option<String>)> = conn
+            .query_row(
+                "SELECT kind, parent_symbol_id FROM symbols WHERE symbol_id = ?1",
+                [&id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()?;
+        match row {
+            Some((kind, above)) if kind == "namespace" => parent = above,
+            _ => return Ok(false),
+        }
+    }
+    Ok(true)
+}
+
 /// A symbol of one side of the comparison with the names of the symbols that hold it.
+#[derive(Clone)]
 struct Row {
     symbol: Symbol,
     parents: Vec<String>,
@@ -1269,36 +1350,175 @@ struct Detector<'a> {
 
 impl Detector<'_> {
     fn detect(&self, files: &[ChangedFile]) -> Result<Vec<Candidate>, EditCheckError> {
-        let mut candidates = Vec::new();
+        let mut compared = Vec::new();
         for file in files {
-            if file.base_path.is_none() {
-                continue;
-            }
-            let before = rows_of(&self.base.conn, &file.path)?;
-            if before.is_empty() {
-                continue;
-            }
             let after = rows_of(self.conn, &file.path)?;
-            let unreadable = after.is_empty()
+            let before = match file.base_path {
+                Some(_) => rows_of(&self.base.conn, &file.path)?,
+                None => Vec::new(),
+            };
+            let unreadable = !before.is_empty()
+                && after.is_empty()
                 && self.root.join(&file.path).exists()
                 && !file_is_indexed(self.conn, &file.path)?;
             if unreadable {
                 continue;
             }
+            let pairing = pair_rows(&before, &after);
+            compared.push(ComparedFile {
+                before,
+                after,
+                pairing,
+            });
+        }
+        let moves = self.moves(&compared)?;
+        let mut candidates = Vec::new();
+        for (index, file) in compared.iter().enumerate() {
+            if file.before.is_empty() {
+                continue;
+            }
+            let moved: HashSet<usize> = moves
+                .iter()
+                .filter(|found| found.from_file == index)
+                .map(|found| found.old)
+                .collect();
+            candidates.extend(self.compare_paired(
+                &file.before,
+                &file.after,
+                &file.pairing,
+                &moved,
+            )?);
+        }
+        for found in &moves {
+            let from = &compared[found.from_file];
+            let to = &compared[found.to_file];
+            let before = subtree(&from.before, found.old);
+            let after = subtree(&to.after, found.new);
             candidates.extend(self.compare(&before, &after)?);
         }
         Ok(candidates)
     }
 
+    /// The removed symbols that reappear with the same key in another changed file of a scope
+    /// that callers name instead of the file (see [`Detector::shared_scope`]), each paired with
+    /// that new symbol. A symbol whose parent is also removed moves with its parent.
+    fn moves(&self, compared: &[ComparedFile]) -> Result<Vec<Move>, EditCheckError> {
+        let mut swift_targets = None;
+        let mut taken: HashSet<(usize, usize)> = HashSet::new();
+        let mut moves = Vec::new();
+        for (from_file, file) in compared.iter().enumerate() {
+            let gone: HashSet<&str> = file
+                .pairing
+                .removed
+                .iter()
+                .map(|&index| file.before[index].symbol.symbol_id.as_str())
+                .collect();
+            for &old in &file.pairing.removed {
+                let row = &file.before[old];
+                let inside_removed = row
+                    .symbol
+                    .parent_symbol_id
+                    .as_deref()
+                    .is_some_and(|parent| gone.contains(parent));
+                if inside_removed {
+                    continue;
+                }
+                let Some(scope) = self.shared_scope(&self.base.conn, row, &mut swift_targets)?
+                else {
+                    continue;
+                };
+                let mut found = None;
+                'files: for (to_file, other) in compared.iter().enumerate() {
+                    if to_file == from_file {
+                        continue;
+                    }
+                    for &new in &other.pairing.added {
+                        let candidate = &other.after[new];
+                        if taken.contains(&(to_file, new))
+                            || candidate.key() != row.key()
+                            || candidate.symbol.language != row.symbol.language
+                        {
+                            continue;
+                        }
+                        if self
+                            .shared_scope(self.conn, candidate, &mut swift_targets)?
+                            .as_ref()
+                            == Some(&scope)
+                        {
+                            found = Some((to_file, new));
+                            break 'files;
+                        }
+                    }
+                }
+                if let Some((to_file, new)) = found {
+                    taken.insert((to_file, new));
+                    moves.push(Move {
+                        from_file,
+                        old,
+                        to_file,
+                        new,
+                    });
+                }
+            }
+        }
+        Ok(moves)
+    }
+
+    /// The scope that callers name a symbol of `row`'s language by, for the languages where it
+    /// spans files: a Go package (its folder), a Java, Kotlin, or Scala `package`, the namespaces
+    /// of a C# type, and a SwiftPM target. `None` for a language whose callers name the file
+    /// (Python, JavaScript, Rust imports), where a moved symbol breaks the imports of the old
+    /// file, and for a member of a type, which moves with the type.
+    fn shared_scope(
+        &self,
+        conn: &Connection,
+        row: &Row,
+        swift_targets: &mut Option<Vec<(String, String)>>,
+    ) -> Result<Option<String>, EditCheckError> {
+        let symbol = &row.symbol;
+        let path = symbol.path.replace('\\', "/");
+        let folder = crate::db::parent_folder(&path).replace('\\', "/");
+        let scope = match symbol.language.as_str() {
+            "go" => Some(folder),
+            "java" | "kotlin" | "scala" if row.parents.is_empty() => {
+                Some(package_clause(conn, &symbol.path)?.unwrap_or_default())
+            }
+            "csharp" if ancestors_are_namespaces(conn, symbol)? => Some(row.parents.join(".")),
+            "swift" if row.parents.is_empty() => {
+                if swift_targets.is_none() {
+                    *swift_targets = Some(crate::queries::swift_target_folders(self.conn)?);
+                }
+                swift_targets
+                    .iter()
+                    .flatten()
+                    .filter(|(target, _)| path.starts_with(&format!("{target}/")))
+                    .max_by_key(|(target, _)| target.len())
+                    .map(|(_, name)| name.clone())
+            }
+            _ => None,
+        };
+        Ok(scope)
+    }
+
     fn compare(&self, before: &[Row], after: &[Row]) -> Result<Vec<Candidate>, EditCheckError> {
         let pairing = pair_rows(before, after);
+        self.compare_paired(before, after, &pairing, &HashSet::new())
+    }
+
+    fn compare_paired(
+        &self,
+        before: &[Row],
+        after: &[Row],
+        pairing: &Pairing,
+        moved: &HashSet<usize>,
+    ) -> Result<Vec<Candidate>, EditCheckError> {
         let mut candidates = Vec::new();
         for &(old, new) in &pairing.pairs {
             if let Some(candidate) = self.changed_pair(before, old, after, new)? {
                 candidates.push(candidate);
             }
         }
-        let renamed: HashMap<usize, usize> = renames(before, after, &pairing).into_iter().collect();
+        let renamed: HashMap<usize, usize> = renames(before, after, pairing).into_iter().collect();
         let gone: HashSet<&str> = pairing
             .removed
             .iter()
@@ -1325,7 +1545,8 @@ impl Detector<'_> {
                         && other.symbol.name == row.symbol.name
                         && other.parents == row.parents
                 });
-            if inside_removed
+            if moved.contains(&index)
+                || inside_removed
                 || value_beside
                 || repeated
                 || after.iter().any(|other| row.changed_kind_to(other))

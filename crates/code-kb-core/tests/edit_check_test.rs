@@ -4592,3 +4592,332 @@ fn a_removed_go_method_counts_the_calls_through_an_alias_of_its_type() {
     assert_has(&text, "method `A.Norm` (geom/g.go): removed");
     assert_has(&text, "Unresolved outside the diff: 2");
 }
+
+#[test]
+fn a_python_function_moved_to_a_helper_module_that_its_old_file_imports_has_no_site() {
+    let repo = committed_repo(&[
+        ("pyproject.toml", ""),
+        ("tests/__init__.py", ""),
+        (
+            "tests/test_app.py",
+            "def load_app(o):\n    return o\n\n\ndef test_one():\n    load_app(1)\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "tests/helpers.py",
+        "def load_app(o):\n    return o\n",
+    );
+    write(
+        &repo.root,
+        "tests/test_app.py",
+        "from tests.helpers import load_app\n\n\ndef test_one():\n    load_app(1)\n",
+    );
+    let text = text_of(&repo);
+
+    assert_has(&text, "function `load_app` (tests/test_app.py): removed");
+    assert_lacks(&text, "Not in your diff, proven");
+}
+
+#[test]
+fn a_javascript_function_moved_to_a_commonjs_helper_that_its_old_file_requires_has_no_site() {
+    let repo = committed_repo(&[
+        ("package.json", "{\"name\":\"m\"}\n"),
+        (
+            "test/app.test.js",
+            "function loadApp(o) {\n  return o;\n}\n\ntest('one', () => {\n  loadApp(1);\n});\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "test/helpers/harness.js",
+        "function loadApp(o) {\n  return o;\n}\nmodule.exports = { loadApp };\n",
+    );
+    write(
+        &repo.root,
+        "test/app.test.js",
+        "const { loadApp } = require('./helpers/harness');\n\ntest('one', () => {\n  loadApp(1);\n});\n",
+    );
+    let text = text_of(&repo);
+
+    assert_has(&text, "function `loadApp` (test/app.test.js): removed");
+    assert_lacks(&text, "Not in your diff, proven");
+}
+
+#[test]
+fn a_removed_python_function_whose_old_file_imports_another_name_still_lists_the_call() {
+    let repo = committed_repo(&[
+        ("pyproject.toml", ""),
+        ("tests/__init__.py", ""),
+        ("tests/helpers.py", "def other(o):\n    return o\n"),
+        (
+            "tests/test_app.py",
+            "def load_app(o):\n    return o\n\n\ndef test_one():\n    load_app(1)\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "tests/test_app.py",
+        "from tests.helpers import other\n\n\ndef test_one():\n    load_app(1)\n",
+    );
+    let text = text_of(&repo);
+
+    assert_has(&text, "Not in your diff, proven (1):");
+    assert_has(&text, "tests/test_app.py:5  `test_one`");
+}
+
+#[test]
+fn a_go_function_moved_to_another_file_of_its_package_is_no_change() {
+    let repo = committed_repo(&[
+        ("go.mod", "module m\n\ngo 1.22\n"),
+        (
+            "a.go",
+            "package m\n\nfunc LoadApp(o int) int {\n\treturn o\n}\n\nfunc Run() int {\n\treturn LoadApp(1)\n}\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "b.go",
+        "package m\n\nfunc LoadApp(o int) int {\n\treturn o\n}\n",
+    );
+    write(
+        &repo.root,
+        "a.go",
+        "package m\n\nfunc Run() int {\n\treturn LoadApp(1)\n}\n",
+    );
+    let text = text_of(&repo);
+
+    assert_lacks(&text, "LoadApp");
+}
+
+#[test]
+fn a_removed_python_function_still_lists_its_call_when_an_unimported_module_has_the_name() {
+    let repo = committed_repo(&[
+        ("pyproject.toml", ""),
+        ("pkg/__init__.py", ""),
+        ("pkg/other.py", "def load_app(o):\n    return o\n"),
+        (
+            "pkg/app.py",
+            "def load_app(o):\n    return o\n\n\ndef run():\n    load_app(1)\n",
+        ),
+    ]);
+    write(&repo.root, "pkg/app.py", "def run():\n    load_app(1)\n");
+    let text = text_of(&repo);
+
+    assert_has(&text, "Not in your diff, proven (1):");
+    assert_has(&text, "pkg/app.py:2  `run`");
+}
+
+#[test]
+fn a_removed_go_function_still_lists_its_call_when_another_package_has_the_name() {
+    let repo = committed_repo(&[
+        ("go.mod", "module m\n\ngo 1.22\n"),
+        (
+            "other/b.go",
+            "package other\n\nfunc LoadApp(o int) int {\n\treturn o\n}\n",
+        ),
+        (
+            "a.go",
+            "package m\n\nfunc LoadApp(o int) int {\n\treturn o\n}\n\nfunc Run() int {\n\treturn LoadApp(1)\n}\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "a.go",
+        "package m\n\nfunc Run() int {\n\treturn LoadApp(1)\n}\n",
+    );
+    let text = text_of(&repo);
+
+    assert_has(&text, "Not in your diff, proven (1):");
+    assert_has(&text, "a.go:4  `Run`");
+}
+
+#[test]
+fn a_go_function_moved_to_another_file_with_a_new_parameter_lists_the_call() {
+    let repo = committed_repo(&[
+        ("go.mod", "module m\n\ngo 1.22\n"),
+        (
+            "a.go",
+            "package m\n\nfunc LoadApp(o int) int {\n\treturn o\n}\n\nfunc Run() int {\n\treturn LoadApp(1)\n}\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "b.go",
+        "package m\n\nfunc LoadApp(o int, p int) int {\n\treturn o + p\n}\n",
+    );
+    write(
+        &repo.root,
+        "a.go",
+        "package m\n\nfunc Run() int {\n\treturn LoadApp(1)\n}\n",
+    );
+    let text = text_of(&repo);
+
+    assert_has(&text, "function `LoadApp` (b.go): parameters");
+    assert_has(&text, "a.go:4  `Run`");
+}
+
+#[test]
+fn a_kotlin_function_moved_to_another_file_of_its_package_is_no_change() {
+    let repo = committed_repo(&[(
+        "src/p/A.kt",
+        "package p\n\nfun loadApp(o: Int): Int = o\n\nfun run(): Int {\n    return loadApp(1)\n}\n",
+    )]);
+    write(
+        &repo.root,
+        "src/p/B.kt",
+        "package p\n\nfun loadApp(o: Int): Int = o\n",
+    );
+    write(
+        &repo.root,
+        "src/p/A.kt",
+        "package p\n\nfun run(): Int {\n    return loadApp(1)\n}\n",
+    );
+    let text = text_of(&repo);
+
+    assert_lacks(&text, "loadApp");
+}
+
+#[test]
+fn a_kotlin_function_moved_to_another_package_is_removed() {
+    let repo = committed_repo(&[(
+        "src/p/A.kt",
+        "package p\n\nfun loadApp(o: Int): Int = o\n\nfun run(): Int {\n    return loadApp(1)\n}\n",
+    )]);
+    write(
+        &repo.root,
+        "src/q/B.kt",
+        "package q\n\nfun loadApp(o: Int): Int = o\n",
+    );
+    write(
+        &repo.root,
+        "src/p/A.kt",
+        "package p\n\nfun run(): Int {\n    return loadApp(1)\n}\n",
+    );
+    let text = text_of(&repo);
+
+    assert_has(&text, "function `loadApp` (src/p/A.kt): removed");
+}
+
+#[test]
+fn a_csharp_class_moved_to_another_file_of_its_namespace_is_no_change() {
+    let repo = committed_repo(&[
+        (
+            "m.csproj",
+            "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>\n",
+        ),
+        (
+            "A.cs",
+            "namespace App;\n\npublic class Harness\n{\n    public static int Load(int o) => o;\n}\n\npublic class Runner\n{\n    public int Run() => Harness.Load(1);\n}\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "B.cs",
+        "namespace App;\n\npublic class Harness\n{\n    public static int Load(int o) => o;\n}\n",
+    );
+    write(
+        &repo.root,
+        "A.cs",
+        "namespace App;\n\npublic class Runner\n{\n    public int Run() => Harness.Load(1);\n}\n",
+    );
+    let text = text_of(&repo);
+
+    assert_lacks(&text, "Harness");
+}
+
+#[test]
+fn a_java_class_moved_to_its_own_file_in_its_package_is_no_change() {
+    let repo = committed_repo(&[(
+        "src/p/A.java",
+        "package p;\n\nclass Harness {\n    static int load(int o) { return o; }\n}\n\npublic class A {\n    int run() { return Harness.load(1); }\n}\n",
+    )]);
+    write(
+        &repo.root,
+        "src/p/Harness.java",
+        "package p;\n\nclass Harness {\n    static int load(int o) { return o; }\n}\n",
+    );
+    write(
+        &repo.root,
+        "src/p/A.java",
+        "package p;\n\npublic class A {\n    int run() { return Harness.load(1); }\n}\n",
+    );
+    let text = text_of(&repo);
+
+    assert_lacks(&text, "Harness");
+}
+
+#[test]
+fn a_java_class_moved_with_a_changed_method_lists_the_call() {
+    let repo = committed_repo(&[(
+        "src/p/A.java",
+        "package p;\n\nclass Harness {\n    static int load(int o) { return o; }\n}\n\npublic class A {\n    int run() { return Harness.load(1); }\n}\n",
+    )]);
+    write(
+        &repo.root,
+        "src/p/Harness.java",
+        "package p;\n\nclass Harness {\n    static int load(int o, int p) { return o + p; }\n}\n",
+    );
+    write(
+        &repo.root,
+        "src/p/A.java",
+        "package p;\n\npublic class A {\n    int run() { return Harness.load(1); }\n}\n",
+    );
+    let text = text_of(&repo);
+
+    assert_has(
+        &text,
+        "method `Harness.load` (src/p/Harness.java): parameters",
+    );
+    assert_has(&text, "src/p/A.java:4  `run`");
+}
+
+#[test]
+fn a_swift_function_moved_to_another_file_of_its_target_is_no_change() {
+    let repo = committed_repo(&[
+        (
+            "Package.swift",
+            "// swift-tools-version:5.9\nimport PackageDescription\nlet package = Package(name: \"M\", targets: [.target(name: \"M\")])\n",
+        ),
+        (
+            "Sources/M/A.swift",
+            "func loadApp(_ o: Int) -> Int { o }\n\nfunc run() -> Int {\n    loadApp(1)\n}\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "Sources/M/B.swift",
+        "func loadApp(_ o: Int) -> Int { o }\n",
+    );
+    write(
+        &repo.root,
+        "Sources/M/A.swift",
+        "func run() -> Int {\n    loadApp(1)\n}\n",
+    );
+    let text = text_of(&repo);
+
+    assert_lacks(&text, "loadApp");
+}
+
+#[test]
+fn a_python_function_moved_to_another_module_still_lists_a_caller_that_imports_the_old_one() {
+    let repo = committed_repo(&[
+        ("pyproject.toml", ""),
+        ("pkg/__init__.py", ""),
+        ("pkg/app.py", "def load_app(o):\n    return o\n"),
+        (
+            "pkg/use.py",
+            "from pkg.app import load_app\n\n\ndef run():\n    return load_app(1)\n",
+        ),
+    ]);
+    write(&repo.root, "pkg/app.py", "");
+    write(
+        &repo.root,
+        "pkg/helpers.py",
+        "def load_app(o):\n    return o\n",
+    );
+    let text = text_of(&repo);
+
+    assert_has(&text, "function `load_app` (pkg/app.py): removed");
+    assert_has(&text, "pkg/use.py:5  `run`");
+}

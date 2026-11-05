@@ -1491,7 +1491,7 @@ fn joined_path(folder: &str, relative: &str) -> Option<String> {
 /// lives in `Sources/<name>` (`Tests/<name>` for a test target), and SwiftPM takes the first of
 /// `Sources`, `Source`, `src`, and `srcs` (`Tests` first for a test target) that the package
 /// holds; julie does not read the disk, so an indexed file under the folder shows that it exists.
-fn swift_target_folders(conn: &Connection) -> Result<Vec<(String, String)>, QueryError> {
+pub(crate) fn swift_target_folders(conn: &Connection) -> Result<Vec<(String, String)>, QueryError> {
     if !has_table(conn, "structural_facts") {
         return Ok(Vec::new());
     }
