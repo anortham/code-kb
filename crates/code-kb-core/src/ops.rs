@@ -2185,16 +2185,13 @@ fn report_callers(
         let name_only = sites.iter().all(|labeled| {
             labeled.label == SiteLabel::Likely && labeled.basis.starts_with("name only")
         });
-        let reason = Some(
-            if has_call_site && name_only {
-                "direct caller (find_references, name only)"
-            } else if has_call_site {
-                "direct caller (find_references)"
-            } else {
-                "direct reference (find_references)"
-            }
-            .to_string(),
-        );
+        let relation = if has_call_site {
+            "direct caller"
+        } else {
+            "direct reference"
+        };
+        let evidence = if name_only { ", name only" } else { "" };
+        let reason = Some(format!("{relation} (find_references{evidence})"));
         if caller.is_empty() {
             let site = &sites[0].site;
             rows.push((
