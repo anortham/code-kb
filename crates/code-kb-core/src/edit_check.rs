@@ -3389,7 +3389,8 @@ impl<'a> SiteLister<'a> {
             let report = reference_report_for_removed_member(self.conn, self.root, subject, name)?;
             for labeled in report.sites.iter().filter(|site| {
                 site.label != SiteLabel::Excluded
-                    && (site.site.kind == "member_access" || is_call(&site.site.kind))
+                    && (matches!(site.site.kind.as_str(), "member_access" | "type_usage")
+                        || is_call(&site.site.kind))
             }) {
                 let (first, last) = site_span(labeled);
                 if first == 0 || self.dynamic_member_write(&subject.language, labeled, name) {

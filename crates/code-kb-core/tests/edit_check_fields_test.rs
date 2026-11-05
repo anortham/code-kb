@@ -748,3 +748,75 @@ fn a_removed_go_field_lists_its_writes_first_among_the_sites_outside_the_diff() 
         "{text}"
     );
 }
+
+#[test]
+fn a_removed_python_class_attribute_that_a_base_only_annotates_lists_every_read() {
+    let repo = committed_repo(&[
+        ("pkg/__init__.py", ""),
+        (
+            "pkg/base.py",
+            "class Base:\n    response_class: type\n\n    def build(self):\n        return self.response_class()\n",
+        ),
+        (
+            "pkg/app.py",
+            "from .base import Base\n\n\nclass App(Base):\n    response_class = dict\n\n    def make(self, rv):\n        if not isinstance(rv, self.response_class):\n            rv = self.response_class(rv)\n        return rv\n\n    def client(self):\n        return wrap(self, self.response_class)\n\n\ndef wrap(app, cls):\n    return cls\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "pkg/app.py",
+        "from .base import Base\n\n\nclass App(Base):\n    def make(self, rv):\n        if not isinstance(rv, self.response_class):\n            rv = self.response_class(rv)\n        return rv\n\n    def client(self):\n        return wrap(self, self.response_class)\n\n\ndef wrap(app, cls):\n    return cls\n",
+    );
+
+    let check = check_of(&repo);
+    let text = format_edit_check(&check);
+    let app = field_change(&check, "pkg/app.py");
+    assert!(has_site(app, "pkg/app.py", 6), "{text}");
+    assert!(proven_site(app, "pkg/app.py", 7), "{text}");
+    assert!(proven_site(app, "pkg/app.py", 11), "{text}");
+}
+
+#[test]
+fn a_removed_python_class_attribute_that_a_base_assigns_leaves_the_reads_unproven() {
+    let repo = committed_repo(&[
+        ("pkg/__init__.py", ""),
+        ("pkg/base.py", "class Base:\n    response_class = list\n"),
+        (
+            "pkg/app.py",
+            "from .base import Base\n\n\nclass App(Base):\n    response_class = dict\n\n    def make(self, rv):\n        return self.response_class(rv)\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "pkg/app.py",
+        "from .base import Base\n\n\nclass App(Base):\n    def make(self, rv):\n        return self.response_class(rv)\n",
+    );
+
+    let check = check_of(&repo);
+    let text = format_edit_check(&check);
+    let app = field_change(&check, "pkg/app.py");
+    assert!(!proven_site(app, "pkg/app.py", 6), "{text}");
+}
+
+#[test]
+fn a_removed_python_instance_attribute_skips_a_read_that_another_class_writes_for_itself() {
+    let repo = committed_repo(&[
+        ("pkg/__init__.py", ""),
+        (
+            "pkg/cli.py",
+            "class ScriptInfo:\n    def __init__(self, create_app=None):\n        self.create_app = create_app\n\n    def load_app(self):\n        if self.create_app is not None:\n            return self.create_app()\n\n\nclass Group:\n    def __init__(self, create_app=None):\n        self.create_app = create_app\n\n    def make_context(self):\n        return ScriptInfo(create_app=self.create_app)\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "pkg/cli.py",
+        "class ScriptInfo:\n    def __init__(self, create_app=None):\n        pass\n\n    def load_app(self):\n        if self.create_app is not None:\n            return self.create_app()\n\n\nclass Group:\n    def __init__(self, create_app=None):\n        self.create_app = create_app\n\n    def make_context(self):\n        return ScriptInfo(create_app=self.create_app)\n",
+    );
+
+    let check = check_of(&repo);
+    let text = format_edit_check(&check);
+    let info = field_change(&check, "pkg/cli.py");
+    assert!(proven_site(info, "pkg/cli.py", 6), "{text}");
+    assert!(proven_site(info, "pkg/cli.py", 7), "{text}");
+    assert!(!has_site(info, "pkg/cli.py", 15), "{text}");
+}

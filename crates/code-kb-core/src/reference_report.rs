@@ -1601,6 +1601,16 @@ impl Definition {
         )
     }
 
+    /// A Python attribute that a method of class `owner` writes (`self.x = …`, `cls.x = …`), which
+    /// julie records as a member of the class. Such a write in the class that lost the attribute
+    /// runs only when its method does, so it does not answer a read of the removed attribute.
+    fn writes_attribute_of(&self, owner: Option<&str>) -> bool {
+        self.language == "python"
+            && owner.is_some()
+            && self.owner_name.as_deref() == owner
+            && (self.signature.starts_with("self.") || self.signature.starts_with("cls."))
+    }
+
     fn is_python_class_annotation_without_value(&self) -> bool {
         if self.language != "python"
             || self.owner_name.is_none()
@@ -1690,7 +1700,7 @@ struct Claim {
     basis: Option<String>,
     typed_receiver: Option<TypedReceiverClaim>,
     /// The basis holds only when no other definition can reach the site: a removed member that
-    /// an ancestor still defines leaves the read satisfied.
+    /// an ancestor still defines leaves the read, or the call of a removed field, satisfied.
     unless_rivals: bool,
 }
 
@@ -2478,6 +2488,7 @@ impl<'a> Accounting<'a> {
         let definitions = self.definitions(&spec.name)?;
         let group_ids: HashSet<&str> = spec.group.iter().map(|s| s.symbol_id.as_str()).collect();
         let target = &spec.group[0];
+        let absent_field_owner = self.absent_field_owner()?;
 
         let mut rows = self.load_rows(&spec.name, &definitions, spec.scope)?;
         pair_identifiers(&mut rows);
@@ -2601,6 +2612,7 @@ impl<'a> Accounting<'a> {
                         || row.is_bare_use() && other.is_property_method()
                         || row.language == "python"
                             && other.is_python_class_annotation_without_value()
+                        || other.writes_attribute_of(absent_field_owner.as_deref())
                         || self.include_excludes(row, other)?
                     {
                         kept.push(index);
@@ -3371,9 +3383,10 @@ impl<'a> Accounting<'a> {
                         );
                     }
                     if claimed && entry.basis.is_none() {
-                        entry.unless_rivals = absent_member
-                            && row.source == Source::Identifier
+                        let member_read = row.source == Source::Identifier
                             && matches!(row.kind.as_str(), "type_usage" | "member_access");
+                        let field_call = member.kind == "field" && row.is_call();
+                        entry.unless_rivals = absent_member && (member_read || field_call);
                         entry.basis = basis;
                     }
                 }
@@ -4331,6 +4344,19 @@ impl<'a> Accounting<'a> {
     }
 
     /// The other definitions that can reach `row`; a module receiver reaches no member of a class.
+    /// The name of the class that lost the field a post-edit report is for.
+    fn absent_field_owner(&self) -> Result<Option<String>, QueryError> {
+        let Some(parent) = self
+            .absent
+            .as_ref()
+            .filter(|absent| absent.kind == "field")
+            .and_then(|absent| absent.parent_symbol_id.as_deref())
+        else {
+            return Ok(None);
+        };
+        Ok(crate::queries::get_symbol_by_id(self.conn, parent)?.map(|owner| owner.name))
+    }
+
     fn rivals<'d>(
         &mut self,
         row: &NameRow,
@@ -4350,11 +4376,48 @@ impl<'a> Accounting<'a> {
                 .flatten(),
             _ => None,
         };
+        let absent_field_owner = self.absent_field_owner()?;
+        let absent_field = absent_field_owner.is_some();
+        let self_chain = match (
+            absent_field,
+            row.receiver.as_deref(),
+            row.caller_id.as_deref(),
+        ) {
+            (true, Some("self" | "this" | "cls"), Some(caller)) => {
+                match self
+                    .definition_by_id(caller)?
+                    .and_then(|caller| caller.owner_name)
+                {
+                    Some(class) => {
+                        let mut chain = self.ancestor_names(&class)?;
+                        chain.insert(class);
+                        Some(chain)
+                    }
+                    None => None,
+                }
+            }
+            _ => None,
+        };
         let mut rivals = Vec::new();
         for &other in others {
+            // A Python class-body annotation without a value binds nothing at run time, and a
+            // `self.x = …` write in a method runs only when that method does, so neither answers
+            // a read of a removed attribute.
             if !row.can_reach(other)
                 || module_receiver && other.owner_name.is_some()
+                || absent_field
+                    && row.language == "python"
+                    && (other.is_python_class_annotation_without_value()
+                        || other.writes_attribute_of(absent_field_owner.as_deref()))
                 || self.load_excludes(row, other)?
+            {
+                continue;
+            }
+            if let Some(chain) = &self_chain
+                && !other
+                    .owner_name
+                    .as_ref()
+                    .is_some_and(|owner| chain.contains(owner))
             {
                 continue;
             }
