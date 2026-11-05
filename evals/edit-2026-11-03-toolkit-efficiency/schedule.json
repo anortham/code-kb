@@ -1,0 +1,537 @@
+{
+  "schema": 1,
+  "trial_count": 36,
+  "matched_set_count": 12,
+  "jobs": [
+    {
+      "ordinal": 1,
+      "id": "flask-config-r1-native",
+      "runtime": "native",
+      "manifest": "current",
+      "schedule_index": 1,
+      "case_id": "flask-config",
+      "repeat": 1
+    },
+    {
+      "ordinal": 2,
+      "id": "flask-config-r1-current",
+      "runtime": "current",
+      "manifest": "current",
+      "schedule_index": 2,
+      "case_id": "flask-config",
+      "repeat": 1
+    },
+    {
+      "ordinal": 3,
+      "id": "flask-config-r1-candidate",
+      "runtime": "candidate",
+      "manifest": "candidate",
+      "schedule_index": 2,
+      "case_id": "flask-config",
+      "repeat": 1
+    },
+    {
+      "ordinal": 4,
+      "id": "express-route-r1-native",
+      "runtime": "native",
+      "manifest": "current",
+      "schedule_index": 3,
+      "case_id": "express-route",
+      "repeat": 1
+    },
+    {
+      "ordinal": 5,
+      "id": "express-route-r1-current",
+      "runtime": "current",
+      "manifest": "current",
+      "schedule_index": 4,
+      "case_id": "express-route",
+      "repeat": 1
+    },
+    {
+      "ordinal": 6,
+      "id": "express-route-r1-candidate",
+      "runtime": "candidate",
+      "manifest": "candidate",
+      "schedule_index": 4,
+      "case_id": "express-route",
+      "repeat": 1
+    },
+    {
+      "ordinal": 7,
+      "id": "minijinja-config-r1-native",
+      "runtime": "native",
+      "manifest": "current",
+      "schedule_index": 5,
+      "case_id": "minijinja-config",
+      "repeat": 1
+    },
+    {
+      "ordinal": 8,
+      "id": "minijinja-config-r1-current",
+      "runtime": "current",
+      "manifest": "current",
+      "schedule_index": 6,
+      "case_id": "minijinja-config",
+      "repeat": 1
+    },
+    {
+      "ordinal": 9,
+      "id": "minijinja-config-r1-candidate",
+      "runtime": "candidate",
+      "manifest": "candidate",
+      "schedule_index": 6,
+      "case_id": "minijinja-config",
+      "repeat": 1
+    },
+    {
+      "ordinal": 10,
+      "id": "hcl-config-r1-native",
+      "runtime": "native",
+      "manifest": "current",
+      "schedule_index": 7,
+      "case_id": "hcl-config",
+      "repeat": 1
+    },
+    {
+      "ordinal": 11,
+      "id": "hcl-config-r1-current",
+      "runtime": "current",
+      "manifest": "current",
+      "schedule_index": 8,
+      "case_id": "hcl-config",
+      "repeat": 1
+    },
+    {
+      "ordinal": 12,
+      "id": "hcl-config-r1-candidate",
+      "runtime": "candidate",
+      "manifest": "candidate",
+      "schedule_index": 8,
+      "case_id": "hcl-config",
+      "repeat": 1
+    },
+    {
+      "ordinal": 13,
+      "id": "commons-lang-r1-native",
+      "runtime": "native",
+      "manifest": "current",
+      "schedule_index": 9,
+      "case_id": "commons-lang",
+      "repeat": 1
+    },
+    {
+      "ordinal": 14,
+      "id": "commons-lang-r1-current",
+      "runtime": "current",
+      "manifest": "current",
+      "schedule_index": 10,
+      "case_id": "commons-lang",
+      "repeat": 1
+    },
+    {
+      "ordinal": 15,
+      "id": "commons-lang-r1-candidate",
+      "runtime": "candidate",
+      "manifest": "candidate",
+      "schedule_index": 10,
+      "case_id": "commons-lang",
+      "repeat": 1
+    },
+    {
+      "ordinal": 16,
+      "id": "nodatime-r1-native",
+      "runtime": "native",
+      "manifest": "current",
+      "schedule_index": 11,
+      "case_id": "nodatime",
+      "repeat": 1
+    },
+    {
+      "ordinal": 17,
+      "id": "nodatime-r1-current",
+      "runtime": "current",
+      "manifest": "current",
+      "schedule_index": 12,
+      "case_id": "nodatime",
+      "repeat": 1
+    },
+    {
+      "ordinal": 18,
+      "id": "nodatime-r1-candidate",
+      "runtime": "candidate",
+      "manifest": "candidate",
+      "schedule_index": 12,
+      "case_id": "nodatime",
+      "repeat": 1
+    },
+    {
+      "ordinal": 19,
+      "id": "flask-config-r2-candidate",
+      "runtime": "candidate",
+      "manifest": "candidate",
+      "schedule_index": 13,
+      "case_id": "flask-config",
+      "repeat": 2
+    },
+    {
+      "ordinal": 20,
+      "id": "flask-config-r2-current",
+      "runtime": "current",
+      "manifest": "current",
+      "schedule_index": 13,
+      "case_id": "flask-config",
+      "repeat": 2
+    },
+    {
+      "ordinal": 21,
+      "id": "flask-config-r2-native",
+      "runtime": "native",
+      "manifest": "current",
+      "schedule_index": 14,
+      "case_id": "flask-config",
+      "repeat": 2
+    },
+    {
+      "ordinal": 22,
+      "id": "express-route-r2-candidate",
+      "runtime": "candidate",
+      "manifest": "candidate",
+      "schedule_index": 15,
+      "case_id": "express-route",
+      "repeat": 2
+    },
+    {
+      "ordinal": 23,
+      "id": "express-route-r2-current",
+      "runtime": "current",
+      "manifest": "current",
+      "schedule_index": 15,
+      "case_id": "express-route",
+      "repeat": 2
+    },
+    {
+      "ordinal": 24,
+      "id": "express-route-r2-native",
+      "runtime": "native",
+      "manifest": "current",
+      "schedule_index": 16,
+      "case_id": "express-route",
+      "repeat": 2
+    },
+    {
+      "ordinal": 25,
+      "id": "minijinja-config-r2-candidate",
+      "runtime": "candidate",
+      "manifest": "candidate",
+      "schedule_index": 17,
+      "case_id": "minijinja-config",
+      "repeat": 2
+    },
+    {
+      "ordinal": 26,
+      "id": "minijinja-config-r2-current",
+      "runtime": "current",
+      "manifest": "current",
+      "schedule_index": 17,
+      "case_id": "minijinja-config",
+      "repeat": 2
+    },
+    {
+      "ordinal": 27,
+      "id": "minijinja-config-r2-native",
+      "runtime": "native",
+      "manifest": "current",
+      "schedule_index": 18,
+      "case_id": "minijinja-config",
+      "repeat": 2
+    },
+    {
+      "ordinal": 28,
+      "id": "hcl-config-r2-candidate",
+      "runtime": "candidate",
+      "manifest": "candidate",
+      "schedule_index": 19,
+      "case_id": "hcl-config",
+      "repeat": 2
+    },
+    {
+      "ordinal": 29,
+      "id": "hcl-config-r2-current",
+      "runtime": "current",
+      "manifest": "current",
+      "schedule_index": 19,
+      "case_id": "hcl-config",
+      "repeat": 2
+    },
+    {
+      "ordinal": 30,
+      "id": "hcl-config-r2-native",
+      "runtime": "native",
+      "manifest": "current",
+      "schedule_index": 20,
+      "case_id": "hcl-config",
+      "repeat": 2
+    },
+    {
+      "ordinal": 31,
+      "id": "commons-lang-r2-candidate",
+      "runtime": "candidate",
+      "manifest": "candidate",
+      "schedule_index": 21,
+      "case_id": "commons-lang",
+      "repeat": 2
+    },
+    {
+      "ordinal": 32,
+      "id": "commons-lang-r2-current",
+      "runtime": "current",
+      "manifest": "current",
+      "schedule_index": 21,
+      "case_id": "commons-lang",
+      "repeat": 2
+    },
+    {
+      "ordinal": 33,
+      "id": "commons-lang-r2-native",
+      "runtime": "native",
+      "manifest": "current",
+      "schedule_index": 22,
+      "case_id": "commons-lang",
+      "repeat": 2
+    },
+    {
+      "ordinal": 34,
+      "id": "nodatime-r2-candidate",
+      "runtime": "candidate",
+      "manifest": "candidate",
+      "schedule_index": 23,
+      "case_id": "nodatime",
+      "repeat": 2
+    },
+    {
+      "ordinal": 35,
+      "id": "nodatime-r2-current",
+      "runtime": "current",
+      "manifest": "current",
+      "schedule_index": 23,
+      "case_id": "nodatime",
+      "repeat": 2
+    },
+    {
+      "ordinal": 36,
+      "id": "nodatime-r2-native",
+      "runtime": "native",
+      "manifest": "current",
+      "schedule_index": 24,
+      "case_id": "nodatime",
+      "repeat": 2
+    }
+  ],
+  "matched_sets": [
+    {
+      "id": "flask-config-r1",
+      "case_id": "flask-config",
+      "repeat": 1,
+      "native": {
+        "manifest": "current",
+        "schedule_index": 1
+      },
+      "current": {
+        "manifest": "current",
+        "schedule_index": 2
+      },
+      "candidate": {
+        "manifest": "candidate",
+        "schedule_index": 2
+      }
+    },
+    {
+      "id": "express-route-r1",
+      "case_id": "express-route",
+      "repeat": 1,
+      "native": {
+        "manifest": "current",
+        "schedule_index": 3
+      },
+      "current": {
+        "manifest": "current",
+        "schedule_index": 4
+      },
+      "candidate": {
+        "manifest": "candidate",
+        "schedule_index": 4
+      }
+    },
+    {
+      "id": "minijinja-config-r1",
+      "case_id": "minijinja-config",
+      "repeat": 1,
+      "native": {
+        "manifest": "current",
+        "schedule_index": 5
+      },
+      "current": {
+        "manifest": "current",
+        "schedule_index": 6
+      },
+      "candidate": {
+        "manifest": "candidate",
+        "schedule_index": 6
+      }
+    },
+    {
+      "id": "hcl-config-r1",
+      "case_id": "hcl-config",
+      "repeat": 1,
+      "native": {
+        "manifest": "current",
+        "schedule_index": 7
+      },
+      "current": {
+        "manifest": "current",
+        "schedule_index": 8
+      },
+      "candidate": {
+        "manifest": "candidate",
+        "schedule_index": 8
+      }
+    },
+    {
+      "id": "commons-lang-r1",
+      "case_id": "commons-lang",
+      "repeat": 1,
+      "native": {
+        "manifest": "current",
+        "schedule_index": 9
+      },
+      "current": {
+        "manifest": "current",
+        "schedule_index": 10
+      },
+      "candidate": {
+        "manifest": "candidate",
+        "schedule_index": 10
+      }
+    },
+    {
+      "id": "nodatime-r1",
+      "case_id": "nodatime",
+      "repeat": 1,
+      "native": {
+        "manifest": "current",
+        "schedule_index": 11
+      },
+      "current": {
+        "manifest": "current",
+        "schedule_index": 12
+      },
+      "candidate": {
+        "manifest": "candidate",
+        "schedule_index": 12
+      }
+    },
+    {
+      "id": "flask-config-r2",
+      "case_id": "flask-config",
+      "repeat": 2,
+      "native": {
+        "manifest": "current",
+        "schedule_index": 14
+      },
+      "current": {
+        "manifest": "current",
+        "schedule_index": 13
+      },
+      "candidate": {
+        "manifest": "candidate",
+        "schedule_index": 13
+      }
+    },
+    {
+      "id": "express-route-r2",
+      "case_id": "express-route",
+      "repeat": 2,
+      "native": {
+        "manifest": "current",
+        "schedule_index": 16
+      },
+      "current": {
+        "manifest": "current",
+        "schedule_index": 15
+      },
+      "candidate": {
+        "manifest": "candidate",
+        "schedule_index": 15
+      }
+    },
+    {
+      "id": "minijinja-config-r2",
+      "case_id": "minijinja-config",
+      "repeat": 2,
+      "native": {
+        "manifest": "current",
+        "schedule_index": 18
+      },
+      "current": {
+        "manifest": "current",
+        "schedule_index": 17
+      },
+      "candidate": {
+        "manifest": "candidate",
+        "schedule_index": 17
+      }
+    },
+    {
+      "id": "hcl-config-r2",
+      "case_id": "hcl-config",
+      "repeat": 2,
+      "native": {
+        "manifest": "current",
+        "schedule_index": 20
+      },
+      "current": {
+        "manifest": "current",
+        "schedule_index": 19
+      },
+      "candidate": {
+        "manifest": "candidate",
+        "schedule_index": 19
+      }
+    },
+    {
+      "id": "commons-lang-r2",
+      "case_id": "commons-lang",
+      "repeat": 2,
+      "native": {
+        "manifest": "current",
+        "schedule_index": 22
+      },
+      "current": {
+        "manifest": "current",
+        "schedule_index": 21
+      },
+      "candidate": {
+        "manifest": "candidate",
+        "schedule_index": 21
+      }
+    },
+    {
+      "id": "nodatime-r2",
+      "case_id": "nodatime",
+      "repeat": 2,
+      "native": {
+        "manifest": "current",
+        "schedule_index": 24
+      },
+      "current": {
+        "manifest": "current",
+        "schedule_index": 23
+      },
+      "candidate": {
+        "manifest": "candidate",
+        "schedule_index": 23
+      }
+    }
+  ]
+}

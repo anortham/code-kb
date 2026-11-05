@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "case_id": "flask-config",
+  "repeat": 1,
+  "runtime": "native",
+  "attempt_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/current/attempts/001-flask-config-native-r1/attempt.json",
+  "attempt_sha256": "69a73bd83fb254dfb84dd6bd6031f9faff7a1248babf9ad8d5ee2d39f79ce0a0",
+  "source_review": "passed",
+  "accepted": true,
+  "trial_completed": true,
+  "behavioral_pass": true,
+  "protection_status": "unchanged",
+  "evidence": [
+    "Default setting replaces seeded zero with None.",
+    "Permanent expiration accepts timedelta, falls back only for None, rejects all other types with a named TypeError; non-permanent returns before reading the setting.",
+    "UTC arithmetic and existing lifetime handling remain intact; no unrelated source changes.",
+    "Added tests cover positive/zero/negative durations, default lifetime forms, browser-session cookies, invalid types, and live permanent cookie expiry."
+  ],
+  "added_tests": {
+    "file": "tests/test_session_cookie_max_age.py",
+    "executed_count": 19,
+    "fresh_public_replay": true,
+    "trusted_log": "001-flask-native-r1-public.log",
+    "trusted_log_sha256": "15bcff537ea0bf5b24acb71cfc7ad3a728a2915c45135197e06e0fd380211793",
+    "total_public_tests_passed": 20
+  },
+  "original_record_unchanged": true
+}

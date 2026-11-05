@@ -1,0 +1,101 @@
+{
+  "acceptance_status": "not_dispatched",
+  "arm": "code-kb",
+  "campaign_runner_sha256": "9dc440ce952cf622bfc77275bbf97d6a2fd02c6ad238d9f933bfab2e3a91f594",
+  "case_id": "flask-config",
+  "dispatch_started": false,
+  "indexing": {
+    "elapsed_seconds": null,
+    "failure": "case must declare .code-kb as a generated root",
+    "source_digest_after": null,
+    "source_digest_before": null,
+    "status": "failed"
+  },
+  "manifest_sha256": "650a038b104c036c850fd05a798cf68c42f5836c3c0b57ce89742e4b6cf5ba81",
+  "repeat": 1,
+  "runtime_bindings_sha256": "ebdd0607587c28b484376890341eca9b1c83e7509dfa5cfbdde9fb77307790f7",
+  "runtime_setup": [
+    {
+      "command_id": "materialize_python_dependencies",
+      "elapsed_seconds": 0.114468,
+      "exit_status": 0,
+      "expected_output_missing": [],
+      "passed": true,
+      "process_cleanup": {
+        "attempted": false,
+        "complete": true,
+        "signal": null
+      },
+      "retained_traces": {
+        "stderr_log": {
+          "changed": false,
+          "original_bytes": 0,
+          "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/current/attempts/002-flask-config-code-kb-r1/evidence/runtime/setup-00-stderr_log.log",
+          "raw_retained": false,
+          "redacted_bytes": 0,
+          "redacted_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "status": "complete"
+        },
+        "stdout_log": {
+          "changed": false,
+          "original_bytes": 0,
+          "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/current/attempts/002-flask-config-code-kb-r1/evidence/runtime/setup-00-stdout_log.log",
+          "raw_retained": false,
+          "redacted_bytes": 0,
+          "redacted_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "status": "complete"
+        }
+      },
+      "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/current/attempts/002-flask-config-code-kb-r1/evidence/runtime/setup-00-stderr_log.log",
+      "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/current/attempts/002-flask-config-code-kb-r1/evidence/runtime/setup-00-stdout_log.log",
+      "test_execution_observed": null,
+      "timed_out": false
+    },
+    {
+      "command_id": "copy_python_dependencies",
+      "elapsed_seconds": 0.164445,
+      "exit_status": 0,
+      "expected_output_missing": [],
+      "passed": true,
+      "process_cleanup": {
+        "attempted": false,
+        "complete": true,
+        "signal": null
+      },
+      "retained_traces": {
+        "stderr_log": {
+          "changed": false,
+          "original_bytes": 0,
+          "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/current/attempts/002-flask-config-code-kb-r1/evidence/runtime/setup-01-stderr_log.log",
+          "raw_retained": false,
+          "redacted_bytes": 0,
+          "redacted_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "status": "complete"
+        },
+        "stdout_log": {
+          "changed": false,
+          "original_bytes": 0,
+          "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/current/attempts/002-flask-config-code-kb-r1/evidence/runtime/setup-01-stdout_log.log",
+          "raw_retained": false,
+          "redacted_bytes": 0,
+          "redacted_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "status": "complete"
+        }
+      },
+      "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/current/attempts/002-flask-config-code-kb-r1/evidence/runtime/setup-01-stderr_log.log",
+      "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/current/attempts/002-flask-config-code-kb-r1/evidence/runtime/setup-01-stdout_log.log",
+      "test_execution_observed": null,
+      "timed_out": false
+    }
+  ],
+  "schedule_index": 2,
+  "schema": 1,
+  "source_review": "pending",
+  "status": "preindex_failed",
+  "success": false,
+  "trial_completed": false
+}

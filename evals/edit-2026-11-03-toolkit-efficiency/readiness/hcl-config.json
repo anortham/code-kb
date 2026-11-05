@@ -1,0 +1,318 @@
+{
+  "behavioral_pass": true,
+  "case_id": "hcl-config",
+  "case_sha256": "37fdb1ef7267ae6d9165a9fb54623b71a428f753b5881c67c56dcf6c26540079",
+  "checks": {
+    "baseline_public": {
+      "commands": [
+        {
+          "command_id": "native_regressions",
+          "elapsed_seconds": 4.583546,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/baseline-public-00-native_regressions/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/baseline-public-00-native_regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        },
+        {
+          "command_id": "json_regressions",
+          "elapsed_seconds": 0.716924,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/baseline-public-01-json_regressions/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/baseline-public-01-json_regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "baseline_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "materialize_go_module_cache",
+          "elapsed_seconds": 0.214615,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/runtime-baseline-00-materialize_go_module_cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/runtime-baseline-00-materialize_go_module_cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "create_go_build_cache",
+          "elapsed_seconds": 0.114471,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/runtime-baseline-01-create_go_build_cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/runtime-baseline-01-create_go_build_cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "preparation": {
+      "commands": [],
+      "mode": "reused-inputs",
+      "passed": true
+    },
+    "reference_hidden": {
+      "commands": [
+        {
+          "command_id": "native_case_sensitive_acceptance",
+          "elapsed_seconds": 4.379952,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/reference-hidden-00-native_case_sensitive_acceptance/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/reference-hidden-00-native_case_sensitive_acceptance/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        },
+        {
+          "command_id": "json_case_sensitive_acceptance",
+          "elapsed_seconds": 0.721121,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/reference-hidden-01-json_case_sensitive_acceptance/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/reference-hidden-01-json_case_sensitive_acceptance/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_hidden_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "materialize_go_module_cache",
+          "elapsed_seconds": 0.214369,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/runtime-reference-hidden-00-materialize_go_module_cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/runtime-reference-hidden-00-materialize_go_module_cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "create_go_build_cache",
+          "elapsed_seconds": 0.114532,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/runtime-reference-hidden-01-create_go_build_cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/runtime-reference-hidden-01-create_go_build_cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_public": {
+      "commands": [
+        {
+          "command_id": "native_regressions",
+          "elapsed_seconds": 3.983573,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/reference-public-00-native_regressions/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/reference-public-00-native_regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        },
+        {
+          "command_id": "json_regressions",
+          "elapsed_seconds": 0.666098,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/reference-public-01-json_regressions/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/reference-public-01-json_regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_public_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "materialize_go_module_cache",
+          "elapsed_seconds": 0.214326,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/runtime-reference-public-00-materialize_go_module_cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/runtime-reference-public-00-materialize_go_module_cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "create_go_build_cache",
+          "elapsed_seconds": 0.114333,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/runtime-reference-public-01-create_go_build_cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/runtime-reference-public-01-create_go_build_cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "seed_hidden_failure": {
+      "commands": [
+        {
+          "command_id": "native_case_sensitive_acceptance",
+          "elapsed_seconds": 4.233362,
+          "exit_status": 1,
+          "expected_output_missing": [
+            "--- PASS: TestEditEvalCaseSensitiveNativeTraversal",
+            "PASS"
+          ],
+          "passed": false,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/seed-hidden-00-native_case_sensitive_acceptance/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/seed-hidden-00-native_case_sensitive_acceptance/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "seed_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "materialize_go_module_cache",
+          "elapsed_seconds": 0.264624,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/runtime-seed-00-materialize_go_module_cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/runtime-seed-00-materialize_go_module_cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "create_go_build_cache",
+          "elapsed_seconds": 0.11424,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/runtime-seed-01-create_go_build_cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/evidence/runtime-seed-01-create_go_build_cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    }
+  },
+  "created_utc": "2026-11-04T01:38:33Z",
+  "dependencies": {
+    "go-mod-cache": "d5786c23facd1162171bb5462cb4b01fbd4003ab8cddedbecc6beb2aa70bd3c6"
+  },
+  "readiness_error": null,
+  "reference_bundle_path": "evidence/reference-bundle",
+  "reference_digest": "a31e6d92dc4817339cbd4023c5208ff0d3a6c7c337da783ac97a56a6cd5911b0",
+  "reference_production_files_changed": [
+    "json/structure.go",
+    "ops.go"
+  ],
+  "repo_id": "hcl-config",
+  "schema": 1,
+  "seed_digest": "28893caee13b3b5a54118948e02c0dc528e9117e53eca1518ce43892eb2dffa3",
+  "seed_project_path": "work/seed-project",
+  "source_pin": "4a347c448ee961e556dde0fad522a996e04c00c0",
+  "source_review": "passed",
+  "source_tree_sha256": "8ff36484a1c2f3868e37ae605a4f709aad796d9c6c58c699a792c625ffa82373",
+  "status": "ready",
+  "source_review_evidence": "source-review.md",
+  "raw_readiness_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/hcl-v5/readiness.json",
+  "raw_readiness_sha256": "54061ef3d12c27032ea28b5d6e73b73419ac4465170a4592da478f8282ee7189",
+  "independent_source_review": "Reviewed full reversal of planted case-folding in shared object/map access and JSON key construction. New public tests cover valid exact-case inputs and wrong-case object/map/JSON traversals. Canonical frontend suites and hidden checks pass."
+}

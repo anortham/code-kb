@@ -1,0 +1,10 @@
+============================= test session starts ==============================
+platform linux -- Python 3.14.8, pytest-9.2.0, pluggy-1.7.0
+rootdir: /workspace/project
+configfile: pyproject.toml
+collected 19 items
+
+tests/test_session_interface.py .                                        [  5%]
+tests/test_session_cookie_max_age.py ..................                  [100%]
+
+============================== 19 passed in 0.05s ==============================

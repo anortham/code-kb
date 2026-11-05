@@ -1,0 +1,54 @@
+
+running 4 tests
+test convert::tests::test_undefined_and_objects ... ok
+test convert::tests::test_roundtrip ... ok
+test querystring::tests::test_basics ... ok
+test querystring::tests::test_nested ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 30 tests
+test test_empty_template_name_errors ... ok
+test test_cbor ... ok
+test test_explicit_format ... ok
+test test_empty_template_name_with_string_template ... ok
+test test_json ... ok
+test test_preserve_order_cbor ... ok
+test test_line_statement ... ok
+test test_json5 ... ok
+test test_querystring ... ok
+test test_include ... ok
+test test_multiple_data_files ... ok
+test test_print_config_fully_loaded ... ok
+test test_load_config ... ok
+test test_preserve_order_json ... ok
+test test_no_newline ... ok
+test test_select_from_toplevel ... ok
+test test_preserve_order_toml ... ok
+test test_preserve_order_yaml ... ok
+test test_stdin_template ... ok
+test test_context_stdin ... ok
+test test_template_name_with_string_template_fails ... ok
+test test_template_string ... ok
+test test_ini_casing ... ok
+test test_yaml ... ok
+test test_no_include ... ok
+test test_ini ... ok
+test test_yaml_aliases ... ok
+test test_dump ... ok
+test test_toml ... ok
+test test_syntax_error ... ok
+
+test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s
+
+
+running 5 tests
+test zero_cli_fuel_disables_inherited_limit ... ok
+test positive_cli_fuel_lowers_inherited_limit ... ok
+test positive_cli_fuel_raises_inherited_limit ... ok
+test inherited_fuel_limits_rendering ... ok
+test fuel_long_help_explains_overrides ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

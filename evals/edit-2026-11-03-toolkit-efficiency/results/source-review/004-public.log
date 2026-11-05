@@ -1,0 +1,55 @@
+
+
+  req
+    .query
+      ✔ should default to {}
+      ✔ should default to parse simple keys
+      when "query parser" is extended
+        ✔ should parse complex keys
+        ✔ should parse parameters with dots
+      when "query parser" is simple
+        ✔ should not parse complex keys
+      when "query parser" is a function
+        ✔ should parse using function
+      when "query parser" disabled
+        ✔ should not parse query
+      when "query parser" enabled
+        ✔ should not parse complex keys
+      when "query parser" an unknown value
+        ✔ should throw
+
+  query parser depth
+    ✔ should default to 5 without changing the simple parser default
+    ✔ should limit the default extended parser to five levels
+    ✔ should use depth set before selecting the extended parser
+    ✔ should update the extended parser for later requests
+    ✔ should leave bracketed keys un-nested at depth zero
+    ✔ should allow a depth greater than the default
+    ✔ should keep depth settings independent between apps
+    ✔ should preserve parser behavior for simple
+    ✔ should preserve parser behavior for true
+    ✔ should preserve parser behavior for false
+    ✔ should preserve custom parser identity and arguments
+    ✔ should preserve extended parser prototype and dot handling
+    ✔ should reject invalid depth -1 without changing state
+    ✔ should reject invalid depth 1.5 without changing state
+    ✔ should reject invalid depth NaN without changing state
+    ✔ should reject invalid depth Infinity without changing state
+    ✔ should reject invalid depth -Infinity without changing state
+    ✔ should reject invalid depth 2 without changing state
+    ✔ should reject invalid depth  without changing state
+    ✔ should reject invalid depth null without changing state
+    ✔ should reject invalid depth undefined without changing state
+    ✔ should reject invalid depth true without changing state
+    ✔ should reject invalid depth false without changing state
+    ✔ should reject invalid depth [object Object] without changing state
+    ✔ should reject invalid depth  without changing state
+    ✔ should reject invalid depth 2 without changing state
+    ✔ should reject invalid depth function () {} without changing state
+    ✔ should reject invalid depth Symbol(depth) without changing state
+    ✔ should reject invalid depth 2 without changing state
+
+
+  38 passing (89ms)
+
+38 tests passed

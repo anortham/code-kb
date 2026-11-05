@@ -1,0 +1,3 @@
+Add an Express application setting named `query parser depth` for the built-in extended query parser. Its default is 5, matching the existing `qs` default. It accepts only non-negative integers; depth 0 leaves bracketed keys un-nested. It affects only the built-in `extended` parser, and changing it after `query parser` must update the parser used for later requests. Simple, disabled, and custom function parsers keep their current behavior. Invalid values throw a `TypeError` whose message says that depth must be a non-negative integer, without changing the prior setting.
+
+Add a new public test module that proves the limit through a real Express route and covers invalid values. Preserve the existing query parser defaults and behavior.

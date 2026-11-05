@@ -1,0 +1,189 @@
+diff --git b/json/structure.go a/json/structure.go
+index 7426c27..526209d 100644
+--- b/json/structure.go
++++ a/json/structure.go
+@@ -5,7 +5,6 @@ package json
+ 
+ import (
+ 	"fmt"
+-	"strings"
+ 
+ 	"github.com/hashicorp/hcl/v2"
+ 	"github.com/hashicorp/hcl/v2/hclsyntax"
+@@ -484,7 +483,7 @@ func (e *expression) Value(ctx *hcl.EvalContext) (cty.Value, hcl.Diagnostics) {
+ 				known = false
+ 				continue
+ 			}
+-			nameStr := strings.ToLower(name.AsString())
++			nameStr := name.AsString()
+ 			if _, defined := attrs[nameStr]; defined {
+ 				diags = append(diags, &hcl.Diagnostic{
+ 					Severity:    hcl.DiagError,
+diff --git b/ops.go a/ops.go
+index f382bc4..f16e9ba 100644
+--- b/ops.go
++++ a/ops.go
+@@ -6,7 +6,6 @@ package hcl
+ import (
+ 	"fmt"
+ 	"math/big"
+-	"strings"
+ 
+ 	"github.com/zclconf/go-cty/cty"
+ 	"github.com/zclconf/go-cty/cty/convert"
+@@ -281,14 +280,6 @@ func GetAttr(obj cty.Value, attrName string, srcRange *Range) (cty.Value, Diagno
+ 	ty := obj.Type()
+ 	switch {
+ 	case ty.IsObjectType():
+-		if !ty.HasAttribute(attrName) {
+-			for name := range ty.AttributeTypes() {
+-				if strings.EqualFold(name, attrName) {
+-					attrName = name
+-					break
+-				}
+-			}
+-		}
+ 		if !ty.HasAttribute(attrName) {
+ 			return cty.DynamicVal, Diagnostics{
+ 				{
+@@ -316,15 +307,6 @@ func GetAttr(obj cty.Value, attrName string, srcRange *Range) (cty.Value, Diagno
+ 		// traversal of a marked map in the same way we can traverse a marked
+ 		// object
+ 		hasIndex, _ := obj.HasIndex(idx).Unmark()
+-		if hasIndex.False() {
+-			for name := range obj.AsValueMap() {
+-				if strings.EqualFold(name, attrName) {
+-					idx = cty.StringVal(name)
+-					hasIndex = cty.True
+-					break
+-				}
+-			}
+-		}
+ 		if hasIndex.False() {
+ 			return cty.DynamicVal, Diagnostics{
+ 				{
+diff --git a/hclsyntax/edit_eval_case_sensitive_public_test.go b/hclsyntax/edit_eval_case_sensitive_public_test.go
+new file mode 100644
+--- /dev/null
++++ b/hclsyntax/edit_eval_case_sensitive_public_test.go
+@@ -0,0 +1,56 @@
++package hclsyntax_test
++
++import (
++	"strings"
++	"testing"
++
++	"github.com/hashicorp/hcl/v2"
++	"github.com/hashicorp/hcl/v2/hclsyntax"
++	"github.com/zclconf/go-cty/cty"
++)
++
++func TestEditEvalPublicNativeRegion(t *testing.T) {
++	ctx := &hcl.EvalContext{Variables: map[string]cty.Value{
++		"local": cty.ObjectVal(map[string]cty.Value{
++			"settings": cty.ObjectVal(map[string]cty.Value{"Region": cty.StringVal("north")}),
++			"tags":     cty.MapVal(map[string]cty.Value{"Release": cty.StringVal("stable")}),
++		}),
++	}}
++
++	for _, test := range []struct {
++		expression string
++		want       string
++	}{
++		{"local.settings.Region", "north"},
++		{"local.tags.Release", "stable"},
++	} {
++		expr, diags := hclsyntax.ParseExpression([]byte(test.expression), "test.hcl", hcl.InitialPos)
++		if diags.HasErrors() {
++			t.Fatalf("parse %q: %s", test.expression, diags.Error())
++		}
++		got, diags := expr.Value(ctx)
++		if diags.HasErrors() {
++			t.Fatalf("evaluate %q: %s", test.expression, diags.Error())
++		}
++		if got.AsString() != test.want {
++			t.Errorf("%q = %q, want %q", test.expression, got.AsString(), test.want)
++		}
++	}
++
++	for _, test := range []struct {
++		expression string
++		diagnostic string
++	}{
++		{"local.settings.region", "Unsupported attribute"},
++		{"local.tags.release", "Missing map element"},
++	} {
++		expr, diags := hclsyntax.ParseExpression([]byte(test.expression), "test.hcl", hcl.InitialPos)
++		if diags.HasErrors() {
++			t.Fatalf("parse %q: %s", test.expression, diags.Error())
++		}
++		_, diags = expr.Value(ctx)
++		if !diags.HasErrors() || !strings.Contains(diags.Error(), test.diagnostic) {
++			t.Errorf("%q diagnostics = %v, want %q", test.expression, diags, test.diagnostic)
++		}
++	}
++}
+diff --git a/json/edit_eval_case_sensitive_public_test.go b/json/edit_eval_case_sensitive_public_test.go
+new file mode 100644
+--- /dev/null
++++ b/json/edit_eval_case_sensitive_public_test.go
+@@ -0,0 +1,59 @@
++package json_test
++
++import (
++	"strings"
++	"testing"
++
++	"github.com/hashicorp/hcl/v2"
++	hcljson "github.com/hashicorp/hcl/v2/json"
++	"github.com/zclconf/go-cty/cty"
++)
++
++func TestEditEvalPublicJSONRegion(t *testing.T) {
++	object, diags := hcljson.ParseExpression([]byte(`{"Region":"north"}`), "test.json")
++	if diags.HasErrors() {
++		t.Fatal(diags.Error())
++	}
++	value, diags := object.Value(nil)
++	if diags.HasErrors() {
++		t.Fatal(diags.Error())
++	}
++	if !value.Type().HasAttribute("Region") || value.Type().HasAttribute("region") {
++		t.Fatalf("JSON object keys lost their spelling: %s", value.Type().FriendlyName())
++	}
++
++	ctx := &hcl.EvalContext{Variables: map[string]cty.Value{
++		"local": cty.ObjectVal(map[string]cty.Value{
++			"settings": cty.ObjectVal(map[string]cty.Value{"Region": cty.StringVal("north")}),
++			"tags":     cty.MapVal(map[string]cty.Value{"Release": cty.StringVal("stable")}),
++		}),
++	}}
++	for _, test := range []struct {
++		expression string
++		want       string
++	}{
++		{`"${local.settings.Region}"`, "north"},
++		{`"${local.tags.Release}"`, "stable"},
++	} {
++		expr, diags := hcljson.ParseExpression([]byte(test.expression), "test.json")
++		if diags.HasErrors() {
++			t.Fatalf("parse %q: %s", test.expression, diags.Error())
++		}
++		got, diags := expr.Value(ctx)
++		if diags.HasErrors() {
++			t.Fatalf("evaluate %q: %s", test.expression, diags.Error())
++		}
++		if got.AsString() != test.want {
++			t.Errorf("%q = %q, want %q", test.expression, got.AsString(), test.want)
++		}
++	}
++
++	wrongCase, diags := hcljson.ParseExpression([]byte(`"${local.settings.region}"`), "test.json")
++	if diags.HasErrors() {
++		t.Fatal(diags.Error())
++	}
++	_, diags = wrongCase.Value(ctx)
++	if !diags.HasErrors() || !strings.Contains(diags.Error(), "Unsupported attribute") {
++		t.Fatalf("case-sensitive JSON traversal diagnostics = %v, want Unsupported attribute", diags)
++	}
++}

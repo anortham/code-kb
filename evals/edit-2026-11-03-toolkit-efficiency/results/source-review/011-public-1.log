@@ -1,0 +1,356 @@
+=== RUN   TestKeywordSuggestion
+=== RUN   TestKeywordSuggestion/true
+=== RUN   TestKeywordSuggestion/false
+=== RUN   TestKeywordSuggestion/null
+=== RUN   TestKeywordSuggestion/bananas
+=== RUN   TestKeywordSuggestion/NaN
+=== RUN   TestKeywordSuggestion/Inf
+=== RUN   TestKeywordSuggestion/Infinity
+=== RUN   TestKeywordSuggestion/void
+=== RUN   TestKeywordSuggestion/undefined
+=== RUN   TestKeywordSuggestion/ture
+=== RUN   TestKeywordSuggestion/tru
+=== RUN   TestKeywordSuggestion/tre
+=== RUN   TestKeywordSuggestion/treu
+=== RUN   TestKeywordSuggestion/rtue
+=== RUN   TestKeywordSuggestion/flase
+=== RUN   TestKeywordSuggestion/fales
+=== RUN   TestKeywordSuggestion/flse
+=== RUN   TestKeywordSuggestion/fasle
+=== RUN   TestKeywordSuggestion/fasel
+=== RUN   TestKeywordSuggestion/flue
+=== RUN   TestKeywordSuggestion/nil
+=== RUN   TestKeywordSuggestion/nul
+=== RUN   TestKeywordSuggestion/unll
+=== RUN   TestKeywordSuggestion/nll
+--- PASS: TestKeywordSuggestion (0.00s)
+    --- PASS: TestKeywordSuggestion/true (0.00s)
+    --- PASS: TestKeywordSuggestion/false (0.00s)
+    --- PASS: TestKeywordSuggestion/null (0.00s)
+    --- PASS: TestKeywordSuggestion/bananas (0.00s)
+    --- PASS: TestKeywordSuggestion/NaN (0.00s)
+    --- PASS: TestKeywordSuggestion/Inf (0.00s)
+    --- PASS: TestKeywordSuggestion/Infinity (0.00s)
+    --- PASS: TestKeywordSuggestion/void (0.00s)
+    --- PASS: TestKeywordSuggestion/undefined (0.00s)
+    --- PASS: TestKeywordSuggestion/ture (0.00s)
+    --- PASS: TestKeywordSuggestion/tru (0.00s)
+    --- PASS: TestKeywordSuggestion/tre (0.00s)
+    --- PASS: TestKeywordSuggestion/treu (0.00s)
+    --- PASS: TestKeywordSuggestion/rtue (0.00s)
+    --- PASS: TestKeywordSuggestion/flase (0.00s)
+    --- PASS: TestKeywordSuggestion/fales (0.00s)
+    --- PASS: TestKeywordSuggestion/flse (0.00s)
+    --- PASS: TestKeywordSuggestion/fasle (0.00s)
+    --- PASS: TestKeywordSuggestion/fasel (0.00s)
+    --- PASS: TestKeywordSuggestion/flue (0.00s)
+    --- PASS: TestKeywordSuggestion/nil (0.00s)
+    --- PASS: TestKeywordSuggestion/nul (0.00s)
+    --- PASS: TestKeywordSuggestion/unll (0.00s)
+    --- PASS: TestKeywordSuggestion/nll (0.00s)
+=== RUN   TestNavigationContextString
+=== RUN   TestNavigationContextString/0
+=== RUN   TestNavigationContextString/8
+=== RUN   TestNavigationContextString/36
+=== RUN   TestNavigationContextString/60
+=== RUN   TestNavigationContextString/89
+=== RUN   TestNavigationContextString/141
+--- PASS: TestNavigationContextString (0.00s)
+    --- PASS: TestNavigationContextString/0 (0.00s)
+    --- PASS: TestNavigationContextString/8 (0.00s)
+    --- PASS: TestNavigationContextString/36 (0.00s)
+    --- PASS: TestNavigationContextString/60 (0.00s)
+    --- PASS: TestNavigationContextString/89 (0.00s)
+    --- PASS: TestNavigationContextString/141 (0.00s)
+=== RUN   TestParse
+=== RUN   TestParse/true
+=== RUN   TestParse/false
+=== RUN   TestParse/null
+=== RUN   TestParse/undefined
+=== RUN   TestParse/flase
+=== RUN   TestParse/"hello"
+=== RUN   TestParse/"hello\nworld"
+=== RUN   TestParse/"hello_\"world\""
+=== RUN   TestParse/"hello_\\"
+=== RUN   TestParse/"hello
+=== RUN   TestParse/"he\llo"
+=== RUN   TestParse/1
+=== RUN   TestParse/1.2
+=== RUN   TestParse/-1
+=== RUN   TestParse/1.2e5
+=== RUN   TestParse/1.2e+5
+=== RUN   TestParse/1.2e-5
+=== RUN   TestParse/.1
+=== RUN   TestParse/+2
+=== RUN   TestParse/1_2
+=== RUN   TestParse/{"hello":_true}
+=== RUN   TestParse/{"hello":_true,_"bye":_false}
+=== RUN   TestParse/{}
+=== RUN   TestParse/{"hello":true
+=== RUN   TestParse/{"hello":true]
+=== RUN   TestParse/{"hello":true,}
+=== RUN   TestParse/{true:false}
+=== RUN   TestParse/{"hello":_true,_"hello":_true}
+=== RUN   TestParse/{"hello":_true,_"hello":_true,_"hello",_true}
+=== RUN   TestParse/{"hello",_"world"}
+=== RUN   TestParse/[]
+=== RUN   TestParse/[true]
+=== RUN   TestParse/[true,_false]
+=== RUN   TestParse/[[]]
+=== RUN   TestParse/[
+=== RUN   TestParse/[true
+=== RUN   TestParse/]
+=== RUN   TestParse/[true,]
+=== RUN   TestParse/[[],]
+=== RUN   TestParse/["hello":true]
+=== RUN   TestParse/[true}
+=== RUN   TestParse/{"wrong"=true}
+=== RUN   TestParse/{"wrong"_=_true}
+=== RUN   TestParse/{"wrong"_true}
+--- PASS: TestParse (0.00s)
+    --- PASS: TestParse/true (0.00s)
+    --- PASS: TestParse/false (0.00s)
+    --- PASS: TestParse/null (0.00s)
+    --- PASS: TestParse/undefined (0.00s)
+    --- PASS: TestParse/flase (0.00s)
+    --- PASS: TestParse/"hello" (0.00s)
+    --- PASS: TestParse/"hello\nworld" (0.00s)
+    --- PASS: TestParse/"hello_\"world\"" (0.00s)
+    --- PASS: TestParse/"hello_\\" (0.00s)
+    --- PASS: TestParse/"hello (0.00s)
+    --- PASS: TestParse/"he\llo" (0.00s)
+    --- PASS: TestParse/1 (0.00s)
+    --- PASS: TestParse/1.2 (0.00s)
+    --- PASS: TestParse/-1 (0.00s)
+    --- PASS: TestParse/1.2e5 (0.00s)
+    --- PASS: TestParse/1.2e+5 (0.00s)
+    --- PASS: TestParse/1.2e-5 (0.00s)
+    --- PASS: TestParse/.1 (0.00s)
+    --- PASS: TestParse/+2 (0.00s)
+    --- PASS: TestParse/1_2 (0.00s)
+    --- PASS: TestParse/{"hello":_true} (0.00s)
+    --- PASS: TestParse/{"hello":_true,_"bye":_false} (0.00s)
+    --- PASS: TestParse/{} (0.00s)
+    --- PASS: TestParse/{"hello":true (0.00s)
+    --- PASS: TestParse/{"hello":true] (0.00s)
+    --- PASS: TestParse/{"hello":true,} (0.00s)
+    --- PASS: TestParse/{true:false} (0.00s)
+    --- PASS: TestParse/{"hello":_true,_"hello":_true} (0.00s)
+    --- PASS: TestParse/{"hello":_true,_"hello":_true,_"hello",_true} (0.00s)
+    --- PASS: TestParse/{"hello",_"world"} (0.00s)
+    --- PASS: TestParse/[] (0.00s)
+    --- PASS: TestParse/[true] (0.00s)
+    --- PASS: TestParse/[true,_false] (0.00s)
+    --- PASS: TestParse/[[]] (0.00s)
+    --- PASS: TestParse/[ (0.00s)
+    --- PASS: TestParse/[true (0.00s)
+    --- PASS: TestParse/] (0.00s)
+    --- PASS: TestParse/[true,] (0.00s)
+    --- PASS: TestParse/[[],] (0.00s)
+    --- PASS: TestParse/["hello":true] (0.00s)
+    --- PASS: TestParse/[true} (0.00s)
+    --- PASS: TestParse/{"wrong"=true} (0.00s)
+    --- PASS: TestParse/{"wrong"_=_true} (0.00s)
+    --- PASS: TestParse/{"wrong"_true} (0.00s)
+=== RUN   TestParseWithPos
+=== RUN   TestParseWithPos/true
+--- PASS: TestParseWithPos (0.00s)
+    --- PASS: TestParseWithPos/true (0.00s)
+=== RUN   TestParse_nonObject
+--- PASS: TestParse_nonObject (0.00s)
+=== RUN   TestParseTemplate
+--- PASS: TestParseTemplate (0.00s)
+=== RUN   TestParseTemplateUnwrap
+--- PASS: TestParseTemplateUnwrap (0.00s)
+=== RUN   TestParse_malformed
+--- PASS: TestParse_malformed (0.00s)
+=== RUN   TestParseWithStartPos
+--- PASS: TestParseWithStartPos (0.00s)
+=== RUN   TestParseExpression
+=== RUN   TestParseExpression/"hello"
+=== RUN   TestParseExpression/"hello_${noun}"
+=== RUN   TestParseExpression/true
+=== RUN   TestParseExpression/false
+=== RUN   TestParseExpression/1
+=== RUN   TestParseExpression/{}
+=== RUN   TestParseExpression/{"foo":"bar","baz":1}
+=== RUN   TestParseExpression/[]
+=== RUN   TestParseExpression/["1",2,3]
+--- PASS: TestParseExpression (0.00s)
+    --- PASS: TestParseExpression/"hello" (0.00s)
+    --- PASS: TestParseExpression/"hello_${noun}" (0.00s)
+    --- PASS: TestParseExpression/true (0.00s)
+    --- PASS: TestParseExpression/false (0.00s)
+    --- PASS: TestParseExpression/1 (0.00s)
+    --- PASS: TestParseExpression/{} (0.00s)
+    --- PASS: TestParseExpression/{"foo":"bar","baz":1} (0.00s)
+    --- PASS: TestParseExpression/[] (0.00s)
+    --- PASS: TestParseExpression/["1",2,3] (0.00s)
+=== RUN   TestParseExpression_malformed
+--- PASS: TestParseExpression_malformed (0.00s)
+=== RUN   TestParseExpressionWithStartPos
+--- PASS: TestParseExpressionWithStartPos (0.00s)
+=== RUN   TestScan
+=== RUN   TestScan/#00
+=== RUN   TestScan/___
+=== RUN   TestScan/{}
+=== RUN   TestScan/][
+=== RUN   TestScan/:,
+=== RUN   TestScan/1
+=== RUN   TestScan/__1
+=== RUN   TestScan/__12
+=== RUN   TestScan/1_2
+=== RUN   TestScan/_1__2
+=== RUN   TestScan/-1_2.5
+=== RUN   TestScan/true
+=== RUN   TestScan/[true]
+=== RUN   TestScan/""
+=== RUN   TestScan/"hello"
+=== RUN   TestScan/"he\"llo"
+=== RUN   TestScan/"hello\\"_1
+=== RUN   TestScan/"🇬🇧"
+=== RUN   TestScan/"á́́́́́́́"
+=== RUN   TestScan/&
+--- PASS: TestScan (0.00s)
+    --- PASS: TestScan/#00 (0.00s)
+    --- PASS: TestScan/___ (0.00s)
+    --- PASS: TestScan/{} (0.00s)
+    --- PASS: TestScan/][ (0.00s)
+    --- PASS: TestScan/:, (0.00s)
+    --- PASS: TestScan/1 (0.00s)
+    --- PASS: TestScan/__1 (0.00s)
+    --- PASS: TestScan/__12 (0.00s)
+    --- PASS: TestScan/1_2 (0.00s)
+    --- PASS: TestScan/_1__2 (0.00s)
+    --- PASS: TestScan/-1_2.5 (0.00s)
+    --- PASS: TestScan/true (0.00s)
+    --- PASS: TestScan/[true] (0.00s)
+    --- PASS: TestScan/"" (0.00s)
+    --- PASS: TestScan/"hello" (0.00s)
+    --- PASS: TestScan/"he\"llo" (0.00s)
+    --- PASS: TestScan/"hello\\"_1 (0.00s)
+    --- PASS: TestScan/"🇬🇧" (0.00s)
+    --- PASS: TestScan/"á́́́́́́́" (0.00s)
+    --- PASS: TestScan/& (0.00s)
+=== RUN   TestBodyPartialContent
+=== RUN   TestBodyPartialContent/00-{}
+=== RUN   TestBodyPartialContent/01-[]
+=== RUN   TestBodyPartialContent/02-[{}]
+=== RUN   TestBodyPartialContent/03-[[]]
+=== RUN   TestBodyPartialContent/04-{"//":_"comment_that_should_be_ignored"}
+=== RUN   TestBodyPartialContent/05-{"//":_"comment_that_should_be_ignored",_"//":_"another_comment"}
+=== RUN   TestBodyPartialContent/06-{"name":"Ermintrude"}
+=== RUN   TestBodyPartialContent/07-[{"name":"Ermintrude"}]
+=== RUN   TestBodyPartialContent/08-{"name":"Ermintrude"}
+=== RUN   TestBodyPartialContent/09-{"resource":_null}
+=== RUN   TestBodyPartialContent/10-{"resource":_{_"nested":_null_}}
+=== RUN   TestBodyPartialContent/11-{"resource":{}}
+=== RUN   TestBodyPartialContent/12-{"resource":[{},{}]}
+=== RUN   TestBodyPartialContent/13-{"resource":{"foo_instance":{"bar":{}}}}
+=== RUN   TestBodyPartialContent/14-{"resource":{"foo_instance":[{"bar":{}},_{"bar":{}}]}}
+=== RUN   TestBodyPartialContent/15-{"name":"Ermintrude"}
+=== RUN   TestBodyPartialContent/16-[{"name":"Ermintrude"},{"name":"Ermintrude"}]
+--- PASS: TestBodyPartialContent (0.00s)
+    --- PASS: TestBodyPartialContent/00-{} (0.00s)
+    --- PASS: TestBodyPartialContent/01-[] (0.00s)
+    --- PASS: TestBodyPartialContent/02-[{}] (0.00s)
+    --- PASS: TestBodyPartialContent/03-[[]] (0.00s)
+    --- PASS: TestBodyPartialContent/04-{"//":_"comment_that_should_be_ignored"} (0.00s)
+    --- PASS: TestBodyPartialContent/05-{"//":_"comment_that_should_be_ignored",_"//":_"another_comment"} (0.00s)
+    --- PASS: TestBodyPartialContent/06-{"name":"Ermintrude"} (0.00s)
+    --- PASS: TestBodyPartialContent/07-[{"name":"Ermintrude"}] (0.00s)
+    --- PASS: TestBodyPartialContent/08-{"name":"Ermintrude"} (0.00s)
+    --- PASS: TestBodyPartialContent/09-{"resource":_null} (0.00s)
+    --- PASS: TestBodyPartialContent/10-{"resource":_{_"nested":_null_}} (0.00s)
+    --- PASS: TestBodyPartialContent/11-{"resource":{}} (0.00s)
+    --- PASS: TestBodyPartialContent/12-{"resource":[{},{}]} (0.00s)
+    --- PASS: TestBodyPartialContent/13-{"resource":{"foo_instance":{"bar":{}}}} (0.00s)
+    --- PASS: TestBodyPartialContent/14-{"resource":{"foo_instance":[{"bar":{}},_{"bar":{}}]}} (0.00s)
+    --- PASS: TestBodyPartialContent/15-{"name":"Ermintrude"} (0.00s)
+    --- PASS: TestBodyPartialContent/16-[{"name":"Ermintrude"},{"name":"Ermintrude"}] (0.00s)
+=== RUN   TestBodyContent
+=== RUN   TestBodyContent/00-{"unknown":_true}
+=== RUN   TestBodyContent/01-{"//":_"comment_that_should_be_ignored"}
+=== RUN   TestBodyContent/02-{"unknow":_true}
+=== RUN   TestBodyContent/03-{"unknow":_true,_"unnown":_true}
+--- PASS: TestBodyContent (0.00s)
+    --- PASS: TestBodyContent/00-{"unknown":_true} (0.00s)
+    --- PASS: TestBodyContent/01-{"//":_"comment_that_should_be_ignored"} (0.00s)
+    --- PASS: TestBodyContent/02-{"unknow":_true} (0.00s)
+    --- PASS: TestBodyContent/03-{"unknow":_true,_"unnown":_true} (0.00s)
+=== RUN   TestJustAttributes
+=== RUN   TestJustAttributes/00-{}
+=== RUN   TestJustAttributes/01-{"foo":_true}
+=== RUN   TestJustAttributes/02-{"//":_"comment_that_should_be_ignored"}
+=== RUN   TestJustAttributes/03-{"foo":_true,_"foo":_true}
+--- PASS: TestJustAttributes (0.00s)
+    --- PASS: TestJustAttributes/00-{} (0.00s)
+    --- PASS: TestJustAttributes/01-{"foo":_true} (0.00s)
+    --- PASS: TestJustAttributes/02-{"//":_"comment_that_should_be_ignored"} (0.00s)
+    --- PASS: TestJustAttributes/03-{"foo":_true,_"foo":_true} (0.00s)
+=== RUN   TestExpressionVariables
+=== RUN   TestExpressionVariables/{"a":true}
+=== RUN   TestExpressionVariables/{"a":"${foo}"}
+=== RUN   TestExpressionVariables/{"a":["${foo}"]}
+=== RUN   TestExpressionVariables/{"a":{"b":"${foo}"}}
+=== RUN   TestExpressionVariables/{"a":{"${foo}":"b"}}
+--- PASS: TestExpressionVariables (0.00s)
+    --- PASS: TestExpressionVariables/{"a":true} (0.00s)
+    --- PASS: TestExpressionVariables/{"a":"${foo}"} (0.00s)
+    --- PASS: TestExpressionVariables/{"a":["${foo}"]} (0.00s)
+    --- PASS: TestExpressionVariables/{"a":{"b":"${foo}"}} (0.00s)
+    --- PASS: TestExpressionVariables/{"a":{"${foo}":"b"}} (0.00s)
+=== RUN   TestExpressionAsTraversal
+--- PASS: TestExpressionAsTraversal (0.00s)
+=== RUN   TestExpressionAsTraversalPattern
+--- PASS: TestExpressionAsTraversalPattern (0.00s)
+=== RUN   TestStaticExpressionList
+--- PASS: TestStaticExpressionList (0.00s)
+=== RUN   TestExpression_Value
+--- PASS: TestExpression_Value (0.00s)
+=== RUN   TestExpressionValue_Diags
+=== RUN   TestExpressionValue_Diags/string:_happy
+=== RUN   TestExpressionValue_Diags/string:_unhappy
+=== RUN   TestExpressionValue_Diags/object_val:_happy
+=== RUN   TestExpressionValue_Diags/object_val:_unhappy
+=== RUN   TestExpressionValue_Diags/object_key:<REDACTED>
+=== RUN   TestExpressionValue_Diags/object_key:<REDACTED>
+=== RUN   TestExpressionValue_Diags/array:_happy
+=== RUN   TestExpressionValue_Diags/array:_unhappy
+--- PASS: TestExpressionValue_Diags (0.00s)
+    --- PASS: TestExpressionValue_Diags/string:_happy (0.00s)
+    --- PASS: TestExpressionValue_Diags/string:_unhappy (0.00s)
+    --- PASS: TestExpressionValue_Diags/object_val:_happy (0.00s)
+    --- PASS: TestExpressionValue_Diags/object_val:_unhappy (0.00s)
+    --- PASS: TestExpressionValue_Diags/object_key:<REDACTED> (0.00s)
+    --- PASS: TestExpressionValue_Diags/object_key:<REDACTED> (0.00s)
+    --- PASS: TestExpressionValue_Diags/array:_happy (0.00s)
+    --- PASS: TestExpressionValue_Diags/array:_unhappy (0.00s)
+=== RUN   TestExpressionCaseSensitiveLookup
+=== RUN   TestExpressionCaseSensitiveLookup/object.MixedCase
+=== RUN   TestExpressionCaseSensitiveLookup/map.MixedCase
+=== RUN   TestExpressionCaseSensitiveLookup/object["MixedCase"]
+=== RUN   TestExpressionCaseSensitiveLookup/map["MixedCase"]
+=== RUN   TestExpressionCaseSensitiveLookup/object.mixedcase
+=== RUN   TestExpressionCaseSensitiveLookup/map.mixedcase
+=== RUN   TestExpressionCaseSensitiveLookup/object["mixedcase"]
+=== RUN   TestExpressionCaseSensitiveLookup/map["mixedcase"]
+--- PASS: TestExpressionCaseSensitiveLookup (0.00s)
+    --- PASS: TestExpressionCaseSensitiveLookup/object.MixedCase (0.00s)
+    --- PASS: TestExpressionCaseSensitiveLookup/map.MixedCase (0.00s)
+    --- PASS: TestExpressionCaseSensitiveLookup/object["MixedCase"] (0.00s)
+    --- PASS: TestExpressionCaseSensitiveLookup/map["MixedCase"] (0.00s)
+    --- PASS: TestExpressionCaseSensitiveLookup/object.mixedcase (0.00s)
+    --- PASS: TestExpressionCaseSensitiveLookup/map.mixedcase (0.00s)
+    --- PASS: TestExpressionCaseSensitiveLookup/object["mixedcase"] (0.00s)
+    --- PASS: TestExpressionCaseSensitiveLookup/map["mixedcase"] (0.00s)
+=== RUN   TestObjectExpressionPreservesKeyCase
+=== RUN   TestObjectExpressionPreservesKeyCase/literal
+=== RUN   TestObjectExpressionPreservesKeyCase/template_mode
+=== RUN   TestObjectExpressionPreservesKeyCase/dynamic_key
+--- PASS: TestObjectExpressionPreservesKeyCase (0.00s)
+    --- PASS: TestObjectExpressionPreservesKeyCase/literal (0.00s)
+    --- PASS: TestObjectExpressionPreservesKeyCase/template_mode (0.00s)
+    --- PASS: TestObjectExpressionPreservesKeyCase/dynamic_key (0.00s)
+PASS
+ok  	github.com/hashicorp/hcl/v2/json	0.006s

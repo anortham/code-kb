@@ -80,6 +80,11 @@
     }
   ],
   "test_commands": [
+    "node --test tests/plugin/*.test.cjs",
+    "cargo test -p code-kb-core --locked --test blast_radius_test a_method_read_",
+    "cargo test -p code-kb-core --locked --test blast_radius_test",
+    "cargo test -p code-kb-core --locked --lib formatters::tests::blast_radius",
+    "cargo test -p code-kb-core --locked --lib blast_radius_depth_notice_counts_grouped_test_rows",
     "python3 -m unittest discover -s scripts -p test_reach_gate.py",
     "python3 -m unittest discover -s scripts -p test_release_evidence.py",
     "cargo test --workspace --locked",

@@ -1,0 +1,82 @@
+{
+  "attempt_id": "commons-lang-r1-current",
+  "bundle_json_sha256": "75b8a6cffb7bb864d7f29edde7460c80cc12080c58d854959bbd94be50101f35",
+  "evidence_files": [
+    {
+      "bytes": 5950,
+      "copy": "receipt.json",
+      "sha256": "85c100d9da3739178863dfec937521285eed064259384fabef5da883461de9d0",
+      "source": "target/toolkit-efficiency/campaign/public-test-replay/commons-lang-r1-current/receipt.json"
+    },
+    {
+      "bytes": 0,
+      "copy": "logs/runtime-00-commons-copy-prepared-maven-cache.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "target/toolkit-efficiency/campaign/public-test-replay/commons-lang-r1-current/evidence/runtime-public-replay-00-commons-copy-prepared-maven-cache/stdout.log"
+    },
+    {
+      "bytes": 0,
+      "copy": "logs/runtime-00-commons-copy-prepared-maven-cache.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "target/toolkit-efficiency/campaign/public-test-replay/commons-lang-r1-current/evidence/runtime-public-replay-00-commons-copy-prepared-maven-cache/stderr.log"
+    },
+    {
+      "bytes": 76453,
+      "copy": "logs/runtime-01-commons-resolve-dependencies-offline.stdout.log",
+      "sha256": "44c5685802e02aa41d4112b151919fdeefa02309b4090bffe2a4d53709ec82fd",
+      "source": "target/toolkit-efficiency/campaign/public-test-replay/commons-lang-r1-current/evidence/runtime-public-replay-01-commons-resolve-dependencies-offline/stdout.log"
+    },
+    {
+      "bytes": 0,
+      "copy": "logs/runtime-01-commons-resolve-dependencies-offline.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "target/toolkit-efficiency/campaign/public-test-replay/commons-lang-r1-current/evidence/runtime-public-replay-01-commons-resolve-dependencies-offline/stderr.log"
+    },
+    {
+      "bytes": 996,
+      "copy": "logs/runtime-02-commons-surefire-provider-offline-cache.stdout.log",
+      "sha256": "2779829d525ebf96e1b0acf2aa123a2bb356f1eea6f34cff61f68f030497ff64",
+      "source": "target/toolkit-efficiency/campaign/public-test-replay/commons-lang-r1-current/evidence/runtime-public-replay-02-commons-surefire-provider-offline-cache/stdout.log"
+    },
+    {
+      "bytes": 0,
+      "copy": "logs/runtime-02-commons-surefire-provider-offline-cache.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "target/toolkit-efficiency/campaign/public-test-replay/commons-lang-r1-current/evidence/runtime-public-replay-02-commons-surefire-provider-offline-cache/stderr.log"
+    },
+    {
+      "bytes": 6061,
+      "copy": "logs/selected-tests.stdout.log",
+      "sha256": "332ea843ceef9dc0985d35831699216e9cc79b229b71a7b4d1cf2b7c31643009",
+      "source": "target/toolkit-efficiency/campaign/public-test-replay/commons-lang-r1-current/evidence/selected-tests/stdout.log"
+    },
+    {
+      "bytes": 0,
+      "copy": "logs/selected-tests.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "target/toolkit-efficiency/campaign/public-test-replay/commons-lang-r1-current/evidence/selected-tests/stderr.log"
+    }
+  ],
+  "observed_test_count": 6,
+  "observed_test_names": [
+    "org.apache.commons.lang3.time.DateZoneIdTest"
+  ],
+  "schema": 1,
+  "seed_digest": "45360d445c673c6a4ecbd8d32de4afaa701841fd9638caa6668846f10af5b3e3",
+  "source_pin": "a5d6c5ed8847b2b14dacf062b646f94d6cc61a10",
+  "status": "passed",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_sha256": "332ea843ceef9dc0985d35831699216e9cc79b229b71a7b4d1cf2b7c31643009",
+  "test_command": [
+    "/usr/bin/env",
+    "JAVA_HOME=/tools/java",
+    "PATH=/tools/java/bin:/tools/maven/bin:/usr/bin:/bin",
+    "/tools/maven/bin/mvn",
+    "-B",
+    "-o",
+    "-Dmaven.repo.local=/state/commons-m2",
+    "-Dtest=org.apache.commons.lang3.time.DateZoneIdTest",
+    "test"
+  ],
+  "test_selector": "org.apache.commons.lang3.time.DateZoneIdTest"
+}

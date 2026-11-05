@@ -1,0 +1,7 @@
+test_agent_profile_selftest_needs_no_private_profile_or_auth (scripts.test_edit_sandbox.EditSandboxTest.test_agent_profile_selftest_needs_no_private_profile_or_auth) ... ok
+test_agent_profile_denies_private_reads_writes_and_command_network (scripts.test_edit_sandbox.EditSandboxTest.test_agent_profile_denies_private_reads_writes_and_command_network) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.527s
+
+OK

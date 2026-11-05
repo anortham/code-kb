@@ -1,0 +1,295 @@
+{
+  "schema": 1,
+  "review_status": "provisional",
+  "review_scope": "Source review of completed MiniJinja/HCL attempts ordinals 7-12 from immutable attempt bundles. Lead retains final ruling.",
+  "worktree": {
+    "path": "/home/murphy/.codex/worktrees/dd7b/code-kb",
+    "branch": "toolkit-efficiency",
+    "head": "98644c4aff7bd5489b59d279cb611471f573b91a",
+    "pre_review_status": "clean"
+  },
+  "verification_policy": {
+    "review_method": "read-only inspection of frozen case requests, attempt source snapshots, bundle metadata, grader records, and captured test logs",
+    "tests_or_builds_run_by_reviewer": false,
+    "reason_tests_not_run": "The attempts contain trusted fresh public replay evidence; lead owns any remaining independent test run."
+  },
+  "records": [
+    {
+      "ordinal": 7,
+      "attempt_id": "minijinja-config-r1-native",
+      "case_id": "minijinja-config",
+      "runtime": "native",
+      "attempt_path": "target/toolkit-efficiency/campaign/current-v2/attempts/005-minijinja-config-native-r1",
+      "attempt_sha256": "e260f30dd640044df90977446ba79dc2c49f4419efded275a0ae75f27d448114",
+      "bundle_sha256": "3ca514d7e6f197a704d76cc3ff311beec2db1b86dddcc96cffd15d4afc9c1e8a",
+      "final_digest": "c7e41c108e891adf8442b8062af995298a8ec82ec2f5fb048adaf3fbf26c19c4",
+      "source_review": "passed",
+      "protected_status": "unchanged",
+      "bundle_violations": [],
+      "reason": [
+        "The feature request asks for an explicit CLI fuel value to override MINIJINJA_FUEL; --fuel 0 must disable an inherited positive limit.",
+        "Config::update_from_args assigns Some(0) to the configured fuel value. apply_to_env omits the fuel setter at zero, leaving MiniJinja fuel disabled; omitted CLI fuel retains the environment value.",
+        "Long help states the precedence and zero behavior. The edits are limited to command.rs, config.rs, and focused regression coverage."
+      ],
+      "tests": {
+        "files": [
+          "minijinja-cli/tests/test_fuel.rs"
+        ],
+        "public_replay_passed": true,
+        "fresh_test_execution_observed": true,
+        "new_tests_executed": 4,
+        "executed_names": [
+          "test_env_fuel_limit_without_cli_override",
+          "test_zero_fuel_disables_env_limit",
+          "test_positive_fuel_overrides_env_limit",
+          "test_long_help_fuel_wording"
+        ],
+        "public_log": "target/toolkit-efficiency/campaign/current-v2/attempts/005-minijinja-config-native-r1/evidence/grade/grade-004-stdout_log.log",
+        "public_log_sha256": "b186c848fc7439a74334501f0ad9537b9bda053c6e32dfa4f4e193453d9e2b8f",
+        "canonical_test_help": "filtered by the frozen --skip test_help selector because the requested help wording changes; the new long-help regression ran in test_fuel.rs",
+        "hidden_acceptance": {
+          "id": "fuel_override_acceptance",
+          "passed": true,
+          "execution_observed": true
+        }
+      }
+    },
+    {
+      "ordinal": 8,
+      "attempt_id": "minijinja-config-r1-current",
+      "case_id": "minijinja-config",
+      "runtime": "current",
+      "attempt_path": "target/toolkit-efficiency/campaign/current-v2/attempts/006-minijinja-config-code-kb-r1",
+      "attempt_sha256": "5be46a345451266f606b5588c2d8bea9e6d5850a8541710729967793fa5dcc6a",
+      "bundle_sha256": "ee1a2218af3550270d54bdd4dc1a04ac1cc7a4d42afb8cc7d09f5b78a95312da",
+      "final_digest": "7ce061210539a3683619457424c8d126b48822ab3d43a751c2954ea2b941e161",
+      "source_review": "passed",
+      "protected_status": "unchanged",
+      "bundle_violations": [],
+      "reason": [
+        "The implementation preserves the environment limit when no CLI override is supplied, makes explicit zero disable an inherited limit, and applies positive CLI limits both above and below the inherited value.",
+        "The long-help text accurately explains explicit precedence and zero behavior. The production edits are limited to command.rs and config.rs."
+      ],
+      "tests": {
+        "files": [
+          "minijinja-cli/tests/test_fuel.rs"
+        ],
+        "public_replay_passed": true,
+        "fresh_test_execution_observed": true,
+        "new_tests_executed": 4,
+        "executed_names": [
+          "zero_fuel_disables_inherited_limit",
+          "positive_fuel_raises_inherited_limit",
+          "positive_fuel_lowers_inherited_limit",
+          "long_help_explains_fuel_override"
+        ],
+        "public_log": "target/toolkit-efficiency/campaign/current-v2/attempts/006-minijinja-config-code-kb-r1/evidence/grade/grade-004-stdout_log.log",
+        "public_log_sha256": "38c64b8bb84eb3a4508444afe4c6311a20445c773c5dc54902a1e9d9be17c58f",
+        "canonical_test_help": "filtered by the frozen --skip test_help selector; the added long-help test was executed",
+        "hidden_acceptance": {
+          "id": "fuel_override_acceptance",
+          "passed": true,
+          "execution_observed": true
+        }
+      }
+    },
+    {
+      "ordinal": 9,
+      "attempt_id": "minijinja-config-r1-candidate",
+      "case_id": "minijinja-config",
+      "runtime": "candidate",
+      "attempt_path": "target/toolkit-efficiency/campaign/candidate-v2/attempts/006-minijinja-config-code-kb-r1",
+      "attempt_sha256": "dc9283a19d96ae39e55037660d065ebc74915e4f442d7ee6cf52bf40043f3139",
+      "bundle_sha256": "b7b615f652872bd3875058792dc8bdeefe2203c17250aadc43f3ce4f173d8578",
+      "final_digest": "7912ce23c0623122803da4a00cfd69e8d56489b078ff3f4e2493b134a875034d",
+      "source_review": "passed",
+      "protected_status": "unchanged",
+      "bundle_violations": [],
+      "reason": [
+        "The CLI assignment accepts explicit zero, and applying zero leaves the engine fuel feature disabled; when CLI fuel is absent the positive environment setting remains active.",
+        "Positive CLI values override both smaller and larger environment values. The concise long-help wording matches these semantics."
+      ],
+      "tests": {
+        "files": [
+          "minijinja-cli/tests/test_fuel.rs"
+        ],
+        "public_replay_passed": true,
+        "fresh_test_execution_observed": true,
+        "new_tests_executed": 3,
+        "executed_names": [
+          "zero_fuel_disables_env_limit",
+          "positive_fuel_overrides_env_limit",
+          "long_help_describes_fuel_overrides"
+        ],
+        "public_log": "target/toolkit-efficiency/campaign/candidate-v2/attempts/006-minijinja-config-code-kb-r1/evidence/grade/grade-004-stdout_log.log",
+        "public_log_sha256": "b90e3f20479c13ecca8e44325a3f82fb0f46175ef9b5f951793bb1224fe145b8",
+        "canonical_test_help": "filtered by the frozen --skip test_help selector; the added long-help test was executed",
+        "hidden_acceptance": {
+          "id": "fuel_override_acceptance",
+          "passed": true,
+          "execution_observed": true
+        }
+      }
+    },
+    {
+      "ordinal": 10,
+      "attempt_id": "hcl-config-r1-native",
+      "case_id": "hcl-config",
+      "runtime": "native",
+      "attempt_path": "target/toolkit-efficiency/campaign/current-v2/attempts/007-hcl-config-native-r1",
+      "attempt_sha256": "738fca999bfd701863f1f74c3d400a5be3b67cff1b7d1238e92f6b16bfd4c9f9",
+      "bundle_sha256": "e67d63d036d4a13b42424dca7e9cd84e9fa316d3af0c06eb60810ebbecd0e172",
+      "final_digest": "5237bd61ec833e2bb533bcc0c32b9ecc295313d86238d3d8c80257804a109fb0",
+      "source_review": "passed",
+      "protected_status": "unchanged",
+      "bundle_violations": [],
+      "reason": [
+        "The native expression path now checks the requested object attribute or map key exactly and preserves existing missing-attribute/missing-map diagnostics for mismatched case.",
+        "The JSON expression path preserves declared object key spelling instead of lowercasing it. Added public tests cover exact-case controls, wrong-case object and map access via traversal and index forms, and JSON object construction with distinct key casing."
+      ],
+      "tests": {
+        "files": [
+          "hclsyntax/case_sensitive_lookup_test.go",
+          "json/case_sensitive_lookup_test.go"
+        ],
+        "public_replay_passed": true,
+        "fresh_test_execution_observed": true,
+        "public_commands": [
+          {
+            "id": "native_regressions",
+            "result": "go test -v ./hclsyntax: PASS",
+            "log": "target/toolkit-efficiency/campaign/current-v2/attempts/007-hcl-config-native-r1/evidence/grade/grade-008-stdout_log.log",
+            "log_sha256": "18888a0b086fbea1274348303a3899921ed2a67d6b5707eed464e389ab0e5799"
+          },
+          {
+            "id": "json_regressions",
+            "result": "go test -v ./json: PASS",
+            "log": "target/toolkit-efficiency/campaign/current-v2/attempts/007-hcl-config-native-r1/evidence/grade/grade-010-stdout_log.log",
+            "log_sha256": "10dd30c52eb7c8d1cd086d4b30d400e196682ecdd9a0f3bb8117dfe0ffbce118",
+            "capture_note": "grader recorded original log SHA256 54b3ba3f91275de5158a621da05236a7d45d80fa86ddf196615480484266cae3 and retained redacted log SHA256 shown here"
+          }
+        ],
+        "hidden_acceptance": [
+          "native_case_sensitive_acceptance: passed, execution observed",
+          "json_case_sensitive_acceptance: passed, execution observed"
+        ]
+      }
+    },
+    {
+      "ordinal": 11,
+      "attempt_id": "hcl-config-r1-current",
+      "case_id": "hcl-config",
+      "runtime": "current",
+      "attempt_path": "target/toolkit-efficiency/campaign/current-v2/attempts/008-hcl-config-code-kb-r1",
+      "attempt_sha256": "133dcf8a282955e7af996d31b7b0a23e1c019ad6500e5af852eed817f462a576",
+      "bundle_sha256": "e619bfa4d5dfed25a0cf504fa9f08b96a933c5b01b251874b365a4b4b2da65bb",
+      "final_digest": "d1ad00ffcb48fb412963f5d94d4bf1eaa22c7797c6d09bacd3d1bd463d59e3f5",
+      "source_review": "passed",
+      "protected_status": "unchanged",
+      "bundle_violations": [],
+      "reason": [
+        "Removing the EqualFold fallback from ops.go restores exact-case object traversal and map access; retaining native diagnostic construction keeps wrong-case object and map errors recognizable.",
+        "json/structure.go retains name.AsString() as the object key, preserving case for literal, template-mode, and dynamic-key expressions. Added tests exercise both successful and failing case variants and distinct JSON keys."
+      ],
+      "tests": {
+        "files": [
+          "hclsyntax/case_sensitive_test.go",
+          "json/case_sensitive_test.go"
+        ],
+        "public_replay_passed": true,
+        "fresh_test_execution_observed": true,
+        "public_commands": [
+          {
+            "id": "native_regressions",
+            "result": "go test -v ./hclsyntax: PASS",
+            "log": "target/toolkit-efficiency/campaign/current-v2/attempts/008-hcl-config-code-kb-r1/evidence/grade/grade-008-stdout_log.log",
+            "log_sha256": "a66d4eafd96cfff8f37d4ac9261406d511caf8493b194b5b55adf594dfcb0092"
+          },
+          {
+            "id": "json_regressions",
+            "result": "go test -v ./json: PASS",
+            "log": "target/toolkit-efficiency/campaign/current-v2/attempts/008-hcl-config-code-kb-r1/evidence/grade/grade-010-stdout_log.log",
+            "log_sha256": "5e5038a33a758555a192e50005db4eecb383f7f42ca76bbc706495674d922b4f",
+            "capture_note": "grader recorded original log SHA256 a4bc2134dcf527ce0a7525740e2a2e91ea0f1f99e6fb801ebbb6b9aaf3bab7bd; retained log is redacted"
+          }
+        ],
+        "hidden_acceptance": [
+          "native_case_sensitive_acceptance: passed, execution observed",
+          "json_case_sensitive_acceptance: passed, execution observed"
+        ]
+      },
+      "generated_outputs": [
+        {
+          "path": "specsuite/tmp_hcldec",
+          "provenance": "generated by go test ./... according to campaign owner; retained in the immutable bundle",
+          "size_bytes": 7289724,
+          "sha256": "7eb7852b9e7a0627145b575ded80da3feb434dc76cf5bdca6c6c76a6af4c8701"
+        },
+        {
+          "path": "specsuite/tmp_hclspecsuite",
+          "provenance": "generated by go test ./... according to campaign owner; retained in the immutable bundle",
+          "size_bytes": 8335672,
+          "sha256": "97c629c387d87398cf1895352f58849ccbda6fa1286145c88aa1595b54fff047"
+        }
+      ]
+    },
+    {
+      "ordinal": 12,
+      "attempt_id": "hcl-config-r1-candidate",
+      "case_id": "hcl-config",
+      "runtime": "candidate",
+      "attempt_path": "target/toolkit-efficiency/campaign/candidate-v2/attempts/008-hcl-config-code-kb-r1",
+      "attempt_sha256": "e678170e6a0c492ae076d06030e1c3074a43b4a582221bf54c4a67ffb705bf1c",
+      "bundle_sha256": "249f92711d6a489c0f2e849a0fdb8c7b7823cd9de7b8cab14c91f759c6dd9147",
+      "final_digest": "85798390c593de45fa0dd2274851c61ee4ebb85b96dccb62c2d9e9b9aae09afb",
+      "source_review": "passed",
+      "protected_status": "unchanged",
+      "bundle_violations": [],
+      "reason": [
+        "Removing case-insensitive fallback in ops.go restores exact-case object and map lookup; existing diagnostic paths handle wrong-case traversal and indexing.",
+        "JSON object construction now keeps name.AsString() unchanged, preserving declared keys including nested and interpolated keys. Public tests cover both frontends and valid exact-case controls."
+      ],
+      "tests": {
+        "files": [
+          "hclsyntax/case_sensitive_test.go",
+          "json/case_sensitive_test.go"
+        ],
+        "public_replay_passed": true,
+        "fresh_test_execution_observed": true,
+        "public_commands": [
+          {
+            "id": "native_regressions",
+            "result": "go test -v ./hclsyntax: PASS",
+            "log": "target/toolkit-efficiency/campaign/candidate-v2/attempts/008-hcl-config-code-kb-r1/evidence/grade/grade-008-stdout_log.log",
+            "log_sha256": "6da42f4d8d86e569c53beff41f9b2c8d739cc47a8382db6d45cdfa4f9b3dad9e"
+          },
+          {
+            "id": "json_regressions",
+            "result": "go test -v ./json: PASS",
+            "log": "target/toolkit-efficiency/campaign/candidate-v2/attempts/008-hcl-config-code-kb-r1/evidence/grade/grade-010-stdout_log.log",
+            "log_sha256": "81fd4673efbb8d6ddba0b2394da6762243e7242c08e55136a512827b0b64c22a",
+            "capture_note": "grader recorded original log SHA256 c36ae2342e916ae8873227f8ea011d29920ff95462902d3c7160d49ce18231e3; retained log is redacted"
+          }
+        ],
+        "hidden_acceptance": [
+          "native_case_sensitive_acceptance: passed, execution observed",
+          "json_case_sensitive_acceptance: passed, execution observed"
+        ]
+      },
+      "generated_outputs": [
+        {
+          "path": "specsuite/tmp_hcldec",
+          "provenance": "generated by go test ./... according to campaign owner; retained in the immutable bundle",
+          "size_bytes": 7289724,
+          "sha256": "7eb7852b9e7a0627145b575ded80da3feb434dc76cf5bdca6c6c76a6af4c8701"
+        },
+        {
+          "path": "specsuite/tmp_hclspecsuite",
+          "provenance": "generated by go test ./... according to campaign owner; retained in the immutable bundle",
+          "size_bytes": 8335672,
+          "sha256": "97c629c387d87398cf1895352f58849ccbda6fa1286145c88aa1595b54fff047"
+        }
+      ]
+    }
+  ]
+}

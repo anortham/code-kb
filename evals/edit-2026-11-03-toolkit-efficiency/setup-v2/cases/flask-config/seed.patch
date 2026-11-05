@@ -1,0 +1,12 @@
+diff --git a/src/flask/app.py b/src/flask/app.py
+index 0c5b20e..4437546 100644
+--- a/src/flask/app.py
++++ b/src/flask/app.py
+@@ -217,6 +217,7 @@ class Flask(App):
+             "SERVER_NAME": None,
+             "APPLICATION_ROOT": "/",
+             "SESSION_COOKIE_NAME": "session",
++            "SESSION_COOKIE_MAX_AGE": 0,
+             "SESSION_COOKIE_DOMAIN": None,
+             "SESSION_COOKIE_PATH": None,
+             "SESSION_COOKIE_HTTPONLY": True,

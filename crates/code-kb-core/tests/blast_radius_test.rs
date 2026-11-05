@@ -857,7 +857,7 @@ fn sites_the_index_cannot_tie_to_the_target_are_counted_instead_of_reporting_no_
         .collect();
     assert_eq!(
         impacted,
-        [("handle", Some("direct caller (find_references)"))]
+        [("handle", Some("direct reference (find_references)"))]
     );
     assert_eq!(result.callers_report.as_ref().unwrap().unresolved, 1);
     let text = format_blast_radius(&result);
@@ -1324,7 +1324,7 @@ fn add_test(conn: &Connection, test: &str, calls: &str) {
 }
 
 #[test]
-fn a_test_list_cut_by_the_depth_limit_says_how_many_more_tests_the_largest_depth_lists() {
+fn a_test_list_cut_by_the_depth_limit_counts_additional_distinct_test_rows() {
     let temp = safe_tempdir();
     let conn = open_read_write(&temp.path().join("index.db")).unwrap();
     setup_test_db(&conn);
@@ -1343,7 +1343,9 @@ fn a_test_list_cut_by_the_depth_limit_says_how_many_more_tests_the_largest_depth
     assert_eq!(res.stopped_at_depth, Some(2));
     assert_eq!(res.tests_past_depth, Some(1));
     assert!(
-        text.contains("The walk stopped at depth 2. A `depth` of 5 lists 1 more test."),
+        text.contains(
+            "The walk stopped at depth 2. A `depth` of 5 lists 1 additional distinct test row."
+        ),
         "{text}"
     );
 }
@@ -1676,9 +1678,9 @@ fn a_method_read_that_the_walk_cannot_follow_is_a_depth_one_impacted_symbol() {
             (
                 "__init_subclass__",
                 1,
-                Some("direct caller (find_references)")
+                Some("direct reference (find_references)")
             ),
-            ("handlers", 1, Some("direct caller (find_references)")),
+            ("handlers", 1, Some("direct reference (find_references)")),
             ("run", 2, None),
         ],
         "{text}"
@@ -1701,6 +1703,10 @@ fn a_method_read_joins_the_callers_the_walk_found_when_no_test_reaches_the_targe
     let result = blast_radius_op(&workspace, &conn, Some("App.handle_error"), None, 2, 20).unwrap();
 
     let text = format_blast_radius(&result);
+    assert!(
+        text.contains("method `__init_subclass__` [line 2] (direct reference (find_references))"),
+        "{text}"
+    );
     assert_eq!(
         impacted(&result),
         [
@@ -1708,9 +1714,9 @@ fn a_method_read_joins_the_callers_the_walk_found_when_no_test_reaches_the_targe
             (
                 "__init_subclass__",
                 1,
-                Some("direct caller (find_references)")
+                Some("direct reference (find_references)")
             ),
-            ("handlers", 1, Some("direct caller (find_references)")),
+            ("handlers", 1, Some("direct reference (find_references)")),
             ("run", 2, None),
         ],
         "{text}"
@@ -1746,9 +1752,9 @@ fn a_method_read_of_a_function_the_diff_changed_is_a_depth_one_impacted_symbol()
             (
                 "__init_subclass__",
                 1,
-                Some("direct caller (find_references)")
+                Some("direct reference (find_references)")
             ),
-            ("handlers", 1, Some("direct caller (find_references)")),
+            ("handlers", 1, Some("direct reference (find_references)")),
             ("run", 2, None),
         ],
         "{text}"
@@ -1783,7 +1789,7 @@ fn a_file_target_lists_a_reader_of_its_method_in_another_file_and_the_test_of_th
     let text = format_blast_radius(&result);
     assert_eq!(
         impacted(&result),
-        [("register", 1, Some("direct caller (find_references)"))],
+        [("register", 1, Some("direct reference (find_references)"))],
         "{text}"
     );
     assert_eq!(
@@ -1816,7 +1822,7 @@ fn a_typescript_file_target_lists_a_reader_of_its_method_in_another_file_and_its
     let text = format_blast_radius(&result);
     assert_eq!(
         impacted(&result),
-        [("register", 1, Some("direct caller (find_references)"))],
+        [("register", 1, Some("direct reference (find_references)"))],
         "{text}"
     );
     assert_eq!(
@@ -1855,7 +1861,7 @@ fn a_csharp_file_target_lists_a_method_group_reader_in_another_file_and_its_test
         [(
             "Register",
             1,
-            Some("direct caller (find_references, name only)")
+            Some("direct reference (find_references, name only)")
         )],
         "{text}"
     );
@@ -1907,7 +1913,7 @@ fn a_file_target_lists_an_untyped_member_read_when_the_walk_found_no_caller() {
     let text = format_blast_radius(&result);
     assert_eq!(
         impacted(&result),
-        [("collect", 1, Some("direct caller (find_references)"))],
+        [("collect", 1, Some("direct reference (find_references)"))],
         "{text}"
     );
 }
@@ -1934,7 +1940,7 @@ fn a_caller_the_report_moves_up_to_depth_one_leads_the_walk_to_its_test() {
         impacted(&result),
         [
             ("dispatch", 1, None),
-            ("run", 1, Some("direct caller (find_references)")),
+            ("run", 1, Some("direct reference (find_references)")),
         ],
         "{text}"
     );
@@ -1968,7 +1974,7 @@ fn a_typescript_caller_the_report_moves_up_to_depth_one_leads_the_walk_to_its_te
         impacted(&result),
         [
             ("dispatch", 1, None),
-            ("run", 1, Some("direct caller (find_references)")),
+            ("run", 1, Some("direct reference (find_references)")),
         ],
         "{text}"
     );
@@ -2004,7 +2010,7 @@ fn a_csharp_caller_the_report_moves_up_to_depth_one_leads_the_walk_to_its_test()
         impacted(&result),
         [
             ("Dispatch", 1, None),
-            ("Run", 1, Some("direct caller (find_references)")),
+            ("Run", 1, Some("direct reference (find_references)")),
         ],
         "{text}"
     );

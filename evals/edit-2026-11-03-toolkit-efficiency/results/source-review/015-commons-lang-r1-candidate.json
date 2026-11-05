@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "ordinal": 15,
+  "case_id": "commons-lang",
+  "repeat": 1,
+  "runtime": "candidate",
+  "attempt_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/candidate-v2/attempts/010-commons-lang-code-kb-r1/attempt.json",
+  "attempt_sha256": "8c1d423ffcb2d779f33f8428fe6ee2d5381b1d468b728c8b7745e39761a3af39",
+  "bundle_json_sha256": "59e7ab8c068debba0f8b30661a5c3bf65744bf2d676b867be1ff77d1c3ddf82c",
+  "source_review": "passed",
+  "source_behavior_passed": true,
+  "accepted": true,
+  "trial_completed": true,
+  "behavioral_pass": true,
+  "protection_status": "unchanged",
+  "review_note": "results/source-review/provisional-java-csharp/attempt-015-commons-lang-candidate-r1.json",
+  "review_note_sha256": "93c4dd2b273bb998cbcd9fa1cedc4eb52207b418fd6c8f58d243d1ae2e19e00a",
+  "lead_review": "Reviewed production diffs against seeds and source-review rationale; old entrypoints stay unchanged. A fresh trusted public replay used the actual added test classes, no hidden overlay and the identical patch digest. Its observed execution and pass/fail result below determine acceptance. Style observations on immutable model data are unscored.",
+  "added_tests": {
+    "fresh_public_replay": true,
+    "executed": true,
+    "passed": true,
+    "executed_count": 10,
+    "selector": "org.apache.commons.lang3.time.DateZoneIdTest",
+    "command": [
+      "/usr/bin/env",
+      "JAVA_HOME=/tools/java",
+      "PATH=/tools/java/bin:/tools/maven/bin:/usr/bin:/bin",
+      "/tools/maven/bin/mvn",
+      "-B",
+      "-o",
+      "-Dmaven.repo.local=/state/commons-m2",
+      "-Dtest=org.apache.commons.lang3.time.DateZoneIdTest",
+      "test"
+    ],
+    "observed_names": [
+      "org.apache.commons.lang3.time.DateZoneIdTest"
+    ],
+    "receipt": {
+      "path": "results/source-review/replay-commons-lang/commons-lang-r1-candidate/receipt.json",
+      "sha256": "c3fffb3983227ab974f2442b757ab0892d59a22b4137470f8d44241af83be7eb"
+    },
+    "logs": [
+      {
+        "path": "results/source-review/replay-commons-lang/commons-lang-r1-candidate/logs/selected-tests.stdout.log",
+        "sha256": "f7f362e5a9f91351d1ee93022776df8af065c42b69f6de825ddea596e275481a"
+      },
+      {
+        "path": "results/source-review/replay-commons-lang/commons-lang-r2-native/logs/runtime-00-commons-copy-prepared-maven-cache.stdout.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ]
+  },
+  "rejection_reasons": [],
+  "original_record_unchanged": true
+}

@@ -1,0 +1,3 @@
+Add `TryToDateTimeOffset(out DateTimeOffset)` to `Instant` and `OffsetDateTime`. Return true with the same value as `ToDateTimeOffset` when conversion succeeds. Return false and set the out value to the default `DateTimeOffset` when the instant/date or offset is outside the BCL range. Preserve the current truncation of sub-tick precision toward the start of time and the current handling of non-Gregorian calendars. Keep `ToDateTimeOffset` behavior unchanged.
+
+Add public NUnit tests for successful conversions, precision truncation, an instant outside the BCL date range, an offset date outside that range, and an unsupported offset.

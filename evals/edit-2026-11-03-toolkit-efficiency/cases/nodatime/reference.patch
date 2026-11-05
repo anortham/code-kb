@@ -1,0 +1,153 @@
+diff --git a/src/NodaTime.Test/TryDateTimeOffsetTest.cs b/src/NodaTime.Test/TryDateTimeOffsetTest.cs
+new file mode 100644
+index 0000000..3198840
+--- /dev/null
++++ b/src/NodaTime.Test/TryDateTimeOffsetTest.cs
+@@ -0,0 +1,75 @@
++// Copyright 2026 The Noda Time Authors. All rights reserved.
++// Use of this source code is governed by the Apache License 2.0,
++// as found in the LICENSE.txt file.
++
++using System;
++using NodaTime;
++using NUnit.Framework;
++
++namespace NodaTime.Test;
++
++[TestFixture]
++public sealed class TryDateTimeOffsetTest
++{
++    [Test]
++    public void InstantConvertsInRangeAndTruncatesNanos()
++    {
++        var instant = Instant.FromUtc(2024, 7, 1, 12, 0).PlusNanoseconds(NodaConstants.NanosecondsPerSecond - 1);
++
++        Assert.That(instant.TryToDateTimeOffset(out var result), Is.True);
++        Assert.That(result, Is.EqualTo(new DateTimeOffset(2024, 7, 1, 12, 0, 0, TimeSpan.Zero).AddTicks(NodaConstants.TicksPerSecond - 1)));
++    }
++
++    [Test]
++    public void InstantReturnsFalseOutsideBclRange()
++    {
++        var instant = Instant.FromUtc(1, 1, 1, 0, 0).PlusNanoseconds(-1);
++
++        Assert.That(instant.TryToDateTimeOffset(out var result), Is.False);
++        Assert.That(result, Is.EqualTo(default(DateTimeOffset)));
++    }
++
++    [Test]
++    public void InstantConvertsAtUpperBclBoundary()
++    {
++        Assert.That(Instant.MaxValue.TryToDateTimeOffset(out var result), Is.True);
++        Assert.That(result, Is.EqualTo(new DateTimeOffset(DateTime.MaxValue.Ticks, TimeSpan.Zero)));
++    }
++
++    [Test]
++    public void OffsetDateTimeConvertsInRange()
++    {
++        var value = new LocalDateTime(2024, 7, 1, 12, 0).WithOffset(Offset.FromHours(5));
++
++        Assert.That(value.TryToDateTimeOffset(out var result), Is.True);
++        Assert.That(result, Is.EqualTo(new DateTimeOffset(2024, 7, 1, 12, 0, 0, TimeSpan.FromHours(5))));
++    }
++
++    [Test]
++    public void OffsetDateTimeReturnsFalseForLocalDatesOutsideBclRange()
++    {
++        var value = new LocalDate(1, 1, 1).PlusDays(-1).AtMidnight().WithOffset(Offset.FromHours(1));
++
++        Assert.That(value.TryToDateTimeOffset(out var result), Is.False);
++        Assert.That(result, Is.EqualTo(default(DateTimeOffset)));
++    }
++
++    [Test]
++    public void OffsetDateTimePreservesNonGregorianCalendarConversion()
++    {
++        var local = new LocalDateTime(2012, 6, 19, 1, 2, 3, CalendarSystem.Julian).PlusNanoseconds(123456789);
++        var value = local.WithOffset(Offset.FromHours(5));
++
++        Assert.That(value.TryToDateTimeOffset(out var result), Is.True);
++        Assert.That(result, Is.EqualTo(value.ToDateTimeOffset()));
++    }
++
++    [Test]
++    public void OffsetDateTimeReturnsFalseForUnsupportedOffsets()
++    {
++        var value = new LocalDateTime(2024, 7, 1, 12, 0).WithOffset(Offset.FromHours(15));
++
++        Assert.That(value.TryToDateTimeOffset(out var result), Is.False);
++        Assert.That(result, Is.EqualTo(default(DateTimeOffset)));
++    }
++}
+diff --git a/src/NodaTime/Instant.cs b/src/NodaTime/Instant.cs
+index 5c989b9..715293f 100644
+--- a/src/NodaTime/Instant.cs
++++ b/src/NodaTime/Instant.cs
+@@ -582,15 +582,28 @@ public readonly struct Instant : IEquatable<Instant>, IComparable<Instant>, IFor
+     }
+ 
+     /// <summary>
+-    /// Attempts to convert this value to a <see cref="DateTimeOffset"/>.
++    /// Attempts to convert this instant to a <see cref="DateTimeOffset"/>.
+     /// </summary>
+     /// <param name="result">The converted value, or the default value if conversion is not possible.</param>
+     /// <returns>True if conversion succeeded; otherwise, false.</returns>
+     [Pure]
+     public bool TryToDateTimeOffset(out DateTimeOffset result)
+     {
+-        result = default;
+-        return false;
++        try
++        {
++            result = ToDateTimeOffset();
++            return true;
++        }
++        catch (InvalidOperationException)
++        {
++            result = default;
++            return false;
++        }
++        catch (ArgumentOutOfRangeException)
++        {
++            result = default;
++            return false;
++        }
+     }
+ 
+     /// <summary>
+diff --git a/src/NodaTime/OffsetDateTime.cs b/src/NodaTime/OffsetDateTime.cs
+index 629c691..e71dae1 100644
+--- a/src/NodaTime/OffsetDateTime.cs
++++ b/src/NodaTime/OffsetDateTime.cs
+@@ -336,15 +336,28 @@ public readonly struct OffsetDateTime : IEquatable<OffsetDateTime>, IFormattable
+     }
+ 
+     /// <summary>
+-    /// Attempts to convert this value to a <see cref="DateTimeOffset"/>.
++    /// Attempts to convert this offset date and time to a <see cref="DateTimeOffset"/>.
+     /// </summary>
+     /// <param name="result">The converted value, or the default value if conversion is not possible.</param>
+     /// <returns>True if conversion succeeded; otherwise, false.</returns>
+     [Pure]
+     public bool TryToDateTimeOffset(out DateTimeOffset result)
+     {
+-        result = default;
+-        return false;
++        try
++        {
++            result = ToDateTimeOffset();
++            return true;
++        }
++        catch (InvalidOperationException)
++        {
++            result = default;
++            return false;
++        }
++        catch (ArgumentOutOfRangeException)
++        {
++            result = default;
++            return false;
++        }
+     }
+ 
+     /// <summary>

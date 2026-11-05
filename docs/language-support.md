@@ -4,7 +4,7 @@
 language conformance test reads the installed `julie-extract languages --json`
 report at runtime, then checks that both the fixture directory set and
 `evals/languages/fixtures.json` match it. The current pinned report is Julie
-3.11.0 with 42 language IDs.
+3.12.0 with 42 language IDs.
 
 Fixture sources live under `evals/languages/tests/<language>/` so they are
 excluded from this repository's default searches. Paths in the table and
@@ -83,6 +83,28 @@ The operation codes describe fixture assertions:
 - Erlang's exported function name occurs in both the export attribute and declaration. Its refresh changes both declaration-bearing occurrences while leaving the caller's old call in place so edit-check evidence remains meaningful.
 - `gosum` is an intentional no-symbol fixture. Its checksum is changed and rescanned; no symbol, body, or caller is expected.
 
+## Julie 3.12 corrected facts
+
+The [3.12.0 release](https://github.com/anortham/julie-extractors/releases/tag/v3.12.0)
+keeps SQLite schema 8 and extracted-data contract v4. Code-kb rebuilds an index
+written by an older extractor before serving it. That refresh brings corrected
+declaration body ownership, parameter spans, syntax-aware body hashes, and
+source-bound access, type, import, and annotation facts into the existing tools.
+The 42 language IDs and five capability flags per language are unchanged from
+3.11.0; the flags do not describe the depth of these corrections.
+
+Code-kb keeps `references` extraction, including annotations. The new XML/XSLT
+complexity metrics require `full` extraction and are outside the current tool
+surface. Python calls through subscripted callables such as
+`callbacks["key"]()` remain an upstream extraction gap; this upgrade does not
+establish caller coverage for them. The existing conservative proof rules still
+apply to indirect calls and ambiguous receivers. Bodyless TypeScript and TSX
+abstract/interface ancestors keep their override's argument range unknown;
+concrete ancestors still widen that range. The public 3.12 extractor still
+marks a T-SQL `SELECT @variable = expression` assignment as `read`; code-kb
+currently preserves that incorrect access tag. The new access regression covers
+`SET` assignments and compound assignments, not `SELECT` assignment writes.
+
 ## Targeted semantic coverage beyond the matrix
 
 The 42-language matrix checks one representative declaration and refresh path
@@ -92,6 +114,10 @@ language or every grammar form.
 
 | Area | Dedicated cases | Test file |
 | --- | --- | --- |
+| Corrected declaration body ownership | C typedef aliases, Go function-type parameters and interface methods, Swift function-type parameters, and HTML external versus inline scripts retain the correct body spans through body/context APIs and skeleton output. | [`extractor_312_body_test.rs`](../crates/code-kb-core/tests/extractor_312_body_test.rs) |
+| Corrected grammar and fact consumers | Erlang macro catch recovery; parent-relative PowerShell imports and occurrence access; T-SQL routine signatures, bodies, `SET` access and the `NEXT VALUE FOR` non-reference; VB.NET adjacent parameter attributes and method conventions. Erlang local occurrences have no public symbol target. | [`extractor_312_facts_test.rs`](../crates/code-kb-core/tests/extractor_312_facts_test.rs) |
+| PowerShell module exports | Default function exports, explicit comma lists, export-all, empty/dynamic/variable exports, and nested module re-exports. Each module import edge needs export evidence for the queried function; uncertain visibility stays unproven. | [`powershell_exports_test.rs`](../crates/code-kb-core/tests/powershell_exports_test.rs) |
+| Syntax-aware rename matching | Rust nested block comments, F# and PowerShell block comments, and C# interpolation-code comments retain rename evidence. Lua long-bracket comments and formatting remain accepted controls; changed literal data cannot establish a rename. | [`extractor_312_rename_test.rs`](../crates/code-kb-core/tests/extractor_312_rename_test.rs) |
 | Named arguments and accepted parameter ranges | Renamed named parameters, positional-only changes, required versus defaulted formals, optional and variadic ranges, external labels, language-specific name matching, and permissive calls. Examples: `kotlin_required_formal_after_a_default_reports_calls_that_leave_it_unbound`, `php_variadic_formals_do_not_narrow_extra_argument_acceptance`, and `swift_external_label_renames_report_the_old_call`. PHP extra positional arguments remain accepted; the variadic case does not imply a strict maximum. | [`edit_check_arguments_test.rs`](../crates/code-kb-core/tests/edit_check_arguments_test.rs) |
 | Construction and field edits | Kotlin/Scala/C# primary constructors, Swift memberwise initialization, C/C++ aggregates, Zig structs, F# records, Elixir structs, and Ruby keyword structs; required/defaulted additions and named/positional removals; Python and Java reads of a removed field through a typed parameter or `self`, proven only when the receiver binds the owner. Examples: `a_kotlin_data_class_reports_only_a_missing_required_primary_property`, `a_cpp_designated_initializer_reports_removed_members_but_accepts_additions_and_custom_constructors`, `an_fsharp_typed_record_literal_needs_added_fields_but_a_copy_update_does_not`, and `a_removed_python_attribute_read_through_a_typed_parameter_is_proven`. | [`edit_check_fields_test.rs`](../crates/code-kb-core/tests/edit_check_fields_test.rs) |
 | Member reads and callable values | Python and JavaScript member reads, inherited/same-name owner negatives, CSS custom properties and selector composition, embedded HTML calls, C# constants, and callback-value dependencies. Examples: `removing_an_fsharp_record_field_reports_only_its_typed_literal`, `removing_a_css_custom_property_reports_its_reference`, `a_resolved_call_inside_html_is_a_reference_site`, and `a_changed_callable_reports_a_value_dependency_without_proving_a_broken_call`. | [`edit_check_members_test.rs`](../crates/code-kb-core/tests/edit_check_members_test.rs) |

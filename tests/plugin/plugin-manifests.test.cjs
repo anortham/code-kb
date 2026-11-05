@@ -117,6 +117,22 @@ test('every manifest carries the same version', () => {
   assert.equal(versions.size, 1, [...versions].join(', '));
 });
 
+test('cargo-binstall downloads the published archive format for every release target', () => {
+  const result = childProcess.spawnSync('cargo', ['metadata', '--no-deps', '--format-version', '1', '--locked'], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const metadata = JSON.parse(result.stdout).packages.find((pkg) => pkg.name === 'code-kb-cli').metadata.binstall;
+  const workflow = fs.readFileSync(path.join(root, '.github/workflows/release-binaries.yml'), 'utf8');
+  const targets = [...workflow.matchAll(/^\s+target: ([a-z0-9_-]+)$/gm)].map((match) => match[1]);
+  assert.equal(targets.length, 6);
+  for (const target of targets) {
+    const format = metadata.overrides?.[target]?.['pkg-fmt'] ?? metadata['pkg-fmt'];
+    assert.equal(format, target.includes('-windows-') ? 'zip' : 'tgz', target);
+  }
+});
+
 test('the release gate requires green exact-commit CI and matching versions', { skip: process.platform === 'win32' && 'uses POSIX shell fixtures for an Ubuntu workflow' }, () => {
   const version = read('.claude-plugin/plugin.json').version;
   assert.equal(runReleaseGate().status, 0);

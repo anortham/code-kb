@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "manifest_sha256": "528584905a6ec1f50429835c0ee3f82d0b76586b5eaaa01d1a4294e413d385a4",
+  "schedule_sha256": "11164ff0be45a489159372f2eb31789774d6f1888f5e316de8b158a7a0b0b805",
+  "runtime_bindings_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/control/runtime-bindings-candidate.json",
+  "runtime_bindings_sha256": "b6ebb1275ef0866f09206540dba9b445653d328d900eb692a9bedb49dba3072a",
+  "artifact_paths_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/control/artifact-paths-candidate-v2.json",
+  "artifact_paths_sha256": "048bf5a40836d96c2793e88c012313f04290e82982c60cbcc920e70f392e79c3",
+  "validation": {
+    "valid": true,
+    "case_count": 6,
+    "scored_calls": 24
+  },
+  "model_dispatches_at_binding": 0,
+  "setup_amendment": "setup-v2/protocol-amendment.md"
+}

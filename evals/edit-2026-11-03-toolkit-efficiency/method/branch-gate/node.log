@@ -1,0 +1,36 @@
+code-kb-launcher: first launch of code-kb 9.9.9: downloading http://127.0.0.1:40239/code-kb-v9.9.9-x86_64-unknown-linux-gnu.tar.gz
+✔ detectPlatform maps the six release targets (2.385005ms)
+✔ release asset names and URLs follow the Release Binaries workflow (0.292612ms)
+✔ the launcher reads the plugin version from the Claude plugin manifest (0.373664ms)
+✔ parseSha256Sidecar reads the checksum the workflow writes and rejects garbage (0.404429ms)
+✔ validateArchiveEntryNames rejects traversal and absolute paths (1.581992ms)
+code-kb-launcher: ready: /tmp/code-kb-cache-gG2E7F/9.9.9/x86_64-unknown-linux-gnu/package/code-kb
+code-kb-launcher: first launch of code-kb 9.9.9: downloading http://127.0.0.1:40031/code-kb-v9.9.9-x86_64-unknown-linux-gnu.tar.gz
+✔ ensureBinary downloads, verifies, extracts once, and then hits the cache (55.865295ms)
+code-kb-launcher: first launch of code-kb 1.0.2: downloading http://127.0.0.1:45321/code-kb-v1.0.2-x86_64-unknown-linux-gnu.tar.gz
+✔ ensureBinary refuses an archive whose checksum does not match the sidecar (13.975463ms)
+code-kb-launcher: ready: /tmp/code-kb-cache-2KVjnA/1.0.2/x86_64-unknown-linux-gnu/package/code-kb
+code-kb-launcher: first launch of code-kb 9.9.9: downloading http://127.0.0.1:42837/code-kb-v9.9.9-x86_64-unknown-linux-gnu.tar.gz
+✔ ensureBinary keeps only one older cached version (20.29466ms)
+✔ the launcher passes its arguments through to the binary named by CODE_KB_BIN (30.562678ms)
+✔ the launcher runs the release build of its own checkout before downloading anything (63.93766ms)
+✔ a binary at <CODE_KB_HOME>/bin/code-kb overrides the download and the checkout build (59.958618ms)
+code-kb-launcher: download attempt 1/3 failed, retrying: Failed to download http://127.0.0.1:42837/code-kb-v9.9.9-x86_64-unknown-linux-gnu.tar.gz.sha256: HTTP 404
+code-kb-launcher: download attempt 2/3 failed, retrying: Failed to download http://127.0.0.1:42837/code-kb-v9.9.9-x86_64-unknown-linux-gnu.tar.gz.sha256: HTTP 404
+✔ ensureBinary leaves no empty version directory when the release is missing (20.918432ms)
+✔ newestCachedBinary picks the highest other cached version that has a binary (1.740451ms)
+✔ the Claude plugin starts the server and hooks through the launcher (1.374558ms)
+✔ the Stop and SubagentStop hooks run the edit check on every stop (0.20712ms)
+✔ the Codex plugin starts the server through the launcher (0.179555ms)
+✔ the Antigravity plugin starts the server and hook through the launcher (0.217934ms)
+✔ every manifest carries the same version (0.184469ms)
+✔ the release gate requires green exact-commit CI and matching versions (109.039646ms)
+✔ the manifest version reaches the crate, the workflow, the site, and the release notes (1.079092ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 20
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 356.928751

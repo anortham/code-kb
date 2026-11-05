@@ -2,9 +2,9 @@
 
 This guide details the end-to-end release process for `code-kb`. Any agent or maintainer can follow these reproducible steps to publish a new release.
 
-Current published release: [v2.12.0](https://github.com/anortham/code-kb/releases/tag/v2.12.0),
-bundling Julie 3.11.0. See the [release notes](release-notes/v2.12.0.md) and the
-[dogfood round](reviews/2026-10-31-v2.12.0-dogfood.md).
+The [latest published release](https://github.com/anortham/code-kb/releases/latest) lists its
+bundled Julie version and release notes. Source-controlled release notes live in
+[`release-notes/`](release-notes/), and dogfood reports live in [`reviews/`](reviews/).
 
 ---
 
@@ -73,7 +73,7 @@ Run the automated pre-flight script, or execute each check manually:
    Ruby, and the julie fixtures for the other languages). Run it on the local version-bump commit
    (section 3), because the report must be newer than `HEAD` and name the new version.
    ```bash
-   PREV=2.1.0   # the previous release
+   PREV=2.12.0   # replace with the latest published version before this release
    mkdir -p ~/.code-kb/search-eval/bin/v$PREV && cd ~/.code-kb/search-eval/bin/v$PREV
    gh release download v$PREV -R anortham/code-kb -p '*x86_64-unknown-linux-gnu*' --clobber
    sha256sum -c *.sha256 && tar xzf *.tar.gz && cd -

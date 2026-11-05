@@ -1,0 +1,24 @@
+   Compiling code-kb-cli v2.12.0 (/home/murphy/.codex/worktrees/dd7b/code-kb/crates/code-kb-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.55s
+     Running tests/mcp_test.rs (target/debug/deps/mcp_test-6ff713435b3c6f70)
+
+running 1 test
+test test_mcp_blast_radius_stdio_handshake_and_tools ... FAILED
+
+failures:
+
+---- test_mcp_blast_radius_stdio_handshake_and_tools stdout ----
+
+thread 'test_mcp_blast_radius_stdio_handshake_and_tools' (2615242) panicked at crates/code-kb-cli/tests/mcp_test.rs:700:5:
+assertion failed: resp["result"]["instructions"].as_str().is_some_and(|instructions|
+        instructions ==
+            "Pass project_root, the absolute path of the project or git worktree you work in, on every call. Follow each tool's description for navigation and edit checks.")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    test_mcp_blast_radius_stdio_handshake_and_tools
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 65 filtered out; finished in 0.09s
+
+error: test failed, to rerun pass `-p code-kb-cli --test mcp_test`

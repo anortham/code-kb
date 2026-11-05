@@ -1,0 +1,365 @@
+{
+  "behavioral_pass": true,
+  "case_id": "commons-lang",
+  "case_sha256": "f5bcc4a9f9f1c631d17a5934ffc91de72cf4157bdbf1b8b2cacf784cfe21960f",
+  "checks": {
+    "baseline_public": {
+      "commands": [
+        {
+          "command_id": "commons-date-utils-calendar-regressions",
+          "elapsed_seconds": 18.201055,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/baseline-public-00-commons-date-utils-calendar-regressions/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/baseline-public-00-commons-date-utils-calendar-regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        },
+        {
+          "command_id": "commons-date-format-regressions",
+          "elapsed_seconds": 10.449334,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/baseline-public-01-commons-date-format-regressions/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/baseline-public-01-commons-date-format-regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "baseline_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "commons-copy-prepared-maven-cache",
+          "elapsed_seconds": 0.616081,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/runtime-baseline-00-commons-copy-prepared-maven-cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/runtime-baseline-00-commons-copy-prepared-maven-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "commons-resolve-dependencies-offline",
+          "elapsed_seconds": 3.120458,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/runtime-baseline-01-commons-resolve-dependencies-offline/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/runtime-baseline-01-commons-resolve-dependencies-offline/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "commons-surefire-provider-offline-cache",
+          "elapsed_seconds": 1.717607,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/runtime-baseline-02-commons-surefire-provider-offline-cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/runtime-baseline-02-commons-surefire-provider-offline-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "preparation": {
+      "commands": [],
+      "mode": "reused-inputs",
+      "passed": true
+    },
+    "reference_hidden": {
+      "commands": [
+        {
+          "command_id": "zone-id-interop-contract",
+          "elapsed_seconds": 13.397593,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/reference-hidden-00-zone-id-interop-contract/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/reference-hidden-00-zone-id-interop-contract/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_hidden_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "commons-copy-prepared-maven-cache",
+          "elapsed_seconds": 0.565823,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/runtime-reference-hidden-00-commons-copy-prepared-maven-cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/runtime-reference-hidden-00-commons-copy-prepared-maven-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "commons-resolve-dependencies-offline",
+          "elapsed_seconds": 3.321461,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/runtime-reference-hidden-01-commons-resolve-dependencies-offline/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/runtime-reference-hidden-01-commons-resolve-dependencies-offline/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "commons-surefire-provider-offline-cache",
+          "elapsed_seconds": 1.768028,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/runtime-reference-hidden-02-commons-surefire-provider-offline-cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/runtime-reference-hidden-02-commons-surefire-provider-offline-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_public": {
+      "commands": [
+        {
+          "command_id": "commons-date-utils-calendar-regressions",
+          "elapsed_seconds": 13.99709,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/reference-public-00-commons-date-utils-calendar-regressions/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/reference-public-00-commons-date-utils-calendar-regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        },
+        {
+          "command_id": "commons-date-format-regressions",
+          "elapsed_seconds": 8.842151,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/reference-public-01-commons-date-format-regressions/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/reference-public-01-commons-date-format-regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_public_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "commons-copy-prepared-maven-cache",
+          "elapsed_seconds": 1.537073,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/runtime-reference-public-00-commons-copy-prepared-maven-cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/runtime-reference-public-00-commons-copy-prepared-maven-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "commons-resolve-dependencies-offline",
+          "elapsed_seconds": 6.591317,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/runtime-reference-public-01-commons-resolve-dependencies-offline/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/runtime-reference-public-01-commons-resolve-dependencies-offline/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "commons-surefire-provider-offline-cache",
+          "elapsed_seconds": 3.324273,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/runtime-reference-public-02-commons-surefire-provider-offline-cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/runtime-reference-public-02-commons-surefire-provider-offline-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "seed_hidden_failure": {
+      "commands": [
+        {
+          "command_id": "zone-id-interop-contract",
+          "elapsed_seconds": 25.114624,
+          "exit_status": 1,
+          "expected_output_missing": [
+            "Tests run: 4, Failures: 0, Errors: 0, Skipped: 0"
+          ],
+          "passed": false,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/seed-hidden-00-zone-id-interop-contract/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/seed-hidden-00-zone-id-interop-contract/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "seed_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "commons-copy-prepared-maven-cache",
+          "elapsed_seconds": 0.515905,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/runtime-seed-00-commons-copy-prepared-maven-cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/runtime-seed-00-commons-copy-prepared-maven-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "commons-resolve-dependencies-offline",
+          "elapsed_seconds": 3.224481,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/runtime-seed-01-commons-resolve-dependencies-offline/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/runtime-seed-01-commons-resolve-dependencies-offline/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "commons-surefire-provider-offline-cache",
+          "elapsed_seconds": 2.487372,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/runtime-seed-02-commons-surefire-provider-offline-cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/evidence/runtime-seed-02-commons-surefire-provider-offline-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    }
+  },
+  "created_utc": "2026-11-04T01:33:01Z",
+  "dependencies": {
+    "commons-m2": "cd2d5dbf77c5e1e38296de7e5393ae46743b745775eb15c898ddec17c5504f65"
+  },
+  "readiness_error": null,
+  "reference_bundle_path": "evidence/reference-bundle",
+  "reference_digest": "7909e378ad56e0c342de540a2cca537b225adfe810936614b7be134f81d2d7bc",
+  "reference_production_files_changed": [
+    "src/main/java/org/apache/commons/lang3/time/DateFormatUtils.java",
+    "src/main/java/org/apache/commons/lang3/time/DateUtils.java"
+  ],
+  "repo_id": "commons-lang",
+  "schema": 1,
+  "seed_digest": "45360d445c673c6a4ecbd8d32de4afaa701841fd9638caa6668846f10af5b3e3",
+  "seed_project_path": "work/seed-project",
+  "source_pin": "a5d6c5ed8847b2b14dacf062b646f94d6cc61a10",
+  "source_review": "passed",
+  "source_tree_sha256": "6a3a572d1f84211a81c0f35e0caf78069900ff6562794ba90afb2f3c7a05d402",
+  "status": "ready",
+  "source_review_evidence": "source-review.md",
+  "raw_readiness_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/readiness.json",
+  "raw_readiness_sha256": "49ba8e01dd4841211e0da2d6d51c30911fb9cf33db9b76cf2a96d04fae737e5c",
+  "independent_source_review": "Reviewed both ZoneId entrypoints delegating existing conversion/formatting with explicit non-null zones. DST, fixed offset, epoch preservation, unchanged Date, and null behavior are checked. Four separate public reference tests pass."
+}

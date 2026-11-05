@@ -1,0 +1,9 @@
+# Ordinal 23 — Express current, repeat 2
+
+- Provisional source review: **PASS**. Lead owns final acceptance.
+- Attempt: `target/toolkit-efficiency/campaign/current-v2/attempts/015-express-route-code-kb-r2`.
+- Attempt `attempt.json` SHA-256: `f49ce54a8e0c4bbdcf661ac4e7787f1ccf7aa6ce2e9f7e62a8540b75a0b1b38a` (matches `status.json.outcome_sha256`). Bundle JSON SHA-256: `d364e3577b2e91992d51cd64990f30fd8913a266ed6ebf008937213e3efb29db`. Seed digest: `ad2fb07c2954951a089b29f3f8f0ec9356fac82259d13009890343770b1e455a`; replay digest: `4699c7b7bfef6aec7a25c0dac405d48691d74e4f366158de7e16cecb7f795fe0`.
+- Reviewed immutable bundle diff against its seed. It changes only `lib/application.js`, `lib/utils.js`, and new `test/query-parser-depth.js`. Bundle violations are empty, `seed_unchanged` is true, patch is valid, and protection is `unchanged`.
+- Implementation validates depth before mutating settings, supplies it to the built-in extended parser, refreshes that parser when depth changes, and leaves other parser modes intact.
+- Public tests cover default depth and simple default, extended depth behavior and changes between later requests, zero and above-default values, parser-mode changes, simple/true/disabled/custom parser preservation, and invalid values while checking old state remains usable. Trusted configured public replay `evidence/grade/grade-008-stdout_log.log` shows all 36 tests passing, including every added module case. Hidden replay `grade-010-stdout_log.log` shows all 7 hidden tests passing.
+- No implementation or acceptance gap found against the frozen request. The answer reports its own HTTP attempts were blocked by `EPERM`; this can coexist with the separate trusted grader replay passing. The answer's additional 46-test/in-process checks are outside configured replay evidence and were not used. It makes no safe/no-caller claim.
