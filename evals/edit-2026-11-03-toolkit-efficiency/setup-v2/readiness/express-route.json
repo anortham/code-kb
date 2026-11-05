@@ -1,0 +1,270 @@
+{
+  "behavioral_pass": true,
+  "case_id": "express-route",
+  "case_sha256": "5eb6b0c77d26d70b8eeceff5967b04db18afbe6f0f3faf8339138a09aac6bc1b",
+  "checks": {
+    "baseline_public": {
+      "commands": [
+        {
+          "command_id": "focused_public_regressions",
+          "elapsed_seconds": 0.415101,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/evidence/baseline-public-00-focused_public_regressions/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/evidence/baseline-public-00-focused_public_regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "baseline_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "materialize_node_dependencies",
+          "elapsed_seconds": 0.164547,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/evidence/runtime-baseline-00-materialize_node_dependencies/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/evidence/runtime-baseline-00-materialize_node_dependencies/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "copy_node_dependencies",
+          "elapsed_seconds": 0.364653,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/evidence/runtime-baseline-01-copy_node_dependencies/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/evidence/runtime-baseline-01-copy_node_dependencies/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "preparation": {
+      "commands": [],
+      "mode": "reused-inputs",
+      "passed": true
+    },
+    "reference_hidden": {
+      "commands": [
+        {
+          "command_id": "query_parser_depth",
+          "elapsed_seconds": 0.36508,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/evidence/reference-hidden-00-query_parser_depth/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/evidence/reference-hidden-00-query_parser_depth/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_hidden_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "materialize_node_dependencies",
+          "elapsed_seconds": 0.11444,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/evidence/runtime-reference-hidden-00-materialize_node_dependencies/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/evidence/runtime-reference-hidden-00-materialize_node_dependencies/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "copy_node_dependencies",
+          "elapsed_seconds": 0.314674,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/evidence/runtime-reference-hidden-01-copy_node_dependencies/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/evidence/runtime-reference-hidden-01-copy_node_dependencies/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_public": {
+      "commands": [
+        {
+          "command_id": "focused_public_regressions",
+          "elapsed_seconds": 0.414985,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/evidence/reference-public-00-focused_public_regressions/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/evidence/reference-public-00-focused_public_regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_public_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "materialize_node_dependencies",
+          "elapsed_seconds": 0.114389,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/evidence/runtime-reference-public-00-materialize_node_dependencies/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/evidence/runtime-reference-public-00-materialize_node_dependencies/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "copy_node_dependencies",
+          "elapsed_seconds": 0.314666,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/evidence/runtime-reference-public-01-copy_node_dependencies/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/evidence/runtime-reference-public-01-copy_node_dependencies/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "seed_hidden_failure": {
+      "commands": [
+        {
+          "command_id": "query_parser_depth",
+          "elapsed_seconds": 0.414852,
+          "exit_status": 1,
+          "expected_output_missing": [],
+          "passed": false,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/evidence/seed-hidden-00-query_parser_depth/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/evidence/seed-hidden-00-query_parser_depth/stdout.log",
+          "test_execution_observed": false,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "seed_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "materialize_node_dependencies",
+          "elapsed_seconds": 0.114688,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/evidence/runtime-seed-00-materialize_node_dependencies/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/evidence/runtime-seed-00-materialize_node_dependencies/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "copy_node_dependencies",
+          "elapsed_seconds": 0.315145,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/evidence/runtime-seed-01-copy_node_dependencies/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/evidence/runtime-seed-01-copy_node_dependencies/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    }
+  },
+  "created_utc": "2026-11-04T01:21:23Z",
+  "dependencies": {
+    "node-modules": "9d088d16e158b0fdf10ec95c6538484d2685661959fe3ebc2d33fb16ec604731"
+  },
+  "readiness_error": null,
+  "reference_bundle_path": "evidence/reference-bundle",
+  "reference_digest": "5a8186af1bc2d4cbadf6719b860c9980b08c8de9d91a7950aba3a208a3e6aa6c",
+  "reference_production_files_changed": [
+    "lib/application.js",
+    "lib/utils.js"
+  ],
+  "repo_id": "express-route",
+  "schema": 1,
+  "seed_digest": "ad2fb07c2954951a089b29f3f8f0ec9356fac82259d13009890343770b1e455a",
+  "seed_project_path": "work/seed-project",
+  "source_pin": "bed501c695a61886399ee622875f3be933c716d8",
+  "source_review": "passed",
+  "source_tree_sha256": "0c1ef528f520f0718c51c66762f3316ffb4f1fe9e449c256542bb69d23ffeab7",
+  "status": "ready",
+  "source_review_evidence": "../../readiness/source-review.md",
+  "raw_readiness_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-6/express-route/readiness.json",
+  "raw_readiness_sha256": "17af1ac07d2d2a79f2ca29b11b7bb320d7223cf270eae9b4e79ad6a4d0304418",
+  "independent_source_review": "Reviewed validation before mutation, depth-default binding, recompilation after depth changes, zero-depth routes, and simple/disabled/custom parser preservation. New route tests and seven independent hidden checks pass.",
+  "setup_parent_readiness_path": "readiness/express-route.json",
+  "setup_parent_readiness_sha256": "9b8a0a73337dc0e4ca48ae8941dfe95c2d6f25f4fa1e61a90ff29570b0f7bb16",
+  "setup_amendment": "Managed .code-kb metadata only; task, checks, protected inputs, seed, source and both arm prompts unchanged."
+}

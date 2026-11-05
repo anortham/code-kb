@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "decided_utc": "2026-11-04T04:44:21.807601+00:00",
+  "decision": "rejected-and-restored",
+  "reason": "Fails frozen current-comparison total-input and index-inclusive-time thresholds; also fails native savings gate.",
+  "candidate_source_commit": "3dc4d5d8c8668740bfb9b3a74b95facd1f2bdaf3",
+  "candidate_runtime_sha256": "38674d8ba835960335f4120acb3822a6b7105eb2672e173b0454dce3e0a68e75",
+  "patch_path": "results/candidate.patch",
+  "patch_sha256": "14bcfeddac094de67edb34e2c0ad3e6c8f76988da3dc4ecf1f2bac6859d1fab1",
+  "restored_baseline": "f290fdca44cec942ae6f50265e21da9f37fca836",
+  "restored_files_byte_identical_to_baseline": [
+    "crates/code-kb-cli/src/mcp/server.rs",
+    "crates/code-kb-cli/tests/mcp_test.rs"
+  ],
+  "restoration_test": {
+    "target": "test_mcp_blast_radius_stdio_handshake_and_tools",
+    "red_exit": 101,
+    "green_exit": 0,
+    "red_log": "method/k3/restore-red.log",
+    "green_log": "method/k3/restore-green.log"
+  },
+  "gates": {
+    "candidate_vs_current": {
+      "status": "fail",
+      "quality_passed": true,
+      "metrics": {
+        "input_tokens": {
+          "candidate": 7461801,
+          "baseline": 6518315,
+          "ratio": 1.1447438486786845,
+          "maximum_ratio": 0.95,
+          "passed": false
+        },
+        "uncached_input_tokens": {
+          "candidate": 512937,
+          "baseline": 548907,
+          "ratio": 0.9344697735682,
+          "maximum_ratio": 0.95,
+          "passed": true
+        },
+        "index_inclusive_seconds": {
+          "candidate": 1917.6397530000002,
+          "baseline": 1737.84497,
+          "ratio": 1.103458470751853,
+          "maximum_ratio": 1.05,
+          "passed": false
+        }
+      },
+      "missing": []
+    },
+    "candidate_vs_native": {
+      "status": "fail",
+      "quality_passed": true,
+      "metrics": {
+        "input_tokens": {
+          "candidate": 7461801,
+          "baseline": 3758042,
+          "ratio": 1.985555510023571,
+          "maximum_ratio": 0.95,
+          "passed": false
+        },
+        "uncached_input_tokens": {
+          "candidate": 512937,
+          "baseline": 327386,
+          "ratio": 1.566765225147074,
+          "maximum_ratio": 0.95,
+          "passed": false
+        },
+        "index_inclusive_seconds": {
+          "candidate": 1917.6397530000002,
+          "baseline": 1434.958012,
+          "ratio": 1.3363734248413675,
+          "maximum_ratio": 1.05,
+          "passed": false
+        }
+      },
+      "missing": []
+    }
+  }
+}

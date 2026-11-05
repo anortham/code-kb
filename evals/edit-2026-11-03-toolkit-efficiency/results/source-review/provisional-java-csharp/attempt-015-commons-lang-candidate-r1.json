@@ -1,0 +1,208 @@
+{
+  "attempt_artifacts": {
+    "attempt_json_sha256": "8c1d423ffcb2d779f33f8428fe6ee2d5381b1d468b728c8b7745e39761a3af39",
+    "bundle_json_sha256": "59e7ab8c068debba0f8b30661a5c3bf65744bf2d676b867be1ff77d1c3ddf82c",
+    "bundle_violations": [],
+    "final_digest": "c238fbd73d8fd577466d4cce86fc2bc6bbac6910efba66940389ad34e0f7597a",
+    "grade_json_sha256": "a54931f2f84889bd2904425dceb6c0018e2af2414bb29fccae88375fd336bc8f",
+    "status_json_sha256": "17463856b3188dbfea60ebc90b80d96e2a1a7643432c64584d99fbd692dc0a82"
+  },
+  "attempt_id": "commons-lang-r1-candidate",
+  "attempt_path": "target/toolkit-efficiency/campaign/candidate-v2/attempts/010-commons-lang-code-kb-r1",
+  "bundle_changes": [
+    {
+      "after_sha256": "146ff08123b93761aab2ba94a6b1b990aec26c1adac835ec4c0c943cbb0ddd71",
+      "before_sha256": "d50794750cadea7e4f21cdb8863d5c6bad9c573cee59b598bf904dfd1481ec7a",
+      "path": "src/main/java/org/apache/commons/lang3/time/DateFormatUtils.java"
+    },
+    {
+      "after_sha256": "0459c5c21bd74928144a682229b6fe312b76d56240aa01c1f2812655254a8a60",
+      "before_sha256": "880cb6171d4185424854b233e94a5baca7b2185ef31aa082680e7ed25026d426",
+      "path": "src/main/java/org/apache/commons/lang3/time/DateUtils.java"
+    },
+    {
+      "after_sha256": "ed0e726681e037b955a230b8688ea8bb13f597956ad87203bfac137d59421d62",
+      "before_sha256": null,
+      "path": "src/test/java/org/apache/commons/lang3/time/DateZoneIdTest.java"
+    }
+  ],
+  "case_id": "commons-lang",
+  "case_request": {
+    "case_sha256": "f5bcc4a9f9f1c631d17a5934ffc91de72cf4157bdbf1b8b2cacf784cfe21960f",
+    "path": "evals/edit-2026-11-03-toolkit-efficiency/cases/commons-lang/request.md",
+    "sha256": "d676ab1c8100ca011eda9df9a24a850fbbf26116b47d4671e068d1017d047b8f"
+  },
+  "ordinal": 15,
+  "pin": {
+    "clean": true,
+    "commit": "a5d6c5ed8847b2b14dacf062b646f94d6cc61a10",
+    "seed_digest": "45360d445c673c6a4ecbd8d32de4afaa701841fd9638caa6668846f10af5b3e3",
+    "seed_project": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/candidate-v2/attempts/010-commons-lang-code-kb-r1/work/seed-project",
+    "source_root": "target/toolkit-efficiency/preparation/java-csharp/commons-lang-pinned-source"
+  },
+  "result": {
+    "acceptance_status": "pending_source_review",
+    "behavioral_pass": true,
+    "protection_status": "unchanged",
+    "terminal_progress_record": {
+      "attempt_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/candidate-v2/attempts/010-commons-lang-code-kb-r1",
+      "behavioral_pass": true,
+      "case_id": "commons-lang",
+      "dispatch_started": true,
+      "id": "commons-lang-r1-candidate",
+      "launcher_exit_code": 0,
+      "manifest": "candidate",
+      "ordinal": 15,
+      "protection_status": "unchanged",
+      "repeat": 1,
+      "runtime": "candidate",
+      "schedule_index": 10,
+      "slot_state": "dispatched",
+      "status": "completed",
+      "trial_completed": true
+    },
+    "trusted_commands": {
+      "hidden": [
+        {
+          "command_id": "zone-id-interop-contract",
+          "log_path": "target/toolkit-efficiency/campaign/candidate-v2/attempts/010-commons-lang-code-kb-r1/evidence/grade/grade-016-stdout_log.log",
+          "log_sha256": "c22ef910e881b141a1ec66648a4c6a7168aa9956a2c0f4b62777821727e65553",
+          "observed": [
+            {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 4
+            },
+            {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 4
+            }
+          ],
+          "passed": true,
+          "test_execution_observed": true
+        }
+      ],
+      "public": [
+        {
+          "command_id": "commons-date-utils-calendar-regressions",
+          "log_path": "target/toolkit-efficiency/campaign/candidate-v2/attempts/010-commons-lang-code-kb-r1/evidence/grade/grade-012-stdout_log.log",
+          "log_sha256": "2ebf2ac9a6884954cd3a4ed472e42ff43bcf6e21bf8280a267f7081755859269",
+          "observed": [
+            {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            }
+          ],
+          "passed": true,
+          "test_execution_observed": true
+        },
+        {
+          "command_id": "commons-date-format-regressions",
+          "log_path": "target/toolkit-efficiency/campaign/candidate-v2/attempts/010-commons-lang-code-kb-r1/evidence/grade/grade-014-stdout_log.log",
+          "log_sha256": "b106b6f8e5e3ac7be0fafe308592fd9933a60e3c3c85944c9aaebe3d49e7ff8a",
+          "observed": [
+            {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            }
+          ],
+          "passed": true,
+          "test_execution_observed": true
+        }
+      ]
+    }
+  },
+  "review_status": "provisional",
+  "reviewer_verification": {
+    "method": "read-only inspection of the frozen request, pinned source, seed, immutable bundle, grade/status records, and retained logs",
+    "reason": "The timed campaign remains active; configured trusted public replay omits each added public test file, so fresh focused replays are deferred until all 36 slots are terminal.",
+    "reviewer_builds_or_tests_run": false
+  },
+  "runtime": "candidate",
+  "schema": 1,
+  "source_review": {
+    "added_public_tests": [
+      {
+        "after_sha256": "ed0e726681e037b955a230b8688ea8bb13f597956ad87203bfac137d59421d62",
+        "before_sha256": null,
+        "path": "src/test/java/org/apache/commons/lang3/time/DateZoneIdTest.java"
+      }
+    ],
+    "existing_api_conversion_bodies_unchanged": true,
+    "focused_replay_command": "mvn -B -o -Dmaven.repo.local=/state/commons-m2 -Dtest=org.apache.commons.lang3.time.DateZoneIdTest test",
+    "focused_replay_helper": "target/toolkit-efficiency/control/replay_added_public_tests.py",
+    "production_changes": [
+      {
+        "after_sha256": "146ff08123b93761aab2ba94a6b1b990aec26c1adac835ec4c0c943cbb0ddd71",
+        "before_sha256": "d50794750cadea7e4f21cdb8863d5c6bad9c573cee59b598bf904dfd1481ec7a",
+        "path": "src/main/java/org/apache/commons/lang3/time/DateFormatUtils.java"
+      },
+      {
+        "after_sha256": "0459c5c21bd74928144a682229b6fe312b76d56240aa01c1f2812655254a8a60",
+        "before_sha256": "880cb6171d4185424854b233e94a5baca7b2185ef31aa082680e7ed25026d426",
+        "path": "src/main/java/org/apache/commons/lang3/time/DateUtils.java"
+      }
+    ],
+    "rationale": [
+      "Both new methods require a non-null ZoneId and delegate through the existing TimeZone overloads, leaving their default-zone and TimeZone behavior intact.",
+      "The added public test covers fixed offsets, Paris summer and winter rules, a spring daylight-saving transition, null Date/pattern/ZoneId inputs, and Calendar/Date instant preservation.",
+      "The bundle contains only the two requested production files and one licensed public test class; it has no protection violations."
+    ],
+    "status": "provisional-pass-pending-focused-added-public-test-replay",
+    "test_quality_note": "The test also compares Calendar.getTimeZone() with TimeZone.getTimeZone(zoneId). Output, offsets, and epoch assertions already establish the requested behavior; this representation equality check is unnecessary but does not block the review.",
+    "trusted_attempt_added_test_replay": false
+  },
+  "worktree": {
+    "branch": "toolkit-efficiency",
+    "head": "98644c4aff7bd5489b59d279cb611471f573b91a",
+    "path": "/home/murphy/.codex/worktrees/dd7b/code-kb"
+  },
+  "added_public_test_execution": {
+    "status": "passed-fresh-focused-replay",
+    "trusted_replay_observed": true,
+    "helper": "target/toolkit-efficiency/control/replay_added_public_tests.py",
+    "receipt_path": "evals/edit-2026-11-03-toolkit-efficiency/results/source-review/replay-commons-lang/commons-lang-r1-candidate/receipt.json",
+    "receipt_sha256": "c3fffb3983227ab974f2442b757ab0892d59a22b4137470f8d44241af83be7eb",
+    "evidence_index_path": "evals/edit-2026-11-03-toolkit-efficiency/results/source-review/replay-commons-lang/commons-lang-r1-candidate/evidence-index.json",
+    "selector": "org.apache.commons.lang3.time.DateZoneIdTest",
+    "argv": [
+      "/usr/bin/env",
+      "JAVA_HOME=/tools/java",
+      "PATH=/tools/java/bin:/tools/maven/bin:/usr/bin:/bin",
+      "/tools/maven/bin/mvn",
+      "-B",
+      "-o",
+      "-Dmaven.repo.local=/state/commons-m2",
+      "-Dtest=org.apache.commons.lang3.time.DateZoneIdTest",
+      "test"
+    ],
+    "observed_test_names": [
+      "org.apache.commons.lang3.time.DateZoneIdTest"
+    ],
+    "observed_test_count": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "stdout_sha256": "f7f362e5a9f91351d1ee93022776df8af065c42b69f6de825ddea596e275481a",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

@@ -1,0 +1,9 @@
+# Ordinal 2 — Flask current arm
+
+- Source review: **PASS**.
+- Attempt: `target/toolkit-efficiency/campaign/current-v2/attempts/002-flask-config-code-kb-r1`.
+- Attempt `attempt.json` SHA-256: `65247a06d6d7172c242f9b79a9abcf4ed850b3666c4e3be0c9f0b6daacbc26ee` (same as recorded `status.json.outcome_sha256`). Bundle JSON SHA-256: `42da87afd667d08c105d1af30204c112f5ed0a91b7b4cadaedfc3ef411b0209a`. Seed digest: `fc0b9965e6330ffa0d84577f4d787080eec7ced43c00c8307d6cc6da03d48ead`.
+- Reviewed immutable bundle diff against its seed. It changes only `src/flask/app.py`, `src/flask/sessions.py`, and new `tests/test_session_cookie_max_age.py`; bundle violations are empty, `seed_unchanged` is true, and protection is `unchanged`.
+- The config default replaces the seed's `0` with `None`. `SessionInterface.get_expiration_time` returns before reading config for non-permanent sessions, uses `SESSION_COOKIE_MAX_AGE` only when it is a `timedelta`, falls back to the existing permanent lifetime for `None`, and raises a `TypeError` naming the setting for other permanent-session values.
+- New tests exercise actual cookie generation and expiry, zero/negative/positive timedeltas, default lifetime (including an integer config value), no-expiry non-permanent cookies with invalid values, a missing setting on a non-permanent session, and invalid permanent values. The trusted public replay log `evidence/grade/grade-008-stdout_log.log` shows all 17 focused tests passing (the existing test plus all 16 new parameterized cases); hidden replay `grade-010-stdout_log.log` shows its test passing. `grade.json` reports behavioral pass, valid replay, and unchanged protections.
+- No acceptance gap found. The agent answer also reports a full-suite run with two environment failures; that broader run is not part of the retained configured acceptance evidence and was not needed for this source decision.

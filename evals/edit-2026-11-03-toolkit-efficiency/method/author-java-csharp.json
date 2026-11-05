@@ -1,0 +1,155 @@
+{
+  "cases": [
+    {
+      "authoring_reference_scratch": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-work",
+      "dependencies": {
+        "commons-m2": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_commons-lang_commons-m2",
+          "sha256": "cd2d5dbf77c5e1e38296de7e5393ae46743b745775eb15c898ddec17c5504f65"
+        }
+      },
+      "id": "commons-lang",
+      "language": "java",
+      "pin": "a5d6c5ed8847b2b14dacf062b646f94d6cc61a10",
+      "readiness_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/readiness.json",
+      "reference_review": {
+        "evidence": {
+          "behavior_review_cues": [
+            "New APIs are in DateUtils and DateFormatUtils. Tests cover DST rules, Kathmandu +05:45, null zone rejection in both entry points, exact Calendar epoch preservation, and unchanged input Date."
+          ],
+          "case_sha256": "f5bcc4a9f9f1c631d17a5934ffc91de72cf4157bdbf1b8b2cacf784cfe21960f",
+          "checks": {
+            "baseline_public": true,
+            "baseline_runtime_setup": true,
+            "preparation": true,
+            "reference_hidden": true,
+            "reference_hidden_runtime_setup": true,
+            "reference_public": true,
+            "reference_public_runtime_setup": true,
+            "seed_hidden_failure": true,
+            "seed_runtime_setup": true
+          },
+          "readiness_status": "ready",
+          "reference_production_files_changed": [
+            "src/main/java/org/apache/commons/lang3/time/DateFormatUtils.java",
+            "src/main/java/org/apache/commons/lang3/time/DateUtils.java"
+          ],
+          "source_review": "pending",
+          "source_tree_sha256": "6a3a572d1f84211a81c0f35e0caf78069900ff6562794ba90afb2f3c7a05d402",
+          "standalone_public_reference_test_replay": {
+            "command_id": "reference-public-zone-id-tests",
+            "path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/reference-test-replay-clean-source/commons-lang/receipt.json",
+            "reference_test_files": [
+              "src/test/java/org/apache/commons/lang3/time/ZoneIdInteropTest.java"
+            ],
+            "source_archive_sha256": "6a3a572d1f84211a81c0f35e0caf78069900ff6562794ba90afb2f3c7a05d402",
+            "status": "passed",
+            "test_execution_observed": true
+          }
+        },
+        "status": "pending"
+      },
+      "repo_id": "commons-lang",
+      "seed_digest": "45360d445c673c6a4ecbd8d32de4afaa701841fd9638caa6668846f10af5b3e3",
+      "seed_git_commit_count": 1,
+      "seed_git_remotes": [],
+      "seed_project": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-readiness-private-source/work/seed-project",
+      "source_archive_sha256": "6a3a572d1f84211a81c0f35e0caf78069900ff6562794ba90afb2f3c7a05d402",
+      "source_root": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/commons-lang-pinned-source",
+      "tools": {
+        "java": {
+          "container_path": "/tools/java",
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/tools_commons-lang_java",
+          "runtime_env": {
+            "JAVA_HOME": "/tools/java"
+          },
+          "sha256": "08ebc2d440a5cad30907e51ce2fb7ee250ed5e322a7a63c002b3cfabf7dae9ec",
+          "version": "OpenJDK 21.0.13 Temurin"
+        },
+        "maven": {
+          "container_path": "/tools/maven",
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/tools_commons-lang_maven",
+          "runtime_env": {
+            "PATH": "/tools/java/bin:/tools/maven/bin:/usr/bin:/bin"
+          },
+          "sha256": "5ba787b31abbbe574c3bc55d8fabd2588174f9360f9aab7bc359c24e719d7d44",
+          "version": "Apache Maven 3.10.0; Java 21.0.13 from /tools/java"
+        }
+      },
+      "url": "https://github.com/apache/commons-lang.git"
+    },
+    {
+      "authoring_reference_scratch": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-work",
+      "dependencies": {
+        "nodatime-nuget": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_nodatime_nodatime-nuget",
+          "sha256": "b33c5d38a4b9541a64ea5105150e5bbcd49ba2b5a7cd583b7cdee8faf9cb11dd"
+        }
+      },
+      "id": "nodatime",
+      "language": "csharp",
+      "pin": "649ce5a1c8ddf439eaed7b3bf9157882363cb937",
+      "readiness_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/readiness.json",
+      "reference_review": {
+        "evidence": {
+          "behavior_review_cues": [
+            "Try methods preserve [Pure]. Tests cover success, precision truncation, lower BCL boundary, valid upper boundary, OffsetDateTime out-of-range date and offset, and Julian-calendar conversion. Existing purity check is a baseline-safe public regression."
+          ],
+          "case_sha256": "a55ab9b83e8b0a45c9ed8bcbaf79a6f3350c9cb89232a04662993a7bfd05ab43",
+          "checks": {
+            "baseline_public": true,
+            "baseline_runtime_setup": true,
+            "preparation": true,
+            "reference_hidden": true,
+            "reference_hidden_runtime_setup": true,
+            "reference_public": true,
+            "reference_public_runtime_setup": true,
+            "seed_hidden_failure": true,
+            "seed_runtime_setup": true
+          },
+          "readiness_status": "ready",
+          "reference_production_files_changed": [
+            "src/NodaTime/Instant.cs",
+            "src/NodaTime/OffsetDateTime.cs"
+          ],
+          "source_review": "pending",
+          "source_tree_sha256": "d809182eef59b2685373f0d7a51da696dcc67cdad291cff70b7180c9d38d5bfc",
+          "standalone_public_reference_test_replay": {
+            "command_id": "reference-public-try-date-time-offset-tests",
+            "path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/reference-test-replay-clean-source/nodatime/receipt.json",
+            "reference_test_files": [
+              "src/NodaTime.Test/TryDateTimeOffsetTest.cs"
+            ],
+            "source_archive_sha256": "d809182eef59b2685373f0d7a51da696dcc67cdad291cff70b7180c9d38d5bfc",
+            "status": "passed",
+            "test_execution_observed": true
+          }
+        },
+        "status": "pending"
+      },
+      "repo_id": "nodatime",
+      "seed_digest": "7609d88901825bf2f4f5020e2f6b190377fe5e49712b5c522de0e5f6d3f3ca7c",
+      "seed_git_commit_count": 1,
+      "seed_git_remotes": [],
+      "seed_project": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/work/seed-project",
+      "source_archive_sha256": "d809182eef59b2685373f0d7a51da696dcc67cdad291cff70b7180c9d38d5bfc",
+      "source_root": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-pinned-source",
+      "tools": {
+        "dotnet": {
+          "container_path": "/tools/dotnet/dotnet",
+          "path": "/usr/lib64/dotnet",
+          "runtime_env": {
+            "DOTNET_CLI_HOME": "/state/dotnet",
+            "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
+            "DOTNET_NOLOGO": "1",
+            "NUGET_PACKAGES": "/state/nodatime-nuget"
+          },
+          "sha256": "2be7a815b5bd470fc51789d9c6e510be8df7bf322c81656c24d497ee9fc4bdf4",
+          "version": "10.0.113"
+        }
+      },
+      "url": "https://github.com/nodatime/nodatime.git"
+    }
+  ],
+  "schema": 1
+}

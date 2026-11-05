@@ -1,0 +1,79 @@
+test_agent_profile_selftest_needs_no_private_profile_or_auth (scripts.test_edit_sandbox.EditSandboxTest.test_agent_profile_selftest_needs_no_private_profile_or_auth) ... FAIL
+test_agent_profile_denies_private_reads_writes_and_command_network (scripts.test_edit_sandbox.EditSandboxTest.test_agent_profile_denies_private_reads_writes_and_command_network) ... FAIL
+
+======================================================================
+FAIL: test_agent_profile_selftest_needs_no_private_profile_or_auth (scripts.test_edit_sandbox.EditSandboxTest.test_agent_profile_selftest_needs_no_private_profile_or_auth)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/murphy/.codex/worktrees/dd7b/code-kb/scripts/test_edit_sandbox.py", line 605, in test_agent_profile_selftest_needs_no_private_profile_or_auth
+    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : Traceback (most recent call last):
+  File "/home/murphy/.codex/worktrees/dd7b/code-kb/scripts/edit_sandbox.py", line 717, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/home/murphy/.codex/worktrees/dd7b/code-kb/scripts/edit_sandbox.py", line 688, in main
+    report = run(
+        parsed.project,
+    ...<10 lines>...
+        auth_file=parsed.auth_file,
+    )
+  File "/home/murphy/.codex/worktrees/dd7b/code-kb/scripts/edit_sandbox.py", line 642, in run
+    return _execute_sandbox(
+        project_path,
+    ...<15 lines>...
+        identity_root,
+    )
+  File "/home/murphy/.codex/worktrees/dd7b/code-kb/scripts/edit_sandbox.py", line 508, in _execute_sandbox
+    process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=stdout_stream, stderr=stderr_stream, start_new_session=True, close_fds=True)
+  File "/usr/lib64/python3.14/subprocess.py", line 1005, in __init__
+    errread, errwrite) = self._get_handles(stdin, stdout, stderr)
+                         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.14/subprocess.py", line 1739, in _get_handles
+    p2cread = self._get_devnull()
+  File "/usr/lib64/python3.14/subprocess.py", line 1149, in _get_devnull
+    self._devnull = os.open(os.devnull, os.O_RDWR)
+                    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: '/dev/null'
+
+
+======================================================================
+FAIL: test_agent_profile_denies_private_reads_writes_and_command_network (scripts.test_edit_sandbox.EditSandboxTest.test_agent_profile_denies_private_reads_writes_and_command_network)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/murphy/.codex/worktrees/dd7b/code-kb/scripts/test_edit_sandbox.py", line 567, in test_agent_profile_denies_private_reads_writes_and_command_network
+    self.assertEqual(result.returncode, 0, detail)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : Traceback (most recent call last):
+  File "/home/murphy/.codex/worktrees/dd7b/code-kb/scripts/edit_sandbox.py", line 717, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/home/murphy/.codex/worktrees/dd7b/code-kb/scripts/edit_sandbox.py", line 688, in main
+    report = run(
+        parsed.project,
+    ...<10 lines>...
+        auth_file=parsed.auth_file,
+    )
+  File "/home/murphy/.codex/worktrees/dd7b/code-kb/scripts/edit_sandbox.py", line 642, in run
+    return _execute_sandbox(
+        project_path,
+    ...<15 lines>...
+        identity_root,
+    )
+  File "/home/murphy/.codex/worktrees/dd7b/code-kb/scripts/edit_sandbox.py", line 508, in _execute_sandbox
+    process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=stdout_stream, stderr=stderr_stream, start_new_session=True, close_fds=True)
+  File "/usr/lib64/python3.14/subprocess.py", line 1005, in __init__
+    errread, errwrite) = self._get_handles(stdin, stdout, stderr)
+                         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.14/subprocess.py", line 1739, in _get_handles
+    p2cread = self._get_devnull()
+  File "/usr/lib64/python3.14/subprocess.py", line 1149, in _get_devnull
+    self._devnull = os.open(os.devnull, os.O_RDWR)
+                    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: '/dev/null'
+
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.191s
+
+FAILED (failures=2)

@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "observed_utc": "2026-11-04T04:53:06.931604+00:00",
+  "review": "Independent read-only recomputation from all36 raw attempts matched final totals, source hashes, complete timing, and both failed gates.",
+  "completed_trials": 36,
+  "matched_sets": 12,
+  "accepted_by_arm": {
+    "native": 12,
+    "current": 12,
+    "candidate": 12
+  },
+  "missing_required": [],
+  "metrics_sha256": "650a2a60a384c885d4275803d7cb2b2ce4b4a24a39ca0e0a89befb0b94e91c3c",
+  "hardened_aggregator_sha256": "f0f24b218b6f4651150c411b38f50a9c3da713452182d1af1bdb82f1564c88b1",
+  "recomputation_byte_identical": true,
+  "guards_added": [
+    "Exact frozen six-case/two-repeat matrix and computed set count",
+    "Accepted derivative requires a completed raw trial",
+    "Candidate violations must be a known empty list",
+    "Original-record flag must be the boolean true"
+  ],
+  "raw_attempts_changed": false,
+  "model_trials_rerun": false
+}

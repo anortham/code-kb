@@ -1,0 +1,150 @@
+{
+  "arm": "current",
+  "attempt_id": "nodatime-r2-current",
+  "attempt_metadata_sha256": "6621f4984657655598464331c7273433f84dd13d356c7230d77cdad33d9a98db",
+  "attempt_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/current-v2/attempts/023-nodatime-code-kb-r2",
+  "bundle_json_sha256": "e1e134d662b038974ded7896fb36680e12698a92b63199dfd72ed7ad99dea7ef",
+  "bundle_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/current-v2/attempts/023-nodatime-code-kb-r2/bundle",
+  "case_id": "nodatime",
+  "case_sha256": "a55ab9b83e8b0a45c9ed8bcbaf79a6f3350c9cb89232a04662993a7bfd05ab43",
+  "changed_public_test_paths": [
+    "src/NodaTime.Test/TryToDateTimeOffsetTest.cs"
+  ],
+  "command_result": {
+    "command_id": "selected-added-public-tests",
+    "elapsed_seconds": 17.127134,
+    "exit_status": 0,
+    "expected_output_missing": [],
+    "passed": true,
+    "process_cleanup": {
+      "attempted": false,
+      "complete": true,
+      "signal": null
+    },
+    "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/nodatime-r2-current/evidence/selected-tests/stderr.log",
+    "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/nodatime-r2-current/evidence/selected-tests/stdout.log",
+    "test_execution_observed": true,
+    "timed_out": false
+  },
+  "corpus_sha256": "028067bcd6a7f8668cbe352b6e9215b0ba0751cf5d8883c5dd5ad3628bc80939",
+  "handoff_sha256": "60307f5c6647d94ad4f559e82ce7b0241ea281bbe92e2497d399324702af0971",
+  "hidden_overlay_installed": false,
+  "manifest": "current",
+  "observed_test_count": 37,
+  "observed_test_names": [
+    "Instant_BclBoundary(False)",
+    "Instant_BclBoundary(True)",
+    "Instant_DateOutOfRange",
+    "Instant_Success(1)",
+    "Instant_Success(1969)",
+    "Instant_Success(2011)",
+    "Instant_Success(9999)",
+    "Instant_TruncatesNanosecondsTowardsStartOfTime(-1,-1)",
+    "Instant_TruncatesNanosecondsTowardsStartOfTime(-101,-2)",
+    "Instant_TruncatesNanosecondsTowardsStartOfTime(101,1)",
+    "Instant_TruncatesNanosecondsTowardsStartOfTime(99,0)",
+    "Instant_TruncatesNanosecondsTowardsStartOfTime(999999999,9999999)",
+    "OffsetDateTime_BclBoundaryWithTruncatedOffset(False)",
+    "OffsetDateTime_BclBoundaryWithTruncatedOffset(True)",
+    "OffsetDateTime_DateOutOfRange(False)",
+    "OffsetDateTime_DateOutOfRange(True)",
+    "OffsetDateTime_JulianCalendar(1,1,3,1,1,1)",
+    "OffsetDateTime_JulianCalendar(2012,10,6,2012,10,19)",
+    "OffsetDateTime_OffsetOutOfRange(-50460)",
+    "OffsetDateTime_OffsetOutOfRange(-54000)",
+    "OffsetDateTime_OffsetOutOfRange(50460)",
+    "OffsetDateTime_OffsetOutOfRange(54000)",
+    "OffsetDateTime_Success(-330)",
+    "OffsetDateTime_Success(-840)",
+    "OffsetDateTime_Success(0)",
+    "OffsetDateTime_Success(330)",
+    "OffsetDateTime_Success(840)",
+    "OffsetDateTime_TruncatesNanosecondsTowardsStartOfTime(-1,-1)",
+    "OffsetDateTime_TruncatesNanosecondsTowardsStartOfTime(101,1)",
+    "OffsetDateTime_TruncatesNanosecondsTowardsStartOfTime(99,0)",
+    "OffsetDateTime_TruncatesNanosecondsTowardsStartOfTime(999999999,9999999)",
+    "OffsetDateTime_TruncatesOffsetSeconds(-50459,-840)",
+    "OffsetDateTime_TruncatesOffsetSeconds(-5455,-90)",
+    "OffsetDateTime_TruncatesOffsetSeconds(50459,840)",
+    "OffsetDateTime_TruncatesOffsetSeconds(5455,90)",
+    "OffsetDateTime_UtcDateOutOfRange(False)",
+    "OffsetDateTime_UtcDateOutOfRange(True)"
+  ],
+  "observed_test_summary": {
+    "discovered": 37,
+    "passed": 37,
+    "total": 37
+  },
+  "offline_inputs_sha256": {
+    "dependencies": {
+      "nodatime-nuget": "b33c5d38a4b9541a64ea5105150e5bbcd49ba2b5a7cd583b7cdee8faf9cb11dd"
+    },
+    "tools": {
+      "dotnet": "2be7a815b5bd470fc51789d9c6e510be8df7bf322c81656c24d497ee9fc4bdf4"
+    }
+  },
+  "replay_digest": "1fe776e53c95da47c72d854aab08d441875e4c177d1507753302a4df8f193ebf",
+  "runtime_setup": [
+    {
+      "command_id": "nodatime-copy-prepared-nuget-cache",
+      "elapsed_seconds": 0.365328,
+      "exit_status": 0,
+      "expected_output_missing": [],
+      "passed": true,
+      "process_cleanup": {
+        "attempted": false,
+        "complete": true,
+        "signal": null
+      },
+      "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/nodatime-r2-current/evidence/runtime-public-replay-00-nodatime-copy-prepared-nuget-cache/stderr.log",
+      "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/nodatime-r2-current/evidence/runtime-public-replay-00-nodatime-copy-prepared-nuget-cache/stdout.log",
+      "test_execution_observed": null,
+      "timed_out": false
+    },
+    {
+      "command_id": "nodatime-restore-from-local-cache",
+      "elapsed_seconds": 4.028289,
+      "exit_status": 0,
+      "expected_output_missing": [],
+      "passed": true,
+      "process_cleanup": {
+        "attempted": false,
+        "complete": true,
+        "signal": null
+      },
+      "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/nodatime-r2-current/evidence/runtime-public-replay-01-nodatime-restore-from-local-cache/stderr.log",
+      "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/nodatime-r2-current/evidence/runtime-public-replay-01-nodatime-restore-from-local-cache/stdout.log",
+      "test_execution_observed": null,
+      "timed_out": false
+    }
+  ],
+  "schema": 1,
+  "seed_digest": "7609d88901825bf2f4f5020e2f6b190377fe5e49712b5c522de0e5f6d3f3ca7c",
+  "seed_project": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-readiness-private-source/work/seed-project",
+  "source_pin": "649ce5a1c8ddf439eaed7b3bf9157882363cb937",
+  "source_root": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/java-csharp/nodatime-pinned-source",
+  "status": "passed",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_sha256": "2ed20030972c9fe6c17dbd29d6ef40cbc986b667c8a827ca223d5017eb84067b",
+  "test_command": [
+    "/usr/bin/env",
+    "DOTNET_CLI_HOME=/state/dotnet",
+    "NUGET_PACKAGES=/state/nodatime-nuget",
+    "DOTNET_CLI_TELEMETRY_OPTOUT=1",
+    "DOTNET_NOLOGO=1",
+    "/tools/dotnet/dotnet",
+    "test",
+    "src/NodaTime.Test/NodaTime.Test.csproj",
+    "--framework",
+    "net10.0",
+    "--no-restore",
+    "--filter",
+    "FullyQualifiedName~NodaTime.Test.TryToDateTimeOffsetTest",
+    "--results-directory",
+    "/state/results",
+    "--logger",
+    "console;verbosity=normal",
+    "-p:PublicSign=true"
+  ],
+  "test_selector": "FullyQualifiedName~NodaTime.Test.TryToDateTimeOffsetTest"
+}

@@ -1,0 +1,9 @@
+# Ordinal 5 — Express current arm
+
+- Source review: **PASS**.
+- Attempt: `target/toolkit-efficiency/campaign/current-v2/attempts/004-express-route-code-kb-r1`.
+- Attempt `attempt.json` SHA-256: `935b2e473d49798cbc6d908b64475ad659ca01609e39ad7d05623023ef035924` (same as recorded `status.json.outcome_sha256`). Bundle JSON SHA-256: `dfe9700e4bc78481a13a16d6181c00155dad4db663b6831320d422fb196655c2`. Seed digest: `ad2fb07c2954951a089b29f3f8f0ec9356fac82259d13009890343770b1e455a`.
+- Reviewed immutable bundle diff against its seed. It changes only `lib/application.js`, `lib/utils.js`, and new `test/query-parser-depth.js`; bundle violations are empty, `seed_unchanged` is true, and protection is `unchanged`.
+- The setting validation runs before the assignment to `this.settings`; a depth update recompiles only the built-in extended parser, and extended parsing forwards depth to `qs.parse`. Other parser functions and modes remain untouched. Invalid-value tests assert both the setting and compiled function remain unchanged and make a route request afterward to confirm the old depth still applies.
+- Trusted public replay `evidence/grade/grade-008-stdout_log.log` shows 38 passing (including the entire added module); hidden replay `grade-010-stdout_log.log` shows all 7 hidden tests passing. `grade.json` reports behavioral pass, valid replay, and unchanged protections.
+- Source passes. The answer reports its own public/full HTTP attempts were blocked by `listen EPERM`; this can coexist with the separate trusted grader replay, which ran the configured check and passed all 38 tests. Acceptance uses the retained grader replay. The answer mentions that it ran caller checks but does not claim that no callers exist or that an edit is safe. No safe/no-caller claim appears; no acceptance gap found.

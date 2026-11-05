@@ -1,0 +1,90 @@
+{
+  "schema": 1,
+  "ordinal": 17,
+  "case_id": "nodatime",
+  "repeat": 1,
+  "runtime": "current",
+  "attempt_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/current-v2/attempts/012-nodatime-code-kb-r1/attempt.json",
+  "attempt_sha256": "8f34f31cfb4aa7c67cd0f908bd2258eb1421251e9479acb33450088343fc0d0b",
+  "bundle_json_sha256": "00fa7fc5a2e32114e98b1e766c2c35196df26aa58f79508a88ae97925139ff7d",
+  "source_review": "passed",
+  "source_behavior_passed": true,
+  "accepted": true,
+  "trial_completed": true,
+  "behavioral_pass": true,
+  "protection_status": "unchanged",
+  "review_note": "results/source-review/provisional-java-csharp/attempt-017-nodatime-current-r1.json",
+  "review_note_sha256": "12b48e1619d0234b0046f1020798a9031ce097d35959c978e92e96fcedf40846",
+  "lead_review": "Reviewed production diffs against seeds and source-review rationale; old entrypoints stay unchanged. A fresh trusted public replay used the actual added test classes, no hidden overlay and the identical patch digest. Its observed execution and pass/fail result below determine acceptance. Style observations on immutable model data are unscored.",
+  "added_tests": {
+    "fresh_public_replay": true,
+    "executed": true,
+    "passed": true,
+    "executed_count": 26,
+    "selector": "FullyQualifiedName~NodaTime.Test.TryToDateTimeOffsetTest",
+    "command": [
+      "/usr/bin/env",
+      "DOTNET_CLI_HOME=/state/dotnet",
+      "NUGET_PACKAGES=/state/nodatime-nuget",
+      "DOTNET_CLI_TELEMETRY_OPTOUT=1",
+      "DOTNET_NOLOGO=1",
+      "/tools/dotnet/dotnet",
+      "test",
+      "src/NodaTime.Test/NodaTime.Test.csproj",
+      "--framework",
+      "net10.0",
+      "--no-restore",
+      "--filter",
+      "FullyQualifiedName~NodaTime.Test.TryToDateTimeOffsetTest",
+      "--results-directory",
+      "/state/results",
+      "--logger",
+      "console;verbosity=normal",
+      "-p:PublicSign=true"
+    ],
+    "observed_names": [
+      "Instant_DateOutOfRange",
+      "Instant_MaxValue",
+      "Instant_Success(1,1,1)",
+      "Instant_Success(2011,8,18)",
+      "Instant_Success(9999,12,31)",
+      "Instant_TruncatesTowardsStartOfTime(100)",
+      "Instant_TruncatesTowardsStartOfTime(1900)",
+      "Instant_TruncatesTowardsStartOfTime(2900)",
+      "OffsetDateTime_BclBoundaries",
+      "OffsetDateTime_JulianCalendar",
+      "OffsetDateTime_LocalDateOutOfRange",
+      "OffsetDateTime_Success(-14)",
+      "OffsetDateTime_Success(0)",
+      "OffsetDateTime_Success(14)",
+      "OffsetDateTime_TruncatesOffsetSeconds(-1859,-30)",
+      "OffsetDateTime_TruncatesOffsetSeconds(-50459,-840)",
+      "OffsetDateTime_TruncatesOffsetSeconds(-59,0)",
+      "OffsetDateTime_TruncatesOffsetSeconds(1859,30)",
+      "OffsetDateTime_TruncatesOffsetSeconds(50459,840)",
+      "OffsetDateTime_TruncatesOffsetSeconds(59,0)",
+      "OffsetDateTime_TruncatesTowardsStartOfTime(100)",
+      "OffsetDateTime_TruncatesTowardsStartOfTime(1900)",
+      "OffsetDateTime_TruncatesTowardsStartOfTime(2900)",
+      "OffsetDateTime_UnsupportedOffset(-15)",
+      "OffsetDateTime_UnsupportedOffset(15)",
+      "OffsetDateTime_UtcDateOutOfRange"
+    ],
+    "receipt": {
+      "path": "results/source-review/replay-nodatime/nodatime-r1-current/receipt.json",
+      "sha256": "9b7775685da18f45876a38b4ad9a8d73cfbb8b046854b05099ad135598b42d85"
+    },
+    "logs": [
+      {
+        "path": "results/source-review/replay-nodatime/nodatime-r1-current/stdout.trusted.log",
+        "sha256": "a5d3f8275aa6221db9a323549384c15de6b49812fc2db38829df1e57bb702d91"
+      },
+      {
+        "path": "results/source-review/replay-nodatime/nodatime-r1-native/stderr.trusted.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ]
+  },
+  "rejection_reasons": [],
+  "original_record_unchanged": true
+}

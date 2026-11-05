@@ -1,0 +1,261 @@
+{
+  "schema": 1,
+  "status": "ready",
+  "cases": [
+    {
+      "id": "flask-config",
+      "repo_id": "flask-config",
+      "pin": "d73fa1cdcbd8b1465c151db8924ba58b1dd14e35",
+      "case_path": "cases/flask-config",
+      "readiness_path": "readiness/flask-config.json",
+      "case_sha256": "00bb6dec8edcd93059ae3e1ce670331f7448e2a0dc8962706fc0e2d64478b5c4",
+      "readiness_sha256": "763bd68bb65c9503791a6accdeba7663003cbdb8c62353d078c46646d03b1022",
+      "seed_digest": "fc0b9965e6330ffa0d84577f4d787080eec7ced43c00c8307d6cc6da03d48ead"
+    },
+    {
+      "id": "express-route",
+      "repo_id": "express-route",
+      "pin": "bed501c695a61886399ee622875f3be933c716d8",
+      "case_path": "cases/express-route",
+      "readiness_path": "readiness/express-route.json",
+      "case_sha256": "92bd3e7736b45473f4c2a904c224d3234e45bca8068604738f26a69cf573e3b5",
+      "readiness_sha256": "9b8a0a73337dc0e4ca48ae8941dfe95c2d6f25f4fa1e61a90ff29570b0f7bb16",
+      "seed_digest": "ad2fb07c2954951a089b29f3f8f0ec9356fac82259d13009890343770b1e455a"
+    },
+    {
+      "id": "minijinja-config",
+      "repo_id": "minijinja-config",
+      "pin": "81787c4eab656f3a4f4e92dea53f303a36f1685c",
+      "case_path": "cases/minijinja-config",
+      "readiness_path": "readiness/minijinja-config.json",
+      "case_sha256": "3580ae7fd74760eec9ed0e4c0f07a274552949bab76600be5eeb25f72d088915",
+      "readiness_sha256": "a3d8298528487673051d99c4b8daf56ee40d126933a622e20598fb239c6c1f06",
+      "seed_digest": "e70f8d055dff7a54758b5fd4661ab5dbf08e8a2484f8fc7f8498f3245114ed72"
+    },
+    {
+      "id": "hcl-config",
+      "repo_id": "hcl-config",
+      "pin": "4a347c448ee961e556dde0fad522a996e04c00c0",
+      "case_path": "cases/hcl-config",
+      "readiness_path": "readiness/hcl-config.json",
+      "case_sha256": "37fdb1ef7267ae6d9165a9fb54623b71a428f753b5881c67c56dcf6c26540079",
+      "readiness_sha256": "d0aea55cfb547c8e7145478ba888a186da851926df777de0f28b89caa6a6b5b8",
+      "seed_digest": "28893caee13b3b5a54118948e02c0dc528e9117e53eca1518ce43892eb2dffa3"
+    },
+    {
+      "id": "commons-lang",
+      "repo_id": "commons-lang",
+      "pin": "a5d6c5ed8847b2b14dacf062b646f94d6cc61a10",
+      "case_path": "cases/commons-lang",
+      "readiness_path": "readiness/commons-lang.json",
+      "case_sha256": "f5bcc4a9f9f1c631d17a5934ffc91de72cf4157bdbf1b8b2cacf784cfe21960f",
+      "readiness_sha256": "bcf88c63f1f5e861ca7953176ee120a9cd0f30c93238a91200f35df2fe070fe5",
+      "seed_digest": "45360d445c673c6a4ecbd8d32de4afaa701841fd9638caa6668846f10af5b3e3"
+    },
+    {
+      "id": "nodatime",
+      "repo_id": "nodatime",
+      "pin": "649ce5a1c8ddf439eaed7b3bf9157882363cb937",
+      "case_path": "cases/nodatime",
+      "readiness_path": "readiness/nodatime.json",
+      "case_sha256": "a55ab9b83e8b0a45c9ed8bcbaf79a6f3350c9cb89232a04662993a7bfd05ab43",
+      "readiness_sha256": "0ff71fcc9ed686371f98e246a7afddf82404b7f9c167d48acb8e4bb14c9d4dad",
+      "seed_digest": "7609d88901825bf2f4f5020e2f6b190377fe5e49712b5c522de0e5f6d3f3ca7c"
+    }
+  ],
+  "schedule": [
+    {
+      "case_id": "flask-config",
+      "arm": "native",
+      "repeat": 1
+    },
+    {
+      "case_id": "flask-config",
+      "arm": "code-kb",
+      "repeat": 1
+    },
+    {
+      "case_id": "express-route",
+      "arm": "native",
+      "repeat": 1
+    },
+    {
+      "case_id": "express-route",
+      "arm": "code-kb",
+      "repeat": 1
+    },
+    {
+      "case_id": "minijinja-config",
+      "arm": "native",
+      "repeat": 1
+    },
+    {
+      "case_id": "minijinja-config",
+      "arm": "code-kb",
+      "repeat": 1
+    },
+    {
+      "case_id": "hcl-config",
+      "arm": "native",
+      "repeat": 1
+    },
+    {
+      "case_id": "hcl-config",
+      "arm": "code-kb",
+      "repeat": 1
+    },
+    {
+      "case_id": "commons-lang",
+      "arm": "native",
+      "repeat": 1
+    },
+    {
+      "case_id": "commons-lang",
+      "arm": "code-kb",
+      "repeat": 1
+    },
+    {
+      "case_id": "nodatime",
+      "arm": "native",
+      "repeat": 1
+    },
+    {
+      "case_id": "nodatime",
+      "arm": "code-kb",
+      "repeat": 1
+    },
+    {
+      "case_id": "flask-config",
+      "arm": "code-kb",
+      "repeat": 2
+    },
+    {
+      "case_id": "flask-config",
+      "arm": "native",
+      "repeat": 2
+    },
+    {
+      "case_id": "express-route",
+      "arm": "code-kb",
+      "repeat": 2
+    },
+    {
+      "case_id": "express-route",
+      "arm": "native",
+      "repeat": 2
+    },
+    {
+      "case_id": "minijinja-config",
+      "arm": "code-kb",
+      "repeat": 2
+    },
+    {
+      "case_id": "minijinja-config",
+      "arm": "native",
+      "repeat": 2
+    },
+    {
+      "case_id": "hcl-config",
+      "arm": "code-kb",
+      "repeat": 2
+    },
+    {
+      "case_id": "hcl-config",
+      "arm": "native",
+      "repeat": 2
+    },
+    {
+      "case_id": "commons-lang",
+      "arm": "code-kb",
+      "repeat": 2
+    },
+    {
+      "case_id": "commons-lang",
+      "arm": "native",
+      "repeat": 2
+    },
+    {
+      "case_id": "nodatime",
+      "arm": "code-kb",
+      "repeat": 2
+    },
+    {
+      "case_id": "nodatime",
+      "arm": "native",
+      "repeat": 2
+    }
+  ],
+  "controls": {
+    "model": "gpt-6.1-sol",
+    "effort": "high",
+    "timeout_seconds": 900,
+    "codex_sha256": "b93f6811d3f653f0fb83be4050d857fb9abbb111dfa2ce160563327daff7f306",
+    "codex_code_mode_host_sha256": "8ee4f472e92ac226a189e98998633b2d07f989f208515750764db660369f2926",
+    "outbound_redactor_sha256": "09c521c0f39bf83c1f877edf7fd1799b9eb7df3780e9c99c52707d6d3620c36f",
+    "protocol_sha256": "2276518f5622e43b1bf538e3c0d91e5caedb7be2acdd1a90594b3b3681b59b3f",
+    "toolkit_protocol_sha256": "7e2b7e2fdef94d041e3dbdf818131a11c546573e1cf89d5d161e3653d2dd8a7a",
+    "corpus_sha256": "028067bcd6a7f8668cbe352b6e9215b0ba0751cf5d8883c5dd5ad3628bc80939",
+    "snapshot_sha256": "7920526e21f47852d73e33d6ef6bbcb73e7ae1373b0fedc5d31aac65804e3839",
+    "sandbox_sha256": "8885484984822cd4c854696e7d04379240b0092c231c545ea4042721656315d5",
+    "runner_sha256": "a8107d69595a23d25aa00447ff38a69738188ce9ddea5ed846580f3d9bf72100",
+    "campaign_runner_sha256": "9dc440ce952cf622bfc77275bbf97d6a2fd02c6ad238d9f933bfab2e3a91f594",
+    "trace_metrics_sha256": "ef25b4126dbe60b7188881c341b80d8624089e768d1a0f6051f9cbb74e8d7470",
+    "binary_sha256": "38674d8ba835960335f4120acb3822a6b7105eb2672e173b0454dce3e0a68e75",
+    "extractor_sha256": "008372ec7a61f0921ef687d20e24c67547255f603d7dbca08710f8e27bef28bc",
+    "guidance_sha256": "8a8efd001a1e65aeca95669b41184e18f8a4d72afea337378192f131059b38ad",
+    "profiles_sha256": "c52cf5fb91916d395fea89fd500d534c8b6484f39909212bb1457bbc284edf2e",
+    "runtime_identity_sha256": "3fe8fa20a94d64721b321cff9a14664ffb3dc70ffbc97657784d2acab9cee7ff",
+    "finding_sha256": "3b958e70d5573b9224981740fc79ed9dfe391bccb0c99752a16d17098a9c56ca",
+    "trace_evidence_sha256": "d1a5c6621fcd32f0b7aa9d8a3ac6ca725aba973a5b3b460c2eb25f50c6003837",
+    "client_metadata_sha256": "f235fb86a6ed17742e24b585e9e78792cec4e4da8fdf8e94df064b6c653fa9d6",
+    "base_bubblewrap_binary_sha256": "6da06f152b0865172d73348c34cb88487c326ce2f21cd980fc25ff10c4dbcdfb",
+    "base_python_binary_sha256": "df5a95e6119c051c43ab78993af48f8a53c54a25a475dacd1428c322251eb8b0",
+    "base_node_binary_sha256": "9d9f55f1f4497fe069d681020b728f77221c43b9a4e9576a89ff7cc537caf5cf",
+    "base_go_toolchain_sha256": "7d4a3654d14009f7cdf70507c6badf16fc40f2ffccf2be04d8c792edffdaebcd",
+    "dependencies_flask-config_python-site_sha256": "5117e25ba3fedef8fa8fb13cc85c068343cfbd90fb1a387c3beedfe24eddcbb6",
+    "dependencies_express-route_node-modules_sha256": "9d088d16e158b0fdf10ec95c6538484d2685661959fe3ebc2d33fb16ec604731",
+    "dependencies_minijinja-config_cargo-cache_sha256": "eac88f77d5490563112b892dcb38a804d9fdb32e52de2624bd5c0738faef538a",
+    "tools_minijinja-config_rust_sha256": "9bb3ada2e04cf6c70356f9fddee8f03d47a485cdece85ca8d06c920aaf913779",
+    "dependencies_hcl-config_go-mod-cache_sha256": "d5786c23facd1162171bb5462cb4b01fbd4003ab8cddedbecc6beb2aa70bd3c6",
+    "dependencies_commons-lang_commons-m2_sha256": "cd2d5dbf77c5e1e38296de7e5393ae46743b745775eb15c898ddec17c5504f65",
+    "tools_commons-lang_java_sha256": "08ebc2d440a5cad30907e51ce2fb7ee250ed5e322a7a63c002b3cfabf7dae9ec",
+    "tools_commons-lang_maven_sha256": "5ba787b31abbbe574c3bc55d8fabd2588174f9360f9aab7bc359c24e719d7d44",
+    "dependencies_nodatime_nodatime-nuget_sha256": "b33c5d38a4b9541a64ea5105150e5bbcd49ba2b5a7cd583b7cdee8faf9cb11dd",
+    "tools_nodatime_dotnet_sha256": "2be7a815b5bd470fc51789d9c6e510be8df7bf322c81656c24d497ee9fc4bdf4"
+  },
+  "artifacts": {
+    "codex": "inputs/codex",
+    "codex_code_mode_host": "inputs/codex_code_mode_host",
+    "outbound_redactor": "inputs/outbound_redactor",
+    "protocol": "inputs/protocol",
+    "toolkit_protocol": "inputs/toolkit_protocol",
+    "corpus": "inputs/corpus",
+    "snapshot": "inputs/snapshot",
+    "sandbox": "inputs/sandbox",
+    "runner": "inputs/runner",
+    "campaign_runner": "inputs/campaign_runner",
+    "trace_metrics": "inputs/trace_metrics",
+    "binary": "inputs/binary",
+    "extractor": "inputs/extractor",
+    "guidance": "inputs/guidance",
+    "profiles": "inputs/profiles",
+    "runtime_identity": "inputs/runtime_identity",
+    "finding": "inputs/finding",
+    "trace_evidence": "inputs/trace_evidence",
+    "client_metadata": "inputs/client_metadata",
+    "base_bubblewrap_binary": "inputs/base_bubblewrap_binary",
+    "base_python_binary": "inputs/base_python_binary",
+    "base_node_binary": "inputs/base_node_binary",
+    "base_go_toolchain": "inputs/base_go_toolchain",
+    "dependencies_flask-config_python-site": "inputs/dependencies_flask-config_python-site",
+    "dependencies_express-route_node-modules": "inputs/dependencies_express-route_node-modules",
+    "dependencies_minijinja-config_cargo-cache": "inputs/dependencies_minijinja-config_cargo-cache",
+    "tools_minijinja-config_rust": "inputs/tools_minijinja-config_rust",
+    "dependencies_hcl-config_go-mod-cache": "inputs/dependencies_hcl-config_go-mod-cache",
+    "dependencies_commons-lang_commons-m2": "inputs/dependencies_commons-lang_commons-m2",
+    "tools_commons-lang_java": "inputs/tools_commons-lang_java",
+    "tools_commons-lang_maven": "inputs/tools_commons-lang_maven",
+    "dependencies_nodatime_nodatime-nuget": "inputs/dependencies_nodatime_nodatime-nuget",
+    "tools_nodatime_dotnet": "inputs/tools_nodatime_dotnet"
+  }
+}

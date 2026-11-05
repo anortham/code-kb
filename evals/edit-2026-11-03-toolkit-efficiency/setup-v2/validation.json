@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "records": [
+    {
+      "runtime": "current",
+      "manifest": "manifest-v2.json",
+      "sha256": "04cb73fbbeb1809c708fa48441a9b846333c5757f19671a35b8fb2728ec00d4d",
+      "validation": {
+        "valid": true,
+        "case_count": 6,
+        "scored_calls": 24
+      }
+    },
+    {
+      "runtime": "candidate",
+      "manifest": "manifest-candidate-v2.json",
+      "sha256": "528584905a6ec1f50429835c0ee3f82d0b76586b5eaaa01d1a4294e413d385a4",
+      "validation": {
+        "valid": true,
+        "case_count": 6,
+        "scored_calls": 24
+      }
+    }
+  ],
+  "same_fixed_schedule": true,
+  "prospective_model_dispatches": 0
+}

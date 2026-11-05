@@ -1,0 +1,95 @@
+diff --git a/lib/application.js b/lib/application.js
+index 3827dcd..c22ca5b 100644
+--- a/lib/application.js
++++ b/lib/application.js
+@@ -355,6 +355,10 @@ app.set = function set(setting, val) {
+     return this.settings[setting];
+   }
+ 
++  if (setting === 'query parser depth' && (!Number.isInteger(val) || val < 0)) {
++    throw new TypeError('query parser depth must be a non-negative integer')
++  }
++
+   debug('set "%s" to %o', setting, val);
+ 
+   // set value
+@@ -366,7 +370,12 @@ app.set = function set(setting, val) {
+       this.set('etag fn', compileETag(val));
+       break;
+     case 'query parser':
+-      this.set('query parser fn', compileQueryParser(val));
++      this.set('query parser fn', compileQueryParser(val, this.get('query parser depth')));
++      break;
++    case 'query parser depth':
++      if (this.get('query parser') !== undefined) {
++        this.set('query parser fn', compileQueryParser(this.get('query parser'), val));
++      }
+       break;
+     case 'trust proxy':
+       this.set('trust proxy fn', compileTrust(val));
+diff --git a/lib/utils.js b/lib/utils.js
+index 4f21e7e..029a922 100644
+--- a/lib/utils.js
++++ b/lib/utils.js
+@@ -159,7 +159,7 @@ exports.compileETag = function(val) {
+  * @api private
+  */
+ 
+-exports.compileQueryParser = function compileQueryParser(val) {
++exports.compileQueryParser = function compileQueryParser(val, depth) {
+   var fn;
+ 
+   if (typeof val === 'function') {
+@@ -174,7 +174,7 @@ exports.compileQueryParser = function compileQueryParser(val) {
+     case false:
+       break;
+     case 'extended':
+-      fn = parseExtendedQueryString;
++      fn = function (str) { return parseExtendedQueryString(str, depth); };
+       break;
+     default:
+       throw new TypeError('unknown value for query parser function: ' + val);
+@@ -264,8 +264,9 @@ function createETagGenerator (options) {
+  * @private
+  */
+ 
+-function parseExtendedQueryString(str) {
++function parseExtendedQueryString(str, depth) {
+   return qs.parse(str, {
+-    allowPrototypes: true
++    allowPrototypes: true,
++    depth: depth
+   });
+ }
+diff --git a/test/query-parser-depth.js b/test/query-parser-depth.js
+new file mode 100644
+index 0000000..cfa4e81
+--- /dev/null
++++ b/test/query-parser-depth.js
+@@ -0,0 +1,26 @@
++'use strict'
++
++var assert = require('node:assert/strict')
++var express = require('../')
++var request = require('supertest')
++
++describe('query parser depth setting', function () {
++  it('applies the configured nesting limit to route query parameters', function (done) {
++    var app = express()
++    app.set('query parser', 'extended')
++    app.set('query parser depth', 1)
++    app.get('/', function (req, res) { res.json(req.query) })
++
++    request(app)
++      .get('/?account[profile][name]=Ada')
++      .expect(200, { account: { profile: { '[name]': 'Ada' } } }, done)
++  })
++
++  it('rejects a negative or non-integer depth without changing the setting', function () {
++    var app = express()
++
++    assert.throws(function () { app.set('query parser depth', -1) }, /non-negative integer/)
++    assert.throws(function () { app.set('query parser depth', 1.5) }, /non-negative integer/)
++    assert.strictEqual(app.get('query parser depth'), 5)
++  })
++})

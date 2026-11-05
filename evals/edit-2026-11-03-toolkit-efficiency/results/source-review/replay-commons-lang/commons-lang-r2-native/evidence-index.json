@@ -1,0 +1,82 @@
+{
+  "schema": 1,
+  "attempt_id": "commons-lang-r2-native",
+  "status": "passed",
+  "bundle_json_sha256": "4d3d057d8c76e742d6d98f8d7ab68446e14d256a5c82f55b0bf1bfdd7b9e26c9",
+  "source_pin": "a5d6c5ed8847b2b14dacf062b646f94d6cc61a10",
+  "seed_digest": "45360d445c673c6a4ecbd8d32de4afaa701841fd9638caa6668846f10af5b3e3",
+  "test_selector": "org.apache.commons.lang3.time.DateZoneIdTest",
+  "test_command": [
+    "/usr/bin/env",
+    "JAVA_HOME=/tools/java",
+    "PATH=/tools/java/bin:/tools/maven/bin:/usr/bin:/bin",
+    "/tools/maven/bin/mvn",
+    "-B",
+    "-o",
+    "-Dmaven.repo.local=/state/commons-m2",
+    "-Dtest=org.apache.commons.lang3.time.DateZoneIdTest",
+    "test"
+  ],
+  "observed_test_names": [
+    "org.apache.commons.lang3.time.DateZoneIdTest"
+  ],
+  "observed_test_count": 6,
+  "stdout_sha256": "50fc515c5fbcee65f7ced7741064c66b09bd7bebe861c36178c85d4782008c2f",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "evidence_files": [
+    {
+      "source": "target/toolkit-efficiency/campaign/public-test-replay/commons-lang-r2-native/receipt.json",
+      "copy": "receipt.json",
+      "bytes": 5937,
+      "sha256": "5a24a0b906f75f6d5f0863217bb8746ebe3be0a99814b1e8c5dc441241361eb8"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/commons-lang-r2-native/evidence/runtime-public-replay-00-commons-copy-prepared-maven-cache/stdout.log",
+      "copy": "logs/runtime-00-commons-copy-prepared-maven-cache.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/commons-lang-r2-native/evidence/runtime-public-replay-00-commons-copy-prepared-maven-cache/stderr.log",
+      "copy": "logs/runtime-00-commons-copy-prepared-maven-cache.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/commons-lang-r2-native/evidence/runtime-public-replay-01-commons-resolve-dependencies-offline/stdout.log",
+      "copy": "logs/runtime-01-commons-resolve-dependencies-offline.stdout.log",
+      "bytes": 76453,
+      "sha256": "19e091d95ddc9688e41185f4832d2ebd0518a3cc328d6c83ef018841611e69ee"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/commons-lang-r2-native/evidence/runtime-public-replay-01-commons-resolve-dependencies-offline/stderr.log",
+      "copy": "logs/runtime-01-commons-resolve-dependencies-offline.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/commons-lang-r2-native/evidence/runtime-public-replay-02-commons-surefire-provider-offline-cache/stdout.log",
+      "copy": "logs/runtime-02-commons-surefire-provider-offline-cache.stdout.log",
+      "bytes": 996,
+      "sha256": "25dffc9891e2fdd3b6e17be0d552fa0d5c73807fafa30b3f965f8c367a365586"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/commons-lang-r2-native/evidence/runtime-public-replay-02-commons-surefire-provider-offline-cache/stderr.log",
+      "copy": "logs/runtime-02-commons-surefire-provider-offline-cache.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/commons-lang-r2-native/evidence/selected-tests/stdout.log",
+      "copy": "logs/selected-tests.stdout.log",
+      "bytes": 6061,
+      "sha256": "50fc515c5fbcee65f7ced7741064c66b09bd7bebe861c36178c85d4782008c2f"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/public-test-replay/commons-lang-r2-native/evidence/selected-tests/stderr.log",
+      "copy": "logs/selected-tests.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ]
+}

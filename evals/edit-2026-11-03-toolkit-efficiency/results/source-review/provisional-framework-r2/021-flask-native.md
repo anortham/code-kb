@@ -1,0 +1,9 @@
+# Ordinal 21 — Flask native, repeat 2
+
+- Provisional source review: **PASS**. Lead owns final acceptance.
+- Attempt: `target/toolkit-efficiency/campaign/current-v2/attempts/014-flask-config-native-r2`.
+- Attempt `attempt.json` SHA-256: `36849228019bd20ab0dab6bcb2cc491204b36ce9479274eb4d85c8de5d8e7416` (matches `status.json.outcome_sha256`). Bundle JSON SHA-256: `e5d6d21e60be5e26b6e91dded59c1728b8a9fbaa435ee7b2cafae09dcf989387`. Seed digest: `fc0b9965e6330ffa0d84577f4d787080eec7ced43c00c8307d6cc6da03d48ead`; replay digest: `b3ab240c88dce44d3a5a23a7950f648397b5a4717993ed2146b44976b77a88d2`.
+- Reviewed immutable bundle diff against its seed. It changes only `src/flask/app.py`, `src/flask/sessions.py`, and new `tests/test_session_cookie_max_age.py`. Bundle violations are empty, `seed_unchanged` is true, patch is valid, and protection is `unchanged`.
+- Implementation sets the default to `None`; permanent-session expiry uses the configured `timedelta`, falls back to `PERMANENT_SESSION_LIFETIME` for `None`, and raises a named `TypeError` for other permanent-session values. The non-permanent branch returns before config access.
+- The new public module covers unset/explicit-None fallback, a seconds-configured fallback, positive/zero/negative overrides, actual emitted-cookie expiry, non-permanent cookies despite invalid settings, a guard against reading `SESSION_COOKIE_MAX_AGE`, and invalid permanent values including bool, string, integer, and object. Trusted configured public replay `evidence/grade/grade-008-stdout_log.log` collected 17 tests and passed all 17, including all 16 added cases. Hidden replay `grade-010-stdout_log.log` observed and passed its test.
+- No implementation or acceptance gap found against the frozen request. The answer's focused 17-test claim matches the trusted replay; the additional 153 basic/config test claim is outside the configured replay logs and was not used for acceptance. No safe/no-caller claim appears.

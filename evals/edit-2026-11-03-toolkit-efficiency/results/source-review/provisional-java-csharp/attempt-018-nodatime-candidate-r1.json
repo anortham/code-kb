@@ -1,0 +1,193 @@
+{
+  "added_public_test_execution": {
+    "focused_replay_command": "dotnet test src/NodaTime.Test/NodaTime.Test.csproj --framework net10.0 --no-restore --filter FullyQualifiedName~NodaTime.Test.BclDateTimeOffsetConversionTest",
+    "helper": "target/toolkit-efficiency/control/replay_added_public_tests.py",
+    "status": "pending-fresh-focused-replay-after-campaign",
+    "trusted_replay_observed": false
+  },
+  "attempt_artifacts": {
+    "attempt_json_sha256": "4095462e9d189c9c68b612f7560fa9da18f487d35f3c92fd6d8fc92c17ce3aa4",
+    "bundle_json_sha256": "f8e1139e1ccc04a44e5a59faa8c5e69227ab798042934103ca18d65574091d6b",
+    "bundle_violations": [],
+    "final_digest": "9480d297c98caac0c24fd24ee601aba7fe2c1a44cf0785ce10b4de3c43a38794",
+    "grade_json_sha256": "5325e33182a0a9a3423c31b2e014999677e21faaa5460cbb8957ee2cccffc584",
+    "status_json_sha256": "1165122e1aa3369e3e9bdbc9eb7f0506a09da5c37bc86fb7db5054e7ca021ecd"
+  },
+  "attempt_id": "nodatime-r1-candidate",
+  "attempt_path": "target/toolkit-efficiency/campaign/candidate-v2/attempts/012-nodatime-code-kb-r1",
+  "bundle_changes": [
+    {
+      "after_sha256": "2a945e660d6d593559e2d9d93a819c11292d3ef1dc92cf8647a00e01d2fe1ca5",
+      "before_sha256": null,
+      "path": "src/NodaTime.Test/BclDateTimeOffsetConversionTest.cs"
+    },
+    {
+      "after_sha256": "f63051e0f9f787f7bd4c8cb2f03f42be0fe6579707da63b5fedaf573196301ed",
+      "before_sha256": "e76b7274543d16fb4cbb93125fa2e5f71906b041a1ccbc9855f757056df57cf6",
+      "path": "src/NodaTime/Instant.cs"
+    },
+    {
+      "after_sha256": "37b113e32845dcece03cb0326291b391b857874ebd47146613af9f5794a0bdd3",
+      "before_sha256": "c4d0e11f82412e4dcbe6d303edd27090eabce050468a6694ee222601d5fe0699",
+      "path": "src/NodaTime/OffsetDateTime.cs"
+    }
+  ],
+  "case_id": "nodatime",
+  "case_request": {
+    "case_sha256": "a55ab9b83e8b0a45c9ed8bcbaf79a6f3350c9cb89232a04662993a7bfd05ab43",
+    "path": "evals/edit-2026-11-03-toolkit-efficiency/cases/nodatime/request.md",
+    "sha256": "ea783c09b7d5a0e5f506ef43bb59d5694d7ac6dbfdb95c69d303cf580c5f03e5"
+  },
+  "ordinal": 18,
+  "pin": {
+    "clean": true,
+    "commit": "649ce5a1c8ddf439eaed7b3bf9157882363cb937",
+    "seed_digest": "7609d88901825bf2f4f5020e2f6b190377fe5e49712b5c522de0e5f6d3f3ca7c",
+    "seed_project": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/candidate-v2/attempts/012-nodatime-code-kb-r1/work/seed-project",
+    "source_root": "target/toolkit-efficiency/preparation/java-csharp/nodatime-pinned-source"
+  },
+  "result": {
+    "acceptance_status": "pending_source_review",
+    "behavioral_pass": true,
+    "protection_status": "unchanged",
+    "terminal_progress_record": {
+      "attempt_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/candidate-v2/attempts/012-nodatime-code-kb-r1",
+      "behavioral_pass": true,
+      "case_id": "nodatime",
+      "dispatch_started": true,
+      "id": "nodatime-r1-candidate",
+      "launcher_exit_code": 0,
+      "manifest": "candidate",
+      "ordinal": 18,
+      "protection_status": "unchanged",
+      "repeat": 1,
+      "runtime": "candidate",
+      "schedule_index": 12,
+      "slot_state": "dispatched",
+      "status": "completed",
+      "trial_completed": true
+    },
+    "trusted_commands": {
+      "hidden": [
+        {
+          "command_id": "try-date-time-offset-contract",
+          "log_path": "target/toolkit-efficiency/campaign/candidate-v2/attempts/012-nodatime-code-kb-r1/evidence/grade/grade-014-stdout_log.log",
+          "log_sha256": "448c1ddcc9861777da76d29c7885c81a5609b613936fdcdee2c0fa0e53e52e1a",
+          "observed": {
+            "passed_names": [
+              "InstantConvertsAtUpperDateTimeOffsetBoundary [2 ms]",
+              "InstantConvertsInRangeAndTruncatesTowardStartOfTime [< 1 ms]",
+              "InstantReturnsFalseForValuesBeforeDateTimeOffsetRange [< 1 ms]",
+              "OffsetDateTimeReturnsFalseForOutOfRangeLocalDate [< 1 ms]",
+              "OffsetDateTimeReturnsFalseForUnsupportedOffset [< 1 ms]"
+            ],
+            "summary": {
+              "discovered": 5,
+              "passed": 5,
+              "total": 5
+            }
+          },
+          "passed": true,
+          "test_execution_observed": true
+        }
+      ],
+      "public": [
+        {
+          "command_id": "nodatime-public-instant-conversion-regressions",
+          "log_path": "target/toolkit-efficiency/campaign/candidate-v2/attempts/012-nodatime-code-kb-r1/evidence/grade/grade-008-stdout_log.log",
+          "log_sha256": "755b5c64eb90b99c4064f859b146b1422835f417c9cd218065052e267248073b",
+          "observed": {
+            "passed_names": [
+              "ToBclTypes_DateOutOfRange [4 ms]"
+            ],
+            "summary": {
+              "discovered": 1,
+              "passed": 1,
+              "total": 1
+            }
+          },
+          "passed": true,
+          "test_execution_observed": true
+        },
+        {
+          "command_id": "nodatime-public-offset-conversion-regressions",
+          "log_path": "target/toolkit-efficiency/campaign/candidate-v2/attempts/012-nodatime-code-kb-r1/evidence/grade/grade-010-stdout_log.log",
+          "log_sha256": "a61de27f1fc6934273c55a21ca33981e080cf106a6f43a3ea8ea82060205ed7f",
+          "observed": {
+            "passed_names": [
+              "ToDateTimeOffset_OffsetOutOfRange(-15) [4 ms]",
+              "ToDateTimeOffset_OffsetOutOfRange(15) [< 1 ms]"
+            ],
+            "summary": {
+              "discovered": 2,
+              "passed": 2,
+              "total": 2
+            }
+          },
+          "passed": true,
+          "test_execution_observed": true
+        },
+        {
+          "command_id": "nodatime-existing-public-purity-regression",
+          "log_path": "target/toolkit-efficiency/campaign/candidate-v2/attempts/012-nodatime-code-kb-r1/evidence/grade/grade-012-stdout_log.log",
+          "log_sha256": "0b48f99d9f5a6c2f8d956ccf481d42c4485821531cc5b402702a8b346c09b52d",
+          "observed": {
+            "passed_names": [
+              "AllPublicStructMethodsArePure [3 ms]"
+            ],
+            "summary": {
+              "discovered": 1,
+              "passed": 1,
+              "total": 1
+            }
+          },
+          "passed": true,
+          "test_execution_observed": true
+        }
+      ]
+    }
+  },
+  "review_status": "provisional",
+  "reviewer_verification": {
+    "method": "read-only inspection of the frozen request, pinned source, seed, immutable bundle, grade/status records, and retained logs",
+    "reason": "The timed campaign is active; configured trusted public filters omit BclDateTimeOffsetConversionTest, so its fresh focused public replay is deferred until all 36 trials are terminal.",
+    "reviewer_builds_or_tests_run": false
+  },
+  "runtime": "candidate",
+  "schema": 1,
+  "source_review": {
+    "added_public_tests": [
+      {
+        "after_sha256": "2a945e660d6d593559e2d9d93a819c11292d3ef1dc92cf8647a00e01d2fe1ca5",
+        "before_sha256": null,
+        "path": "src/NodaTime.Test/BclDateTimeOffsetConversionTest.cs"
+      }
+    ],
+    "existing_api_conversion_bodies_unchanged": true,
+    "production_changes": [
+      {
+        "after_sha256": "f63051e0f9f787f7bd4c8cb2f03f42be0fe6579707da63b5fedaf573196301ed",
+        "before_sha256": "e76b7274543d16fb4cbb93125fa2e5f71906b041a1ccbc9855f757056df57cf6",
+        "path": "src/NodaTime/Instant.cs"
+      },
+      {
+        "after_sha256": "37b113e32845dcece03cb0326291b391b857874ebd47146613af9f5794a0bdd3",
+        "before_sha256": "c4d0e11f82412e4dcbe6d303edd27090eabce050468a6694ee222601d5fe0699",
+        "path": "src/NodaTime/OffsetDateTime.cs"
+      }
+    ],
+    "rationale": [
+      "Instant.TryToDateTimeOffset initializes the out value to default on failure, rejects values before the BCL epoch, and delegates successful conversions to the unchanged ToDateTimeOffset method.",
+      "OffsetDateTime.TryToDateTimeOffset initializes the out value to default, checks offset plus local and UTC BCL tick ranges, and preserves ToDateTimeOffset precision truncation, offset-second truncation, and non-Gregorian calendar conversion.",
+      "Both new public struct methods preserve the existing Pure annotation. The added NUnit class covers successful values, negative and positive sub-tick precision, offset truncation and boundaries, default output on failure, BCL date limits, unsupported offsets, and Julian-calendar behavior including the BCL epoch boundary.",
+      "The bundle changes only Instant.cs, OffsetDateTime.cs, and one licensed NUnit test class. Existing ToDateTimeOffset method bodies match the frozen seed exactly; bundle violations are empty and protections are unchanged."
+    ],
+    "status": "provisional-source-pass",
+    "test_quality_note": null
+  },
+  "worktree": {
+    "branch": "toolkit-efficiency",
+    "head": "98644c4aff7bd5489b59d279cb611471f573b91a",
+    "path": "/home/murphy/.codex/worktrees/dd7b/code-kb"
+  }
+}

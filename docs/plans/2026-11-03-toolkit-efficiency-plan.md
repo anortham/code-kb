@@ -12,9 +12,9 @@
 
 **Architecture Quality:** Keep context behavior inside existing query and formatter boundaries. Main risk: reducing answer size or calls can hide callers, tests, conventions, uncertainty, or indexing cost that an agent needs.
 
-**Status:** Proposed. Implementation awaits a separate user go-ahead and model switch. Reviewer choice: none.
+**Status:** Completed and verified on `toolkit-efficiency` in `/home/murphy/.codex/worktrees/dd7b/code-kb`, retained locally without publication. The candidate failed both frozen efficiency gates and was removed. All 36 patches were independently accepted. K4 retains two source-backed skill clarifications. The full branch gate passes; see `evals/edit-2026-11-03-toolkit-efficiency/results/report.md` and `evals/edit-2026-11-03-toolkit-efficiency/verification.md`. Reviewer choice: none.
 
-**Authority:** This request authorizes planning, including local plan/handoff commits by the coordinating lead. Implementation/configuration changes and model trials are deferred until the user's implementation go-ahead. Repository `AGENTS.md` authorizes necessary model-evaluation spend once implementation starts; do not add a separate budget-approval gate then. Push, publication, release, and global installation changes remain ungranted.
+**Authority:** The implementation request authorizes this plan, necessary model trials, and local commits. Repository `AGENTS.md` authorizes necessary model-evaluation spend; no separate budget gate applies. The user explicitly prohibits pushing or releasing. Publication and global installation changes remain ungranted.
 
 **Reviewed baseline:** `/home/murphy/source/code-kb`, `main`, `8640bcd8cf952c842ab9a7352a568987f4caab5b`, version 2.12.0. The previous review passed 20 launcher tests but interrupted the Rust workspace suite; it is not full-suite verification. Optional coordinator: `/home/murphy/source/goldfish/docs/plans/2026-11-03-ai-toolkit-coordination-plan.md`.
 
@@ -107,12 +107,12 @@ Commit mode for future implementation work: `parallel-lead-commit`. Each worker 
 **Approach:** Reconcile the 2.11.x native comparison and the 2.12.0 one-call follow-up, including acceptance and all available token and timing fields. Treat historical cases as development data only. Use the existing campaign format and record source/test ownership selected with current `code-kb` navigation. Do not select a change from response size alone.
 
 **Acceptance criteria:**
-- [ ] The protocol names the trace evidence and a concrete repeated-cost finding, or records that no code-kb optimization is justified.
-- [ ] The protocol freezes six untouched cases, two repeats per arm, 12 matched three-arm sets (or two-arm pairs with no candidate), controls, run order, acceptance rubric, both 5% comparisons, and the stop rule before K3 starts.
-- [ ] Use the existing two-arm campaign format for native-versus-current and native-versus-candidate schedules if necessary; reuse each identical native control result once through immutable slot references in a combined report rather than rerunning it. Verify protocol/runner compatibility before exposure. Do not invent a new runner arm field or change the runner's trust boundaries to accommodate this plan.
-- [ ] Every case has independently gradable acceptance and protected-input checks; historical case files remain byte-identical.
-- [ ] The task identifies exact K2 source and regression-test paths from current code-kb evidence; if no seam is justified, K2 is skipped and baseline behavior is retained.
-- [ ] K1 artifacts pass their narrow validation and are handed to the lead per `parallel-lead-commit`.
+- [x] The protocol names the trace evidence and a concrete repeated-cost finding, or records that no code-kb optimization is justified.
+- [x] The protocol freezes six untouched cases, two repeats per arm, 12 matched three-arm sets (or two-arm pairs with no candidate), controls, run order, acceptance rubric, both 5% comparisons, and the stop rule before K3 starts.
+- [x] Use the existing two-arm campaign format for native-versus-current and native-versus-candidate schedules if necessary; reuse each identical native control result once through immutable slot references in a combined report rather than rerunning it. Verify protocol/runner compatibility before exposure. Do not invent a new runner arm field or change the runner's trust boundaries to accommodate this plan.
+- [x] Every case has independently gradable acceptance and protected-input checks; historical case files remain byte-identical.
+- [x] The task identifies exact K2 source and regression-test paths from current code-kb evidence; if no seam is justified, K2 is skipped and baseline behavior is retained.
+- [x] K1 artifacts pass their narrow validation and are handed to the lead per `parallel-lead-commit`.
 
 ### Task K2: Implement only the measured context reduction
 
@@ -137,11 +137,11 @@ Commit mode for future implementation work: `parallel-lead-commit`. Each worker 
 **Approach:** Use `get_symbol_context` and `find_references` on the selected seam before editing. Add the targeted failing test first. Do not assume a batching, truncation, caching, summary, or prompt rewrite is the right algorithm; implement only what the frozen traces support.
 
 **Acceptance criteria:**
-- [ ] The regression test fails before the implementation and passes after it.
-- [ ] All seven MCP tools, explicit root, automatic refresh, caller/test/convention information, uncertainty and coverage notices, and budget/drill-down warnings remain available as required.
-- [ ] No unrelated public behavior, language contract, or Stop hook behavior changes.
-- [ ] `cargo build --release` produces the candidate and its path/hash/version/commit are frozen alongside a separately preserved current-code-kb runtime before K3.
-- [ ] Worker-scope verification passes; hand the verified diff to the lead per `parallel-lead-commit`.
+- [x] The regression test fails before the implementation and passes after it.
+- [x] All seven MCP tools, explicit root, automatic refresh, caller/test/convention information, uncertainty and coverage notices, and budget/drill-down warnings remain available as required.
+- [x] No unrelated public behavior, language contract, or Stop hook behavior changes.
+- [x] `cargo build --release` produces the candidate and its path/hash/version/commit are frozen alongside a separately preserved current-code-kb runtime before K3.
+- [x] Worker-scope verification passes; hand the verified diff to the lead per `parallel-lead-commit`.
 
 ### Task K3: Run the fresh paired confirmation campaign
 
@@ -168,10 +168,10 @@ Commit mode for future implementation work: `parallel-lead-commit`. Each worker 
 **Approach:** Use the existing runner, frozen artifacts, and output-isolated campaign path. Keep completed attempts unchanged. Repair only setup failures that occurred before model exposure and run only the affected unexposed slots. Do not tune against the confirmation cases or extend the sample after seeing results.
 
 **Acceptance criteria:**
-- [ ] The report contains all 12 matched sets or marks the affected comparison inconclusive; it does not silently discard missing measurements or failed slots. It identifies every runtime by executable hash/version/source commit.
-- [ ] Acceptance and protected-input/source-review results are primary; all token and timing measures are reported separately.
-- [ ] The candidate-improvement and native-savings gates are reported separately at the Design contract thresholds; a fail/inconclusive outcome makes no corresponding savings claim. A candidate failing the retention gate is not shipped as an optimization.
-- [ ] No completed historical or confirmation attempt is rerun or rewritten; hand the evidence to the lead per `parallel-lead-commit`.
+- [x] The report contains all 12 matched sets or marks the affected comparison inconclusive; it does not silently discard missing measurements or failed slots. It identifies every runtime by executable hash/version/source commit.
+- [x] Acceptance and protected-input/source-review results are primary; all token and timing measures are reported separately.
+- [x] The candidate-improvement and native-savings gates are reported separately at the Design contract thresholds; a fail/inconclusive outcome makes no corresponding savings claim. A candidate failing the retention gate is not shipped as an optimization.
+- [x] No completed historical or confirmation attempt is rerun or rewritten; hand the evidence to the lead per `parallel-lead-commit`.
 
 ### Task K4: Align code-kb guidance with verified behavior
 
@@ -203,10 +203,10 @@ Commit mode for future implementation work: `parallel-lead-commit`. Each worker 
 **Approach:** Compare every changed instruction with current source and K3 evidence, including configuration/framework reference gaps, broader-test guidance, and the advisory fail-open one-shot edit check. If no mismatch exists, leave guidance unchanged. Do not edit Razorback materials or broaden into compiler/dynamic analysis.
 
 **Acceptance criteria:**
-- [ ] Any changed claim is source-backed and agrees with the paired results; a negative result contains no efficiency claim.
-- [ ] `AGENTS.md` and `CLAUDE.md` remain byte-identical if either changes.
-- [ ] Add a regression test only when an actual documentation/runtime mismatch was found; otherwise record the no-change audit.
-- [ ] The owning tests pass and the result is handed to the lead for the coordinator's combined smoke per `parallel-lead-commit`.
+- [x] Any changed claim is source-backed and agrees with the paired results; a negative result contains no efficiency claim.
+- [x] `AGENTS.md` and `CLAUDE.md` remain byte-identical if either changes.
+- [x] Add a regression test only when an actual documentation/runtime mismatch was found; otherwise record the no-change audit.
+- [x] The owning tests pass and the result is handed to the lead for the coordinator's combined smoke per `parallel-lead-commit`.
 
 ## Starting a separate implementation session
 

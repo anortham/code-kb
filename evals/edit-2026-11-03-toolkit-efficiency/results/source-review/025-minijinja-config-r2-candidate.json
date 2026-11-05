@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "ordinal": 25,
+  "case_id": "minijinja-config",
+  "repeat": 2,
+  "runtime": "candidate",
+  "attempt_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/campaign/candidate-v2/attempts/017-minijinja-config-code-kb-r2/attempt.json",
+  "attempt_sha256": "0ba40a415d374b7763e7f98831f5e103b4e1a2e6f010bcdbb27170dbe8c2a6e7",
+  "bundle_json_sha256": "6435278f0547fa0c1beffdc1f612753dfbc4679ad14d9bc85e5c968f466cc92c",
+  "source_review": "passed",
+  "accepted": true,
+  "trial_completed": true,
+  "behavioral_pass": true,
+  "protection_status": "unchanged",
+  "review_note": "results/source-review/provisional-rust-go-r2/review.json",
+  "review_note_sha256": "e8497525fcc20860ad49f56dd8eb3576aaed11f2d565cc17748936d988ccd3d6",
+  "lead_review": "Reviewed production diffs against seeds and independent source notes; accepted frozen behavior, valid controls and edge cases. Trusted public replay executed added tests. HCL generated executable paths are produced by specsuite/spec_test.go; they are retained, unprotected outputs, not modified source or acceptance checks.",
+  "added_tests": {
+    "fresh_public_replay": true,
+    "executed": true,
+    "logs": [
+      {
+        "path": "results/source-review/025-public-0.log",
+        "sha256": "fff18f30e7e866f639c0062b4d7273a904f7a2acfb1973fa91dd472eacac431e"
+      }
+    ]
+  },
+  "generated_outputs": [],
+  "original_record_unchanged": true
+}

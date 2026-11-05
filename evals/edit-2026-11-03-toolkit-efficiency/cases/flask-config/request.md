@@ -1,0 +1,3 @@
+Add an optional `SESSION_COOKIE_MAX_AGE` Flask config setting. It accepts a `datetime.timedelta` or `None` and defaults to `None`. For a permanent session, a timedelta value overrides `PERMANENT_SESSION_LIFETIME` when generating the cookie expiration. `None` keeps the existing permanent-session lifetime. A non-permanent session remains a browser session and has no expiration without inspecting this setting. When calculating expiration for a permanent session, reject any other setting type with a `TypeError` that names `SESSION_COOKIE_MAX_AGE`.
+
+Add a new public test module that covers the override, the default, non-permanent sessions, and an invalid value. Keep existing session behavior unchanged when the new setting is unset.

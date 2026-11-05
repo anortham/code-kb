@@ -1,0 +1,60 @@
+{
+  "schema": 1,
+  "archives": [
+    {
+      "name": "attempts",
+      "path": "/home/murphy/.cache/code-kb-completed-edit/2026-11-03-toolkit-efficiency/archive/attempts.tar.gz",
+      "sha256": "2cb24b196888554c341d7456e33d26fc776b744e1f6bde106b51876712897260",
+      "bytes": 36359421,
+      "members": 1100,
+      "inventory_path": "/home/murphy/.cache/code-kb-completed-edit/2026-11-03-toolkit-efficiency/archive/attempts-inventory.json",
+      "inventory_sha256": "84f9c08a0202922aac69c624ffc2da1d74d00f26b5e83da4e98fa38054f4fd47",
+      "verified_all_members": true
+    },
+    {
+      "name": "seeds",
+      "path": "/home/murphy/.cache/code-kb-completed-edit/2026-11-03-toolkit-efficiency/archive/seeds.tar.gz",
+      "sha256": "6bda87203d05fd0db7397fd1ebe37d58a438cd2d5a6e3fe9e20568476015a518",
+      "bytes": 12381517,
+      "members": 7217,
+      "inventory_path": "/home/murphy/.cache/code-kb-completed-edit/2026-11-03-toolkit-efficiency/archive/seeds-inventory.json",
+      "inventory_sha256": "d24afdd68de5b02c27a49de895056e57c465688e7e16232644fc29b9e2c77533",
+      "verified_all_members": true
+    },
+    {
+      "name": "method",
+      "path": "/home/murphy/.cache/code-kb-completed-edit/2026-11-03-toolkit-efficiency/archive/method.tar.gz",
+      "sha256": "dc14a7e8884a7b4e4824b2d0ccf796bc0bc72f67c75be528237b7c57ac652caa",
+      "bytes": 1143386,
+      "members": 1166,
+      "inventory_path": "/home/murphy/.cache/code-kb-completed-edit/2026-11-03-toolkit-efficiency/archive/method-inventory.json",
+      "inventory_sha256": "7d70cd0a891257aa28bec645bc757e7036ec63ebe2898b77328877429ba3f184",
+      "verified_all_members": true
+    },
+    {
+      "name": "analysis-final",
+      "path": "/home/murphy/.cache/code-kb-completed-edit/2026-11-03-toolkit-efficiency/archive/analysis-final.tar.gz",
+      "sha256": "9a00aa1d8c5e17f52d1f7207e0c020699f68746b7314178afc4cbf5ccf330ed0",
+      "bytes": 426037,
+      "members": 306,
+      "inventory_path": "/home/murphy/.cache/code-kb-completed-edit/2026-11-03-toolkit-efficiency/archive/analysis-final-inventory.json",
+      "inventory_sha256": "d6c14a3716281345db926316c27574e92fa9048845102cb55d14f11c720ca73d",
+      "verified_all_members": true,
+      "purpose": "Final guarded analysis, acceptance derivatives, report/guidance, and branch verification; preserves the earlier method archive unchanged."
+    }
+  ],
+  "seed_digests": {
+    "flask-config": "fc0b9965e6330ffa0d84577f4d787080eec7ced43c00c8307d6cc6da03d48ead",
+    "express-route": "ad2fb07c2954951a089b29f3f8f0ec9356fac82259d13009890343770b1e455a",
+    "minijinja-config": "e70f8d055dff7a54758b5fd4661ab5dbf08e8a2484f8fc7f8498f3245114ed72",
+    "hcl-config": "28893caee13b3b5a54118948e02c0dc528e9117e53eca1518ce43892eb2dffa3",
+    "commons-lang": "45360d445c673c6a4ecbd8d32de4afaa701841fd9638caa6668846f10af5b3e3",
+    "nodatime": "7609d88901825bf2f4f5020e2f6b190377fe5e49712b5c522de0e5f6d3f3ca7c"
+  },
+  "excluded": [
+    "Private provider credentials and unredacted state",
+    "Agent and grader build/work directories",
+    "Dependency and tool copies already bound by frozen hashes"
+  ],
+  "seed_policy": "One actual immutable runner seed per case, preserving its Git metadata and symlinks; never the rejected refreshed framework seed copies."
+}

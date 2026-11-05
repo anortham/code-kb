@@ -1,0 +1,53 @@
+
+
+  req
+    .query
+      ✔ should default to {}
+      ✔ should default to parse simple keys
+      when "query parser" is extended
+        ✔ should parse complex keys
+        ✔ should parse parameters with dots
+      when "query parser" is simple
+        ✔ should not parse complex keys
+      when "query parser" is a function
+        ✔ should parse using function
+      when "query parser" disabled
+        ✔ should not parse query
+      when "query parser" enabled
+        ✔ should not parse complex keys
+      when "query parser" an unknown value
+        ✔ should throw
+
+  query parser depth
+    ✔ should default to 5 without changing the simple parser default
+    ✔ should preserve the default extended nesting limit of 5
+    ✔ should use a depth set before selecting the extended parser
+    ✔ should apply depth changes to later requests
+    ✔ should allow increasing depth beyond the default
+    ✔ should leave the simple parser unchanged
+    ✔ should leave the true parser unchanged
+    ✔ should leave the false parser unchanged
+    ✔ should leave a custom function parser unchanged
+    ✔ should retain the depth when switching back to extended
+    ✔ should reject invalid depth #0 without changing the setting or parser
+    ✔ should reject invalid depth #1 without changing the setting or parser
+    ✔ should reject invalid depth #2 without changing the setting or parser
+    ✔ should reject invalid depth #3 without changing the setting or parser
+    ✔ should reject invalid depth #4 without changing the setting or parser
+    ✔ should reject invalid depth #5 without changing the setting or parser
+    ✔ should reject invalid depth #6 without changing the setting or parser
+    ✔ should reject invalid depth #7 without changing the setting or parser
+    ✔ should reject invalid depth #8 without changing the setting or parser
+    ✔ should reject invalid depth #9 without changing the setting or parser
+    ✔ should reject invalid depth #10 without changing the setting or parser
+    ✔ should reject invalid depth #11 without changing the setting or parser
+    ✔ should reject invalid depth #12 without changing the setting or parser
+    ✔ should reject invalid depth #13 without changing the setting or parser
+    ✔ should reject invalid depth #14 without changing the setting or parser
+    ✔ should reject invalid depth #15 without changing the setting or parser
+    ✔ should reject invalid depth #16 without changing the setting or parser
+
+
+  36 passing (70ms)
+
+36 tests passed

@@ -1,0 +1,206 @@
+{
+  "behavioral_pass": true,
+  "case_id": "minijinja-config",
+  "case_sha256": "3580ae7fd74760eec9ed0e4c0f07a274552949bab76600be5eeb25f72d088915",
+  "checks": {
+    "baseline_public": {
+      "commands": [
+        {
+          "command_id": "minijinja_cli_regressions",
+          "elapsed_seconds": 8.041282,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/minijinja-v5/evidence/baseline-public-00-minijinja_cli_regressions/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/minijinja-v5/evidence/baseline-public-00-minijinja_cli_regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "baseline_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "restore_cargo_cache",
+          "elapsed_seconds": 1.117378,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/minijinja-v5/evidence/runtime-baseline-00-restore_cargo_cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/minijinja-v5/evidence/runtime-baseline-00-restore_cargo_cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "preparation": {
+      "commands": [],
+      "mode": "reused-inputs",
+      "passed": true
+    },
+    "reference_hidden": {
+      "commands": [
+        {
+          "command_id": "fuel_override_acceptance",
+          "elapsed_seconds": 10.059358,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/minijinja-v5/evidence/reference-hidden-00-fuel_override_acceptance/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/minijinja-v5/evidence/reference-hidden-00-fuel_override_acceptance/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_hidden_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "restore_cargo_cache",
+          "elapsed_seconds": 1.568483,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/minijinja-v5/evidence/runtime-reference-hidden-00-restore_cargo_cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/minijinja-v5/evidence/runtime-reference-hidden-00-restore_cargo_cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_public": {
+      "commands": [
+        {
+          "command_id": "minijinja_cli_regressions",
+          "elapsed_seconds": 10.656335,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/minijinja-v5/evidence/reference-public-00-minijinja_cli_regressions/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/minijinja-v5/evidence/reference-public-00-minijinja_cli_regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_public_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "restore_cargo_cache",
+          "elapsed_seconds": 1.521006,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/minijinja-v5/evidence/runtime-reference-public-00-restore_cargo_cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/minijinja-v5/evidence/runtime-reference-public-00-restore_cargo_cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "seed_hidden_failure": {
+      "commands": [
+        {
+          "command_id": "fuel_override_acceptance",
+          "elapsed_seconds": 8.292477,
+          "exit_status": 101,
+          "expected_output_missing": [
+            "test explicit_zero_cli_fuel_overrides_environment ... ok",
+            "test result: ok. 2 passed"
+          ],
+          "passed": false,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/minijinja-v5/evidence/seed-hidden-00-fuel_override_acceptance/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/minijinja-v5/evidence/seed-hidden-00-fuel_override_acceptance/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "seed_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "restore_cargo_cache",
+          "elapsed_seconds": 1.166972,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/minijinja-v5/evidence/runtime-seed-00-restore_cargo_cache/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/minijinja-v5/evidence/runtime-seed-00-restore_cargo_cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    }
+  },
+  "created_utc": "2026-11-04T01:32:35Z",
+  "dependencies": {
+    "cargo-cache": "eac88f77d5490563112b892dcb38a804d9fdb32e52de2624bd5c0738faef538a"
+  },
+  "readiness_error": null,
+  "reference_bundle_path": "evidence/reference-bundle",
+  "reference_digest": "089eab9a16ff04e607143b08c1332b99481404a155e4ee79100c4432d48df22a",
+  "reference_production_files_changed": [
+    "minijinja-cli/src/command.rs",
+    "minijinja-cli/src/config.rs"
+  ],
+  "repo_id": "minijinja-config",
+  "schema": 1,
+  "seed_digest": "e70f8d055dff7a54758b5fd4661ab5dbf08e8a2484f8fc7f8498f3245114ed72",
+  "seed_project_path": "work/seed-project",
+  "source_pin": "81787c4eab656f3a4f4e92dea53f303a36f1685c",
+  "source_review": "passed",
+  "source_tree_sha256": "286853b205b2dfa30f70e74245d9b4e32f86a33c2ac0cfb128a3821b4b82e10b",
+  "status": "ready",
+  "source_review_evidence": "source-review.md",
+  "raw_readiness_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/rust-go/readiness/minijinja-v5/readiness.json",
+  "raw_readiness_sha256": "408321bf203ed6e5628fe6dac40f3f91999e75d048b10f1fcfa44bdbf1e38aab",
+  "independent_source_review": "Reviewed optional CLI fuel handling: only an explicit Some value overrides environment/config, including zero. Positive behavior remains assigned unchanged. Help and new zero/positive CLI tests pass. Protected old help snapshot exclusion is explicit in request; new help coverage verifies the changed contract."
+}

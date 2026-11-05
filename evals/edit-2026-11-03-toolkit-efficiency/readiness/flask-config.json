@@ -1,0 +1,269 @@
+{
+  "behavioral_pass": true,
+  "case_id": "flask-config",
+  "case_sha256": "00bb6dec8edcd93059ae3e1ce670331f7448e2a0dc8962706fc0e2d64478b5c4",
+  "checks": {
+    "baseline_public": {
+      "commands": [
+        {
+          "command_id": "focused_public_regressions",
+          "elapsed_seconds": 0.415025,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/evidence/baseline-public-00-focused_public_regressions/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/evidence/baseline-public-00-focused_public_regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "baseline_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "materialize_python_dependencies",
+          "elapsed_seconds": 0.114556,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/evidence/runtime-baseline-00-materialize_python_dependencies/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/evidence/runtime-baseline-00-materialize_python_dependencies/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "copy_python_dependencies",
+          "elapsed_seconds": 0.164526,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/evidence/runtime-baseline-01-copy_python_dependencies/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/evidence/runtime-baseline-01-copy_python_dependencies/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "preparation": {
+      "commands": [],
+      "mode": "reused-inputs",
+      "passed": true
+    },
+    "reference_hidden": {
+      "commands": [
+        {
+          "command_id": "session_max_age",
+          "elapsed_seconds": 0.4153,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/evidence/reference-hidden-00-session_max_age/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/evidence/reference-hidden-00-session_max_age/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_hidden_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "materialize_python_dependencies",
+          "elapsed_seconds": 0.114611,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/evidence/runtime-reference-hidden-00-materialize_python_dependencies/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/evidence/runtime-reference-hidden-00-materialize_python_dependencies/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "copy_python_dependencies",
+          "elapsed_seconds": 0.164344,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/evidence/runtime-reference-hidden-01-copy_python_dependencies/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/evidence/runtime-reference-hidden-01-copy_python_dependencies/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_public": {
+      "commands": [
+        {
+          "command_id": "focused_public_regressions",
+          "elapsed_seconds": 0.415367,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/evidence/reference-public-00-focused_public_regressions/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/evidence/reference-public-00-focused_public_regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_public_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "materialize_python_dependencies",
+          "elapsed_seconds": 0.114346,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/evidence/runtime-reference-public-00-materialize_python_dependencies/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/evidence/runtime-reference-public-00-materialize_python_dependencies/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "copy_python_dependencies",
+          "elapsed_seconds": 0.164516,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/evidence/runtime-reference-public-01-copy_python_dependencies/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/evidence/runtime-reference-public-01-copy_python_dependencies/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "seed_hidden_failure": {
+      "commands": [
+        {
+          "command_id": "session_max_age",
+          "elapsed_seconds": 0.41592,
+          "exit_status": 1,
+          "expected_output_missing": [
+            "passed"
+          ],
+          "passed": false,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/evidence/seed-hidden-00-session_max_age/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/evidence/seed-hidden-00-session_max_age/stdout.log",
+          "test_execution_observed": false,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "seed_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "materialize_python_dependencies",
+          "elapsed_seconds": 0.114351,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/evidence/runtime-seed-00-materialize_python_dependencies/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/evidence/runtime-seed-00-materialize_python_dependencies/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "copy_python_dependencies",
+          "elapsed_seconds": 0.164324,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/evidence/runtime-seed-01-copy_python_dependencies/stderr.log",
+          "stdout_log": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/evidence/runtime-seed-01-copy_python_dependencies/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    }
+  },
+  "created_utc": "2026-11-04T01:13:32Z",
+  "dependencies": {
+    "python-site": "5117e25ba3fedef8fa8fb13cc85c068343cfbd90fb1a387c3beedfe24eddcbb6"
+  },
+  "readiness_error": null,
+  "reference_bundle_path": "evidence/reference-bundle",
+  "reference_digest": "76830730a19cd58ebf9e3f818da8666daf371c81e4d5268969b5d2ec60c00062",
+  "reference_production_files_changed": [
+    "src/flask/app.py",
+    "src/flask/sessions.py"
+  ],
+  "repo_id": "flask-config",
+  "schema": 1,
+  "seed_digest": "fc0b9965e6330ffa0d84577f4d787080eec7ced43c00c8307d6cc6da03d48ead",
+  "seed_project_path": "work/seed-project",
+  "source_pin": "d73fa1cdcbd8b1465c151db8924ba58b1dd14e35",
+  "source_review": "passed",
+  "source_tree_sha256": "82f9e3eb17edeffd2f768cef94cf936fb5e0d7ea77636113353b2056741b46cf",
+  "status": "ready",
+  "source_review_evidence": "source-review.md",
+  "raw_readiness_path": "/home/murphy/.codex/worktrees/dd7b/code-kb/target/toolkit-efficiency/preparation/framework/readiness-5/flask-config/readiness.json",
+  "raw_readiness_sha256": "efc990253615e63524212449cd00b06286168a9dc3795c876434f590243b9af7",
+  "independent_source_review": "Reviewed defaults and permanent-session expiration, valid timedelta/None, non-permanent bypass, and invalid permanent type. Reference replaces the seeded zero default. New public request/cookie tests and hidden checks pass."
+}

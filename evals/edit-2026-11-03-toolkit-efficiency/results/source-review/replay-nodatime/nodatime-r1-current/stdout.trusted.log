@@ -1,0 +1,46 @@
+  InheritDocTask replaced 53 of 53 inheritdoc tags and removed 649 non-public member docs in /workspace/project/src/NodaTime/bin/Debug/net8.0/NodaTime.xml
+  NodaTime -> /workspace/project/src/NodaTime/bin/Debug/net8.0/NodaTime.dll
+  InheritDocTask replaced 53 of 53 inheritdoc tags and removed 649 non-public member docs in /workspace/project/src/NodaTime/bin/Debug/netstandard2.0/NodaTime.xml
+  NodaTime -> /workspace/project/src/NodaTime/bin/Debug/netstandard2.0/NodaTime.dll
+  InheritDocTask replaced 5 of 5 inheritdoc tags and removed 2 non-public member docs in /workspace/project/src/NodaTime.Testing/bin/Debug/netstandard2.0/NodaTime.Testing.xml
+  NodaTime.Testing -> /workspace/project/src/NodaTime.Testing/bin/Debug/netstandard2.0/NodaTime.Testing.dll
+  NodaTime.Test -> /workspace/project/src/NodaTime.Test/bin/Debug/net10.0/NodaTime.Test.dll
+Test run for /workspace/project/src/NodaTime.Test/bin/Debug/net10.0/NodaTime.Test.dll (.NETCoreApp,Version=v10.0)
+VSTest version 18.0.2 (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+NUnit Adapter 6.3.0.0: Test execution started
+Running selected tests in /workspace/project/src/NodaTime.Test/bin/Debug/net10.0/NodaTime.Test.dll
+   NUnit3TestExecutor discovered 26 of 26 NUnit test cases using Current Discovery mode, Non-Explicit run
+  Passed Instant_DateOutOfRange [5 ms]
+  Passed Instant_MaxValue [< 1 ms]
+  Passed Instant_Success(1,1,1) [< 1 ms]
+  Passed Instant_Success(2011,8,18) [< 1 ms]
+  Passed Instant_Success(9999,12,31) [< 1 ms]
+  Passed Instant_TruncatesTowardsStartOfTime(100) [< 1 ms]
+  Passed Instant_TruncatesTowardsStartOfTime(1900) [< 1 ms]
+  Passed Instant_TruncatesTowardsStartOfTime(2900) [< 1 ms]
+  Passed OffsetDateTime_BclBoundaries [< 1 ms]
+  Passed OffsetDateTime_JulianCalendar [< 1 ms]
+  Passed OffsetDateTime_LocalDateOutOfRange [< 1 ms]
+  Passed OffsetDateTime_Success(-14) [< 1 ms]
+  Passed OffsetDateTime_Success(0) [< 1 ms]
+  Passed OffsetDateTime_Success(14) [< 1 ms]
+  Passed OffsetDateTime_TruncatesOffsetSeconds(-50459,-840) [1 ms]
+  Passed OffsetDateTime_TruncatesOffsetSeconds(-1859,-30) [< 1 ms]
+  Passed OffsetDateTime_TruncatesOffsetSeconds(-59,0) [< 1 ms]
+  Passed OffsetDateTime_TruncatesOffsetSeconds(59,0) [< 1 ms]
+  Passed OffsetDateTime_TruncatesOffsetSeconds(1859,30) [< 1 ms]
+  Passed OffsetDateTime_TruncatesOffsetSeconds(50459,840) [< 1 ms]
+  Passed OffsetDateTime_TruncatesTowardsStartOfTime(100) [< 1 ms]
+  Passed OffsetDateTime_TruncatesTowardsStartOfTime(1900) [< 1 ms]
+  Passed OffsetDateTime_TruncatesTowardsStartOfTime(2900) [< 1 ms]
+  Passed OffsetDateTime_UnsupportedOffset(-15) [< 1 ms]
+  Passed OffsetDateTime_UnsupportedOffset(15) [< 1 ms]
+  Passed OffsetDateTime_UtcDateOutOfRange [< 1 ms]
+
+Test Run Successful.
+Total tests: 26
+     Passed: 26
+ Total time: 3.9140 Seconds

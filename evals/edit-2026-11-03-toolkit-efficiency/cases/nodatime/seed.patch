@@ -1,0 +1,46 @@
+diff --git a/src/NodaTime/Instant.cs b/src/NodaTime/Instant.cs
+index 00e6d4e..5c989b9 100644
+--- a/src/NodaTime/Instant.cs
++++ b/src/NodaTime/Instant.cs
+@@ -581,6 +581,18 @@ public readonly struct Instant : IEquatable<Instant>, IComparable<Instant>, IFor
+         return new DateTimeOffset(BclTicksAtUnixEpoch + ToUnixTimeTicks(), TimeSpan.Zero);
+     }
+ 
++    /// <summary>
++    /// Attempts to convert this value to a <see cref="DateTimeOffset"/>.
++    /// </summary>
++    /// <param name="result">The converted value, or the default value if conversion is not possible.</param>
++    /// <returns>True if conversion succeeded; otherwise, false.</returns>
++    [Pure]
++    public bool TryToDateTimeOffset(out DateTimeOffset result)
++    {
++        result = default;
++        return false;
++    }
++
+     /// <summary>
+     /// Converts a <see cref="DateTimeOffset"/> into a new Instant representing the same instant in time. Note that
+     /// the offset information is not preserved in the returned Instant.
+diff --git a/src/NodaTime/OffsetDateTime.cs b/src/NodaTime/OffsetDateTime.cs
+index b4f599f..629c691 100644
+--- a/src/NodaTime/OffsetDateTime.cs
++++ b/src/NodaTime/OffsetDateTime.cs
+@@ -335,6 +335,18 @@ public readonly struct OffsetDateTime : IEquatable<OffsetDateTime>, IFormattable
+         return new DateTimeOffset(LocalDateTime.ToDateTimeUnspecified(), TimeSpan.FromMinutes(offsetMinutes));
+     }
+ 
++    /// <summary>
++    /// Attempts to convert this value to a <see cref="DateTimeOffset"/>.
++    /// </summary>
++    /// <param name="result">The converted value, or the default value if conversion is not possible.</param>
++    /// <returns>True if conversion succeeded; otherwise, false.</returns>
++    [Pure]
++    public bool TryToDateTimeOffset(out DateTimeOffset result)
++    {
++        result = default;
++        return false;
++    }
++
+     /// <summary>
+     /// Builds an <see cref="OffsetDateTime"/> from a BCL <see cref="DateTimeOffset"/> by converting
+     /// the <see cref="DateTime"/> part to a <see cref="LocalDateTime"/>, and the offset part to an <see cref="Offset"/>.
