@@ -33,4 +33,16 @@ Verification evidence lives under ignored target/release-support, target/reach-g
 
 ## Published releases
 
-Goldfish 8.0.10 is published at `0f74184` with local tests/typecheck/tag guard and both main/tag CI passing. Razorback 0.49.0 has passed 505 tests and its version checks; the combined check passed and its worker is finalizing publication. code-kb source PR: https://github.com/anortham/code-kb/pull/86.
+Goldfish 8.0.10 is published at `0f74184` with local tests/typecheck/tag guard and both main/tag CI passing. Razorback 0.49.0 is published at tag commit `4ebc9d3`, with final metadata at `6d173c6`; 505 tests, version checks, and branch/tag CI passed. code-kb source PR: https://github.com/anortham/code-kb/pull/86.
+
+## Prepublication evidence snapshot, 2026-11-05
+
+This snapshot precedes the final code-kb version-only bump. Final publication is recorded by the GitHub releases and gate reports, rather than by changing this snapshot after its commit.
+
+- Goldfish: https://github.com/anortham/goldfish/releases/tag/v8.0.10.
+- Razorback: https://github.com/anortham/razorback/releases/tag/v0.49.0.
+- code-kb source fixes: `571d393` corrects impact labels/count units and Windows ARM archive selection; `ba22407` preserves name-only confidence. Linux and native Windows impact targets passed all 63 tests. All nine originally failing native tests also passed individually.
+- One additional core formatter assertion still quotes the old test-count wording. Its correction, focused proof, and the full Rust source gate precede publication.
+- Earlier fresh reach passed at `571d393` with 0.915 recall, and combined integration passed on that source. Final semantic-input fingerprints need a fresh reach run and integration check after the final assertion update.
+- Dogfood receipt claims use the existing validator's supported path subsets when later fixes supersede earlier files. Current coverage passed the unchanged strict validator at `ba22407`. Preserve surviving artifacts and the supersession journal; do not reconstruct the deleted historical member-label receipt. Current member-label proof comes from independent `ba22407` reproductions.
+- Remaining publication gates are source/main CI, the version bump, v2.12.0 corpus comparison, release preflight, bump CI, atomic main/tag push, six archive checks, clean plugin install, and core/CLI registry publication and installs.

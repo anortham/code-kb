@@ -5653,7 +5653,7 @@ mod tests {
             ..cut_by_depth.clone()
         };
         assert!(format_blast_radius(&deeper_tests).contains(
-            "No test reaches it within depth 2. A `depth` of 5 lists at least 3 tests.\n"
+            "No test reaches it within depth 2. A `depth` of 5 lists at least 3 additional distinct test rows.\n"
         ));
 
         let no_deeper_test = BlastRadiusResult {
