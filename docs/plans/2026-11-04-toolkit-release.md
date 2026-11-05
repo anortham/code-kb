@@ -9,12 +9,12 @@ Versions: Goldfish 8.0.10, Razorback 0.49.0, code-kb 2.13.0 with published Julie
 - [x] Inventory all worktrees, fetch origin, reuse e912 checkout on release/2.13.0.
 - [x] Merge toolkit-efficiency into Julie integration; rejected candidate remains excluded.
 - [ ] Run exactly one full dogfood round on the combined published-Julie candidate, before version bump; verify each finding. Fix wrong answers with regression and exact-call evidence, never repeat a full round just to find more.
-- [ ] Run fresh ground-truth reach gate for semantic inputs.
+- [x] Run fresh ground-truth reach gate for semantic inputs: a07c195 PASS, overall recall 0.915.
 - [ ] Complete source gates and merge verified integration into main through required PR/CI.
 - [ ] Bump only version-bearing files/release notes locally; source/dependency version normalization permits reusing matching reach/dogfood fingerprints.
 - [ ] Compare release candidate against released v2.12.0 on real-project corpus on bump commit; inspect changed outputs and edge samples.
 - [ ] Run complete release-preflight and required CI on bump commit.
-- [ ] Run final isolated three-tool integration using Julie 3.12 candidate.
+- [x] Run isolated three-tool integration using Julie 3.12 candidate: 2026-11-05T00:57Z PASS on Goldfish 0f74184 and code-kb a07c195; recheck if runtime changes.
 - [ ] Atomically push code-kb main and version tag according to docs/RELEASING.md; watch six-platform assets, verify checksum/install smoke, then publish core/CLI crates and verify registry install paths.
 
 ## Evidence and safety
@@ -30,3 +30,7 @@ Local source scope: existing format/lint/tests/package gates plus available gitl
 Do not rerun the completed 36-trial performance study or claim savings. Its rejected experiment and limits belong in release notes; efficiency success is not an existing release gate.
 
 Verification evidence lives under ignored target/release-support, target/reach-gate, target/release-dogfood, and target/release-corpus; record summary/checkpoint artifacts in source control before release commits.
+
+## Published releases
+
+Goldfish 8.0.10 is published at `0f74184` with local tests/typecheck/tag guard and both main/tag CI passing. Razorback 0.49.0 has passed 505 tests and its version checks; the combined check passed and its worker is finalizing publication. code-kb source PR: https://github.com/anortham/code-kb/pull/86.
