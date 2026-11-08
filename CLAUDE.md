@@ -602,7 +602,8 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   z.object({…})`), and it loads no module (`require(…)`, `import(…)`), the call never reaches a top-level JavaScript or TypeScript function, variable, or
   constant that no object holds: one never written as `object.name` in its file and never placed
   in an object literal there or in a file that imports the name. Such a target excludes the site
-  (``a call on a call result never reaches the top-level `refine` ``), and such a definition is no
+  (``a call on a call result never reaches the top-level `refine` ``, or `a member access on a call
+  result …` for a member read such as `safeParse(x).error`), and such a definition is no
   other definition of it. A JavaScript call whose receiver names the top-level object that the target is assigned
   on in its file (`res.redirect()` for `res.redirect = function`) is `likely` with the basis
   ``receiver `res` names the object `redirect` is assigned on`` when no other definition is

@@ -2547,7 +2547,12 @@ impl<'a> Accounting<'a> {
                         Verdict::new(
                             SiteLabel::Excluded,
                             format!(
-                                "a call on a call result never reaches the top-level `{}`",
+                                "a {} on a call result never reaches the top-level `{}`",
+                                if row.is_call() {
+                                    "call"
+                                } else {
+                                    "member access"
+                                },
                                 spec.name
                             ),
                             false,

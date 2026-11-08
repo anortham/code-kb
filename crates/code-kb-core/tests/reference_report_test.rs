@@ -12999,3 +12999,26 @@ fn a_member_read_on_a_call_result_is_not_tied_to_a_variable_of_the_name_in_its_f
     let site = site_at(&report, "pkg/app.py", 14);
     assert_ne!(site.label, SiteLabel::Excluded, "{}", dump(&report));
 }
+
+#[test]
+fn a_member_access_on_a_call_result_never_reaches_a_top_level_function() {
+    let repo = scanned_repo(&[
+        ("m.ts", "export function error() { return 1; }\n"),
+        (
+            "other.ts",
+            "export class R { error = 2; }\nexport function parse(): R { return new R(); }\n",
+        ),
+        (
+            "use.ts",
+            "import { parse } from \"./other\";\nexport function i() { return parse().error; }\n",
+        ),
+    ]);
+    let report = report(&repo, "error", Some("m.ts"));
+    assert_site(
+        &report,
+        "use.ts",
+        2,
+        SiteLabel::Excluded,
+        "a member access on a call result never reaches the top-level `error`",
+    );
+}

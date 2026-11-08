@@ -93,6 +93,8 @@
     "cargo test -p code-kb-core --locked --test edit_check_fields_test",
     "cargo test -p code-kb-core --locked --test edit_check_test parse_error",
     "cargo test -p code-kb-core --locked --test edit_check_test",
-    "cargo test -p code-kb-core --locked --test reference_report_test a_member_read_on"
+    "cargo test -p code-kb-core --locked --test reference_report_test a_member_read_on",
+    "cargo test -p code-kb-core --locked --test reference_report_test a_member_access_on_a_call_result",
+    "cargo test -p code-kb-core --locked --test reference_report_test"
   ]
 }
