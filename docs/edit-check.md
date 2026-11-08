@@ -47,6 +47,7 @@ Not checked: calls inside macro arguments, callback invocation contracts. Indexe
 - At most 200 files are checked. `Checked 200 of N changed files.` states the cut.
 - New-side hunks come from `git diff -U0`; an untracked file is one hunk of the whole file. A site is "in your diff" when its lines overlap a hunk.
 - The check refreshes each changed file in the main index first, like a body read. Nothing else writes to `artifact.db`.
+- A base symbol that the working rows lack is not removed when its name still stands, as a whole word, on a line inside an `error` row that julie wrote in `parse_diagnostics` for the working file: the extractor lost it, not the edit. The same holds for a field or variant that a type seems to lose. Such symbols are left out of the changes and counted in one cut per file: ``Not compared: 3 symbols of `Pages/Comp.razor` whose names stand in a parse error at lines 1-11 that the extractor reports: `shown`, `count`, `Label`. When the file compiles, the extractor cannot read a construct in it.`` A symbol whose name is gone from the file is still removed. julie 3.12.0 parses a Razor file with a `@* *@` comment inside an `@if`, `else`, or `@foreach` block as one error from line 1 to the end, so every member of its `@code` block read as removed before this rule.
 
 ## Base symbols
 
@@ -271,6 +272,8 @@ Limits on reported sites:
 - julie records a JavaScript property that is assigned a value other than a function or a bare name (`res.locals = …`) only on a plain object name, once per file. A read of a property that a member chain (`res.locals.user = …`), a prototype, or a bare name (`req.res = res`) assigns is still a `likely` site of a removed function with the same name.
 
 Shapes the check does not see:
+
+- A symbol removed from a file whose working side has a parse error is not listed when its name still stands inside the error, in a use, a comment, or a string. The cut names it; check it by hand.
 
 - A TypeScript `interface` and a `type` alias are not field owners, so a field added to or removed from one is not detected. Object literals of that type stop compiling and the check is silent.
 - A Rust tuple struct (`struct P(i32, i32)`) has no field rows in the index, and its signature stops at the name, so a change of its element count is no shape change.

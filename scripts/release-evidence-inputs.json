@@ -90,6 +90,7 @@
     "cargo test --workspace --locked",
     "evals/review-2026-10-26/verify-extraction.sh",
     "cargo test --manifest-path evals/review-2026-10-26/fixture/Cargo.toml handler_sends_invitation",
-    "cargo test -p code-kb-core --locked --test edit_check_fields_test"
+    "cargo test -p code-kb-core --locked --test edit_check_fields_test",
+    "cargo test -p code-kb-core --locked --test edit_check_test parse_error"
   ]
 }

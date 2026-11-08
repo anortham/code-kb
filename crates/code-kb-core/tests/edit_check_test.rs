@@ -4921,3 +4921,88 @@ fn a_python_function_moved_to_another_module_still_lists_a_caller_that_imports_t
     assert_has(&text, "function `load_app` (pkg/app.py): removed");
     assert_has(&text, "pkg/use.py:5  `run`");
 }
+
+const RAZOR_COMPONENT: &str = "@if (shown)\n{\n    <p>@Label()</p>\n    <p>static</p>\n}\n<p class=\"total\">@count</p>\n\n@code {\n    private bool shown = true;\n    private int count;\n    private string Label() => \"x\";\n}\n";
+
+/// julie 3.12.0 parses a Razor file with a `@* *@` comment inside an `@if` block as one error
+/// and keeps almost no symbol of it, though the Razor compiler accepts the comment.
+fn razor_with_comment_in_if(code: &str) -> String {
+    RAZOR_COMPONENT
+        .replacen("{\n", "{\n    @* The Razor compiler accepts this note. *@\n", 1)
+        .replace(
+            "    private bool shown = true;\n    private int count;\n    private string Label() => \"x\";\n",
+            code,
+        )
+}
+
+fn razor_repo() -> Repo {
+    committed_repo(&[
+        (
+            "Demo.csproj",
+            "<Project Sdk=\"Microsoft.NET.Sdk.Razor\"></Project>\n",
+        ),
+        ("Pages/Comp.razor", RAZOR_COMPONENT),
+    ])
+}
+
+#[test]
+fn a_symbol_the_extractor_lost_to_a_parse_error_is_not_removed_and_the_cut_names_it() {
+    let repo = razor_repo();
+    write(
+        &repo.root,
+        "Pages/Comp.razor",
+        &razor_with_comment_in_if(
+            "    private bool shown = true;\n    private int count;\n    private string Label() => \"x\";\n",
+        ),
+    );
+
+    let check = run_check(&repo, None);
+    let text = format_edit_check(&check);
+
+    assert_lacks(&text, "removed");
+    assert_lacks(&text, "fields");
+    assert_has(&text, "no symbol changed shape.");
+    assert_has(
+        &text,
+        "Cut: Not compared: 3 symbols of `Pages/Comp.razor` whose names stand in a parse error at lines 1-",
+    );
+    assert_has(&text, "`shown`, `count`, `Label`");
+    assert_has(
+        &text,
+        "When the file compiles, the extractor cannot read a construct in it.",
+    );
+    assert_eq!(format_stop_reason(&check), None);
+}
+
+#[test]
+fn a_symbol_whose_name_left_a_file_with_a_parse_error_is_still_removed() {
+    let repo = razor_repo();
+    write(
+        &repo.root,
+        "Pages/Comp.razor",
+        &razor_with_comment_in_if("    private bool shown = true;\n    private int count;\n")
+            .replace("    <p>@Label()</p>\n", ""),
+    );
+
+    let text = text_of(&repo);
+
+    assert_has(&text, "method `Comp.Label` (Pages/Comp.razor): removed");
+    assert_has(&text, "Cut: Not compared: 2 symbols of `Pages/Comp.razor`");
+    assert_has(&text, "`shown`, `count`.");
+}
+
+#[test]
+fn a_razor_file_without_a_parse_error_still_reports_a_removed_method() {
+    let repo = razor_repo();
+    write(
+        &repo.root,
+        "Pages/Comp.razor",
+        &RAZOR_COMPONENT.replace("    private string Label() => \"x\";\n", ""),
+    );
+
+    let text = text_of(&repo);
+
+    assert_has(&text, "method `Comp.Label` (Pages/Comp.razor): removed");
+    assert_has(&text, "Pages/Comp.razor:3  `Comp`");
+    assert_lacks(&text, "Not compared");
+}

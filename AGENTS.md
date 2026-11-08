@@ -780,7 +780,11 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   The base symbols come from a `julie-extract scan` of the base content of the changed files into
   `<root>/.code-kb/check/<pid>/`, removed after the call; the main index changes only by the refresh
   of the changed files. A check covers at most 200 files and 30 symbols and starts no step after 20 s, and the
-  answer states each cut. `code-kb hook SessionStart` reads the hook JSON on stdin and writes
+  answer states each cut. A base symbol missing from the working rows whose name still stands in a
+  line of a parse `error` that julie records for the working file is not removed, and a type does not
+  lose such a field or variant; the answer counts them in a cut (`Not compared: N symbols of
+  `path` …`), since the extractor lost them, not the edit (julie 3.12.0 parses a Razor file with a
+  `@* *@` comment inside an `@if` block as one error). `code-kb hook SessionStart` reads the hook JSON on stdin and writes
   `<root>/.code-kb/sessions/<session_id>.json` with `{"base": "<HEAD sha>"}` when the root is a git
   repository with a commit, with or without an index; a file that has a base keeps it, and files
   older than 7 days are removed. `code-kb hook Stop` and `code-kb hook SubagentStop` run the check

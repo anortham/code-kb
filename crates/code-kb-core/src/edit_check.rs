@@ -443,12 +443,16 @@ impl PendingCheck {
             return Ok(check);
         }
 
-        let mut candidates = Detector {
+        let Detected {
+            mut candidates,
+            cuts,
+        } = Detector {
             conn,
             root,
             base: &base_index,
         }
         .detect(&files)?;
+        check.cuts.extend(cuts);
         if candidates.len() > limits.symbols {
             for candidate in &mut candidates {
                 candidate.uses = name_uses(conn, &candidate.rank_name)?;
@@ -871,11 +875,108 @@ fn is_plain_relative(path: &str) -> bool {
             .all(|part| matches!(part, std::path::Component::Normal(_)))
 }
 
-/// The rows of one changed file on both sides, with their pairing.
+/// The rows of one changed file on both sides, with their pairing, and the lines of the working
+/// file that the extractor could not parse.
 struct ComparedFile {
     before: Vec<Row>,
     after: Vec<Row>,
     pairing: Pairing,
+    errors: ParseErrors,
+}
+
+/// The shape changes of a check and the cuts that its comparison stated.
+struct Detected {
+    candidates: Vec<Candidate>,
+    cuts: Vec<String>,
+}
+
+/// The `error` rows that julie wrote in `parse_diagnostics` for the working side of a changed
+/// file, with the file's source. A base symbol that the working rows lack, but whose name still
+/// stands on a line inside such an error, was not removed by the edit: the extractor lost it, so
+/// the check leaves it out and says so.
+#[derive(Default)]
+struct ParseErrors {
+    path: String,
+    spans: Vec<(usize, usize)>,
+    lines: Vec<String>,
+}
+
+impl ParseErrors {
+    fn load(conn: &Connection, root: &Path, path: &str) -> Result<Self, QueryError> {
+        if !has_column(conn, "parse_diagnostics", "kind") {
+            return Ok(Self::default());
+        }
+        let mut stmt = conn.prepare(
+            "SELECT start_line, end_line FROM parse_diagnostics
+             WHERE kind = 'error' AND (path = ?1 OR path = ?2)
+             ORDER BY start_line, end_line",
+        )?;
+        let spans: Vec<(usize, usize)> = stmt
+            .query_map(params![path, path.replace('/', "\\")], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+            })?
+            .filter_map(Result::ok)
+            .map(|(start, end)| (start.max(1) as usize, end.max(start) as usize))
+            .collect();
+        if spans.is_empty() {
+            return Ok(Self::default());
+        }
+        let lines = std::fs::read_to_string(root.join(path))
+            .map(|text| text.lines().map(str::to_string).collect())
+            .unwrap_or_default();
+        Ok(Self {
+            path: path.to_string(),
+            spans,
+            lines,
+        })
+    }
+
+    /// Whether `name` stands as a whole word on a line that a parse error covers.
+    fn hides(&self, name: &str) -> bool {
+        self.spans.iter().any(|&(start, end)| {
+            let first = start.saturating_sub(1).min(self.lines.len());
+            let last = end.min(self.lines.len());
+            self.lines[first..last]
+                .iter()
+                .any(|line| word_position(line, name).is_some())
+        })
+    }
+
+    /// The cut that names the symbols the check did not compare because of the errors.
+    fn cut(&self, unreadable: &[String]) -> Option<String> {
+        if unreadable.is_empty() {
+            return None;
+        }
+        let (first, last) = self
+            .spans
+            .iter()
+            .fold((usize::MAX, 0), |(low, high), &(a, b)| {
+                (low.min(a), high.max(b))
+            });
+        let where_ = if self.spans.len() == 1 {
+            format!("a parse error at lines {first}-{last}")
+        } else {
+            format!("{} parse errors at lines {first}-{last}", self.spans.len())
+        };
+        let named: Vec<String> = unreadable
+            .iter()
+            .take(3)
+            .map(|n| format!("`{n}`"))
+            .collect();
+        let more = if unreadable.len() > 3 { ", …" } else { "" };
+        Some(format!(
+            "Not compared: {} {} of `{}` whose names stand in {where_} that the extractor reports: {}{more}. \
+             When the file compiles, the extractor cannot read a construct in it.",
+            unreadable.len(),
+            plural_symbols(unreadable.len()),
+            self.path,
+            named.join(", ")
+        ))
+    }
+}
+
+fn plural_symbols(count: usize) -> &'static str {
+    if count == 1 { "symbol" } else { "symbols" }
 }
 
 /// A removed row of file `from_file` (`old`) that reappears as row `new` of file `to_file`.
@@ -884,6 +985,20 @@ struct Move {
     old: usize,
     to_file: usize,
     new: usize,
+}
+
+/// `names` once each, in the order of their first definition in `rows`.
+fn in_source_order(rows: &[Row], names: Vec<String>) -> Vec<String> {
+    let line = |name: &str| {
+        rows.iter()
+            .find(|row| row.symbol.name == name)
+            .map_or(usize::MAX, |row| row.symbol.start_line)
+    };
+    let mut names = names;
+    names.sort_by_key(|name| line(name));
+    let mut seen = HashSet::new();
+    names.retain(|name| seen.insert(name.clone()));
+    names
 }
 
 /// The row at `root` and the rows below it, in their order.
@@ -1349,26 +1464,43 @@ struct Detector<'a> {
 }
 
 impl Detector<'_> {
-    fn detect(&self, files: &[ChangedFile]) -> Result<Vec<Candidate>, EditCheckError> {
+    fn detect(&self, files: &[ChangedFile]) -> Result<Detected, EditCheckError> {
         let mut compared = Vec::new();
+        let mut unreadable: Vec<Vec<String>> = Vec::new();
         for file in files {
             let after = rows_of(self.conn, &file.path)?;
             let before = match file.base_path {
                 Some(_) => rows_of(&self.base.conn, &file.path)?,
                 None => Vec::new(),
             };
-            let unreadable = !before.is_empty()
+            let not_indexed = !before.is_empty()
                 && after.is_empty()
                 && self.root.join(&file.path).exists()
                 && !file_is_indexed(self.conn, &file.path)?;
-            if unreadable {
+            if not_indexed {
                 continue;
             }
-            let pairing = pair_rows(&before, &after);
+            let errors = if before.is_empty() {
+                ParseErrors::default()
+            } else {
+                ParseErrors::load(self.conn, self.root, &file.path)?
+            };
+            let mut pairing = pair_rows(&before, &after);
+            let mut lost = Vec::new();
+            pairing.removed.retain(|&index| {
+                let name = &before[index].symbol.name;
+                let hidden = errors.hides(name);
+                if hidden {
+                    lost.push(name.clone());
+                }
+                !hidden
+            });
+            unreadable.push(lost);
             compared.push(ComparedFile {
                 before,
                 after,
                 pairing,
+                errors,
             });
         }
         let moves = self.moves(&compared)?;
@@ -1387,6 +1519,8 @@ impl Detector<'_> {
                 &file.after,
                 &file.pairing,
                 &moved,
+                &file.errors,
+                &mut unreadable[index],
             )?);
         }
         for found in &moves {
@@ -1394,9 +1528,19 @@ impl Detector<'_> {
             let to = &compared[found.to_file];
             let before = subtree(&from.before, found.old);
             let after = subtree(&to.after, found.new);
-            candidates.extend(self.compare(&before, &after)?);
+            candidates.extend(self.compare(
+                &before,
+                &after,
+                &to.errors,
+                &mut unreadable[found.to_file],
+            )?);
         }
-        Ok(candidates)
+        let cuts = compared
+            .iter()
+            .zip(unreadable)
+            .filter_map(|(file, lost)| file.errors.cut(&in_source_order(&file.before, lost)))
+            .collect();
+        Ok(Detected { candidates, cuts })
     }
 
     /// The removed symbols that reappear with the same key in another changed file of a scope
@@ -1500,9 +1644,23 @@ impl Detector<'_> {
         Ok(scope)
     }
 
-    fn compare(&self, before: &[Row], after: &[Row]) -> Result<Vec<Candidate>, EditCheckError> {
-        let pairing = pair_rows(before, after);
-        self.compare_paired(before, after, &pairing, &HashSet::new())
+    fn compare(
+        &self,
+        before: &[Row],
+        after: &[Row],
+        errors: &ParseErrors,
+        unreadable: &mut Vec<String>,
+    ) -> Result<Vec<Candidate>, EditCheckError> {
+        let mut pairing = pair_rows(before, after);
+        pairing.removed.retain(|&index| {
+            let name = &before[index].symbol.name;
+            let hidden = errors.hides(name);
+            if hidden {
+                unreadable.push(name.clone());
+            }
+            !hidden
+        });
+        self.compare_paired(before, after, &pairing, &HashSet::new(), errors, unreadable)
     }
 
     fn compare_paired(
@@ -1511,10 +1669,14 @@ impl Detector<'_> {
         after: &[Row],
         pairing: &Pairing,
         moved: &HashSet<usize>,
+        errors: &ParseErrors,
+        unreadable: &mut Vec<String>,
     ) -> Result<Vec<Candidate>, EditCheckError> {
         let mut candidates = Vec::new();
         for &(old, new) in &pairing.pairs {
-            if let Some(candidate) = self.changed_pair(before, old, after, new)? {
+            if let Some(candidate) =
+                self.changed_pair(before, old, after, new, errors, unreadable)?
+            {
                 candidates.push(candidate);
             }
         }
@@ -1665,8 +1827,16 @@ impl Detector<'_> {
         old: usize,
         after: &[Row],
         new: usize,
+        errors: &ParseErrors,
+        unreadable: &mut Vec<String>,
     ) -> Result<Option<Candidate>, EditCheckError> {
         let (was, is) = (&before[old], &after[new]);
+        let mut readable = |removed: Vec<String>| -> Vec<String> {
+            let (hidden, kept): (Vec<String>, Vec<String>) =
+                removed.into_iter().partition(|name| errors.hides(name));
+            unreadable.extend(hidden);
+            kept
+        };
         let kind = is.symbol.kind.as_str();
         let (change, what) = if CALLABLE_KINDS.contains(&kind) {
             match self.callable_change(&was.symbol, &is.symbol)? {
@@ -1765,6 +1935,7 @@ impl Detector<'_> {
                             && !inherited_names.contains(&row.symbol.name))
             };
             let (added, removed) = member_changes(before, &was.symbol, after, &is.symbol, is_field);
+            let removed = readable(removed);
             if added.is_empty() && removed.is_empty() {
                 if (before_primary_constructor || after_primary_constructor)
                     && let Some((change, what)) = self.callable_change(&was.symbol, &is.symbol)?
@@ -1794,6 +1965,7 @@ impl Detector<'_> {
                     member_changes(before, &was.symbol, after, &is.symbol, |row| {
                         is_annotated_variable(&row.symbol)
                     });
+                let removed = readable(removed);
                 let required = after.iter().any(|row| {
                     row.symbol.parent_symbol_id.as_deref() == Some(&is.symbol.symbol_id)
                         && is_annotated_variable(&row.symbol)
@@ -1817,6 +1989,7 @@ impl Detector<'_> {
             let (added, removed) = member_changes(before, &was.symbol, after, &is.symbol, |row| {
                 row.symbol.kind == "enum_member" || (c_enum && row.symbol.kind == "constant")
             });
+            let removed = readable(removed);
             if added.is_empty() && removed.is_empty() {
                 return Ok(None);
             }
