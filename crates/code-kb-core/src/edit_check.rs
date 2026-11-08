@@ -2484,6 +2484,7 @@ impl<'a> SiteLister<'a> {
         };
         let report =
             reference_report_for_edit(self.conn, self.root, &candidate.subject, condition)?;
+        let mut direct_member_tests: Vec<CallingTest> = Vec::new();
         let placed = match &candidate.what {
             What::Parameters {
                 required_parameters,
@@ -2560,12 +2561,22 @@ impl<'a> SiteLister<'a> {
                 }
                 placed
             }
-            What::Fields(change) => self.constructions(&report, &candidate.subject, change)?,
+            What::Fields(change) => {
+                let (placed, mut member_tests) =
+                    self.constructions(&report, &candidate.subject, change)?;
+                direct_member_tests.append(&mut member_tests);
+                placed
+            }
             What::Variants { added, removed } => {
                 self.variant_uses(&report, &candidate.subject, added, removed)?
             }
         };
-        let tests = report.tests.clone();
+        let mut tests = report.tests.clone();
+        for test in direct_member_tests {
+            if !tests.iter().any(|known| known.symbol_id == test.symbol_id) {
+                tests.push(test);
+            }
+        }
         let walked = if self.walk_tests {
             self.walked_tests(&report)
                 .unwrap_or_else(|error| WalkedTests {
@@ -3556,10 +3567,16 @@ impl<'a> SiteLister<'a> {
         &mut self,
         subject: &Symbol,
         change: &FieldChange,
-    ) -> Result<Placed, EditCheckError> {
+    ) -> Result<(Placed, Vec<CallingTest>), EditCheckError> {
         let mut placed = Placed::default();
+        let mut tests: Vec<CallingTest> = Vec::new();
         for name in &change.removed {
             let report = reference_report_for_removed_member(self.conn, self.root, subject, name)?;
+            for test in &report.tests {
+                if !tests.iter().any(|known| known.symbol_id == test.symbol_id) {
+                    tests.push(test.clone());
+                }
+            }
             for labeled in report.sites.iter().filter(|site| {
                 site.label != SiteLabel::Excluded
                     && (matches!(site.site.kind.as_str(), "member_access" | "type_usage")
@@ -3573,7 +3590,7 @@ impl<'a> SiteLister<'a> {
                 placed.add(labeled.label, reached, edit_site(labeled, first, None));
             }
         }
-        Ok(placed)
+        Ok((placed, tests))
     }
 
     fn dynamic_member_write(&mut self, language: &str, labeled: &LabeledSite, name: &str) -> bool {
@@ -3736,7 +3753,7 @@ impl<'a> SiteLister<'a> {
         report: &ReferenceReport,
         subject: &Symbol,
         change: &FieldChange,
-    ) -> Result<Placed, EditCheckError> {
+    ) -> Result<(Placed, Vec<CallingTest>), EditCheckError> {
         let rust_struct = subject.language == "rust" && subject.kind == "struct";
         let mut rows: Vec<ConstructionSite> = report.constructions.clone();
         if rust_struct {
@@ -3749,7 +3766,7 @@ impl<'a> SiteLister<'a> {
                 }
             }
         }
-        let mut placed = self.removed_member_reads(subject, change)?;
+        let (mut placed, tests) = self.removed_member_reads(subject, change)?;
         let _ = self.source(&subject.path);
         for construction in &rows {
             let site = report
@@ -3835,7 +3852,7 @@ impl<'a> SiteLister<'a> {
             self.self_literals(subject, change, &rows, &mut placed)?;
         }
         placed.deduplicate();
-        Ok(placed)
+        Ok((placed, tests))
     }
 
     /// The `Self { … }` literals and patterns in the methods of a Rust struct, which no

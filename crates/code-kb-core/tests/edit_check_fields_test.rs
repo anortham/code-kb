@@ -820,3 +820,48 @@ fn a_removed_python_instance_attribute_skips_a_read_that_another_class_writes_fo
     assert!(proven_site(info, "pkg/cli.py", 7), "{text}");
     assert!(!has_site(info, "pkg/cli.py", 15), "{text}");
 }
+
+#[test]
+fn the_tests_that_read_a_removed_python_attribute_are_tests_to_run() {
+    let repo = committed_repo(&[
+        (
+            "pyproject.toml",
+            "[tool.pytest.ini_options]\ntestpaths = [\"tests\"]\n",
+        ),
+        ("pkg/__init__.py", ""),
+        (
+            "pkg/sessions.py",
+            "class SessionMixin:\n    accessed = False\n    modified = False\n",
+        ),
+        (
+            "pkg/app.py",
+            "from .sessions import SessionMixin\n\n\ndef save(session: SessionMixin) -> bool:\n    return session.accessed\n",
+        ),
+        (
+            "tests/test_sessions.py",
+            "from pkg.sessions import SessionMixin\n\n\ndef test_session_accessed():\n    session = SessionMixin()\n    assert session.accessed is False\n\n\ndef test_session_modified():\n    assert SessionMixin().modified is False\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "pkg/sessions.py",
+        "class SessionMixin:\n    modified = False\n",
+    );
+
+    let check = check_of(&repo);
+    let text = format_edit_check(&check);
+    let change = field_change(&check, "pkg/sessions.py");
+    assert!(has_site(change, "tests/test_sessions.py", 6), "{text}");
+    assert!(
+        check
+            .tests
+            .iter()
+            .any(|command| command.ends_with("tests/test_sessions.py::test_session_accessed")),
+        "{text}"
+    );
+    assert_eq!(
+        check.tests.first().map(String::as_str),
+        Some("pytest tests/test_sessions.py::test_session_accessed"),
+        "{text}"
+    );
+}

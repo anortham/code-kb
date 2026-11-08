@@ -752,7 +752,8 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   symbol whose shape changed: removed or renamed, its parameters or signature, the fields of a class,
   struct, or record, or the variants of an enum. Each change lists the sites the diff reached, the
   `proven` and `likely` sites it did not reach, a count of the `unresolved` ones, and the tests to run:
-  the tests that call a changed symbol, then the tests that the `blast_radius` walk reaches from the
+  the tests that call a changed symbol (for a type that lost a field, also the tests that read that
+  field), then the tests that the `blast_radius` walk reaches from the
   callers of its `proven` and `likely` sites, up to depth 5. The check keeps 50 commands. A test that no
   runner the project configures runs alone keeps its place on its own line (`Tests with no run command`),
   and the check keeps 50 of those. A line after them gives the count and each reason the list can be
