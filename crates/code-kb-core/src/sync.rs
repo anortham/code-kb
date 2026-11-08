@@ -53,7 +53,7 @@ pub enum SyncError {
     },
 }
 
-pub const PINNED_JULIE_VERSION: &str = "3.12.0";
+pub const PINNED_JULIE_VERSION: &str = "3.12.1";
 
 /// Extraction level for new artifacts: facts, call and variable-reference identifiers,
 /// call metadata, and annotations, without full-level metrics or source regions.
