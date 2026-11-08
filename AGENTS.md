@@ -412,7 +412,8 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
 - Callers report: `find_references` for callers (CLI `refs`) comes from `reference_report` in
   `reference_report.rs`. It lists every indexed site of the name (pending calls, relationships,
   and identifiers; never an import row or a definition line, and a definition line includes its
-  decorators) and gives each site one label and a basis: `proven` (index evidence ties the site to
+  decorators, while a member read on the line that defines another symbol of the name, `cli =
+  app.cli`, stays a site) and gives each site one label and a basis: `proven` (index evidence ties the site to
   the target: same file, qualified path, receiver type, class chain, import, enclosing scope, same
   package, builds the class), `likely` (only the name ties them, and no other definition can reach
   the site), `unresolved` (another definition can reach the site, and the index cannot choose), or
@@ -590,11 +591,12 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   parameter, loop variable, or catch parameter`. A pending call takes the line of a call
   identifier only inside its caller. A receiver that names an object (`z.coerce.boolean()`) ties the call to a member of
   that object only when the qualifier's import (`z`) reaches the object's file. julie records no
-  receiver for a call on a call result (`single().getAsInt()`) or on a string literal, so a call
-  whose name follows a `.` after a call result, an index result, or a closing quote, a call on a
-  line that starts with `.` (`    .readonly()`), and a call that starts the line below such a `.`
-  are never bare calls: scope, class chain, and julie's same-file link neither prove nor exclude
-  them. When such a receiver is a call result, an index result, or a string literal (on the line,
+  receiver for a call or a member access on a call result (`single().getAsInt()`,
+  `load_app().cli`) or on a string literal, so a call or a member access whose name follows a `.`
+  after a call result, an index result, or a closing quote, one on a line that starts with `.`
+  (`    .readonly()`), and one that starts the line below such a `.` are never bare: scope, class
+  chain, and julie's same-file link neither prove nor exclude them, so a module-level variable of
+  the name in the file (`cli = FlaskGroup()`) does not exclude `load_app().cli`. When such a receiver is a call result, an index result, or a string literal (on the line,
   or at the end of the line above a line that starts with `.`), or a `const` of the caller's scope
   or file whose nearest declaration above the call holds a call or a `new` object (`const schema =
   z.object({…})`), and it loads no module (`require(…)`, `import(…)`), the call never reaches a top-level JavaScript or TypeScript function, variable, or

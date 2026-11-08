@@ -488,7 +488,7 @@ impl PendingCheck {
                     found
                         .paths
                         .extend(listed.tests.iter().map(|test| test.path.clone()));
-                    found.direct.extend(listed.tests);
+                    found.direct.push(listed.tests);
                     found.paths.push(candidate.path.clone());
                     found.add_walk(listed.walked);
                     check.changes.push(ShapeChange {
@@ -536,7 +536,8 @@ struct WalkedTests {
 /// reaches from the callers of its sites, and what kept the walk from finding them all.
 #[derive(Default)]
 struct FoundTests {
-    direct: Vec<CallingTest>,
+    /// The tests that call each change, one list per change.
+    direct: Vec<Vec<CallingTest>>,
     walked: Vec<CallingTest>,
     paths: Vec<String>,
     seeds_cut: Vec<(usize, usize)>,
@@ -544,6 +545,20 @@ struct FoundTests {
     stopped_at_depth: bool,
     open_ends: Vec<(String, usize)>,
     failures: Vec<String>,
+}
+
+/// The first test of each change, then the second of each, and so on, so a change with more
+/// tests than the check keeps does not push the tests of the changes after it out of the list.
+fn in_turns(per_change: Vec<Vec<CallingTest>>) -> Vec<CallingTest> {
+    let mut queues: Vec<_> = per_change.into_iter().map(Vec::into_iter).collect();
+    let mut tests = Vec::new();
+    loop {
+        let before = tests.len();
+        tests.extend(queues.iter_mut().filter_map(Iterator::next));
+        if tests.len() == before {
+            return tests;
+        }
+    }
 }
 
 impl FoundTests {
@@ -564,7 +579,7 @@ impl FoundTests {
     fn fill(self, root: &Path, check: &mut EditCheck) {
         let mut seen = HashSet::new();
         let mut places = HashSet::new();
-        for test in self.direct.into_iter().chain(self.walked) {
+        for test in in_turns(self.direct).into_iter().chain(self.walked) {
             match &test.command {
                 Some(command) => {
                     if seen.insert(command.clone()) && check.tests.len() < MAX_TESTS {

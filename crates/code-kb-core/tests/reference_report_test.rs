@@ -12971,3 +12971,31 @@ fn a_bare_fsharp_call_in_a_file_that_opens_the_module_is_proven_by_that_open() {
         dump(&other)
     );
 }
+
+#[test]
+fn a_member_read_on_the_line_that_defines_a_local_of_the_name_is_a_site() {
+    let repo = scanned_repo(&[
+        (
+            "pkg/app.py",
+            "class App:\n    def __init__(self):\n        self.cli = object()\n",
+        ),
+        (
+            "pkg/use.py",
+            "from pkg.app import App\n\n\ndef run(app: App):\n    cli = app.cli\n    return cli\n",
+        ),
+    ]);
+    let report = report(&repo, "App.cli", None);
+    let site = site_at(&report, "pkg/use.py", 5);
+    assert_ne!(site.label, SiteLabel::Excluded, "{}", dump(&report));
+}
+
+#[test]
+fn a_member_read_on_a_call_result_is_not_tied_to_a_variable_of_the_name_in_its_file() {
+    let repo = scanned_repo(&[(
+        "pkg/app.py",
+        "class App:\n    def __init__(self):\n        self.cli = object()\n\n\ndef load_app():\n    return App()\n\n\ncli = load_app()\n\n\ndef run():\n    return load_app().cli\n",
+    )]);
+    let report = report(&repo, "App.cli", None);
+    let site = site_at(&report, "pkg/app.py", 14);
+    assert_ne!(site.label, SiteLabel::Excluded, "{}", dump(&report));
+}

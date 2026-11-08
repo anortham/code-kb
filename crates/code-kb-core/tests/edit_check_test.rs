@@ -4924,15 +4924,22 @@ fn a_python_function_moved_to_another_module_still_lists_a_caller_that_imports_t
 
 const RAZOR_COMPONENT: &str = "@if (shown)\n{\n    <p>@Label()</p>\n    <p>static</p>\n}\n<p class=\"total\">@count</p>\n\n@code {\n    private bool shown = true;\n    private int count;\n    private string Label() => \"x\";\n}\n";
 
-/// julie 3.12.0 parses a Razor file with a `@* *@` comment inside an `@if` block as one error
-/// and keeps almost no symbol of it, though the Razor compiler accepts the comment.
-fn razor_with_comment_in_if(code: &str) -> String {
-    RAZOR_COMPONENT
-        .replacen("{\n", "{\n    @* The Razor compiler accepts this note. *@\n", 1)
-        .replace(
-            "    private bool shown = true;\n    private int count;\n    private string Label() => \"x\";\n",
-            code,
-        )
+/// A Rust file whose working version a parse error swallows from line 2 to the end: julie keeps
+/// `keep` and loses every later symbol, though their names still stand in the error span.
+const RUST_LIB: &str = "pub fn keep() {}\npub fn lost() -> u32 {\n    1\n}\npub struct Gone;\npub fn run() -> u32 {\n    lost()\n}\n";
+
+fn rust_with_parse_error(code: &str) -> String {
+    format!("pub fn keep() {{}}\nmacro_rules! m {{ (\n{code}")
+}
+
+fn rust_repo() -> Repo {
+    committed_repo(&[
+        (
+            "Cargo.toml",
+            "[package]\nname = \"fixture\"\nversion = \"0.1.0\"\n",
+        ),
+        ("src/lib.rs", RUST_LIB),
+    ])
 }
 
 fn razor_repo() -> Repo {
@@ -4947,12 +4954,12 @@ fn razor_repo() -> Repo {
 
 #[test]
 fn a_symbol_the_extractor_lost_to_a_parse_error_is_not_removed_and_the_cut_names_it() {
-    let repo = razor_repo();
+    let repo = rust_repo();
     write(
         &repo.root,
-        "Pages/Comp.razor",
-        &razor_with_comment_in_if(
-            "    private bool shown = true;\n    private int count;\n    private string Label() => \"x\";\n",
+        "src/lib.rs",
+        &rust_with_parse_error(
+            "pub fn lost() -> u32 {\n    1\n}\npub struct Gone;\npub fn run() -> u32 {\n    lost()\n}\n",
         ),
     );
 
@@ -4964,9 +4971,9 @@ fn a_symbol_the_extractor_lost_to_a_parse_error_is_not_removed_and_the_cut_names
     assert_has(&text, "no symbol changed shape.");
     assert_has(
         &text,
-        "Cut: Not compared: 3 symbols of `Pages/Comp.razor` whose names stand in a parse error at lines 1-",
+        "Cut: Not compared: 3 symbols of `src/lib.rs` whose names stand in a parse error at lines 2-",
     );
-    assert_has(&text, "`shown`, `count`, `Label`");
+    assert_has(&text, "`lost`, `Gone`, `run`");
     assert_has(
         &text,
         "When the file compiles, the extractor cannot read a construct in it.",
@@ -4976,19 +4983,18 @@ fn a_symbol_the_extractor_lost_to_a_parse_error_is_not_removed_and_the_cut_names
 
 #[test]
 fn a_symbol_whose_name_left_a_file_with_a_parse_error_is_still_removed() {
-    let repo = razor_repo();
+    let repo = rust_repo();
     write(
         &repo.root,
-        "Pages/Comp.razor",
-        &razor_with_comment_in_if("    private bool shown = true;\n    private int count;\n")
-            .replace("    <p>@Label()</p>\n", ""),
+        "src/lib.rs",
+        &rust_with_parse_error("pub fn lost() -> u32 {\n    1\n}\npub struct Gone;\n"),
     );
 
     let text = text_of(&repo);
 
-    assert_has(&text, "method `Comp.Label` (Pages/Comp.razor): removed");
-    assert_has(&text, "Cut: Not compared: 2 symbols of `Pages/Comp.razor`");
-    assert_has(&text, "`shown`, `count`.");
+    assert_has(&text, "function `run` (src/lib.rs): removed");
+    assert_has(&text, "Cut: Not compared: 2 symbols of `src/lib.rs`");
+    assert_has(&text, "`lost`, `Gone`.");
 }
 
 #[test]
@@ -5005,4 +5011,45 @@ fn a_razor_file_without_a_parse_error_still_reports_a_removed_method() {
     assert_has(&text, "method `Comp.Label` (Pages/Comp.razor): removed");
     assert_has(&text, "Pages/Comp.razor:3  `Comp`");
     assert_lacks(&text, "Not compared");
+}
+
+#[test]
+fn the_tests_of_a_second_change_are_kept_when_the_first_change_has_more_tests_than_the_cap() {
+    let alpha_tests: String = (0..55)
+        .map(|i| format!("def test_alpha_{i}():\n    assert alpha(1)\n\n\n"))
+        .collect();
+    let repo = committed_repo(&[
+        (
+            "pyproject.toml",
+            "[tool.pytest.ini_options]\ntestpaths = [\"tests\"]\n",
+        ),
+        ("pkg/__init__.py", ""),
+        (
+            "pkg/ops.py",
+            "def alpha(x):\n    return x\n\n\ndef beta(x):\n    return x\n",
+        ),
+        (
+            "tests/test_alpha.py",
+            &format!("from pkg.ops import alpha\n\n\n{alpha_tests}"),
+        ),
+        (
+            "tests/test_beta.py",
+            "from pkg.ops import beta\n\n\ndef test_beta():\n    assert beta(1)\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "pkg/ops.py",
+        "def alpha(x, y):\n    return x\n\n\ndef beta(x, y):\n    return x\n",
+    );
+    let check = run_check(&repo, None);
+    assert!(check.tests_found > 50, "{}", check.tests_found);
+    assert!(
+        check
+            .tests
+            .iter()
+            .any(|command| command.ends_with("tests/test_beta.py::test_beta")),
+        "{:?}",
+        check.tests
+    );
 }

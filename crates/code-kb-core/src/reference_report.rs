@@ -3052,6 +3052,9 @@ impl<'a> Accounting<'a> {
                 && !row.is_super_call()
                 && in_spans(&definition_spans, &row.path, row.line)
             {
+                if row.kind == "member_access" && row.access == Some(SiteAccess::Read) {
+                    return true;
+                }
                 row.on_definition_line = true;
                 return row.kind == "call";
             }
@@ -5440,14 +5443,18 @@ fn merge_site_rows(rows: Vec<SiteRow>) -> Vec<LabeledSite> {
         .collect()
 }
 
-/// Marks the calls without a recorded receiver whose name follows a `.` after a call or index
-/// result in the source (`single().getAsInt()`, `items[0]?.name()`), starts a line that
-/// continues a chain (`    .readonly()`), or starts the line below a `.` (`make().` then `foo()`).
+/// Marks the calls and member accesses without a recorded receiver whose name follows a `.`
+/// after a call or index result in the source (`single().getAsInt()`, `items[0]?.name()`,
+/// `load_app().cli`), starts a line that continues a chain (`    .readonly()`), or starts the
+/// line below a `.` (`make().` then `foo()`).
 fn mark_hidden_receivers(root: &Path, rows: &mut [NameRow]) {
     let mut by_path: HashMap<String, Vec<usize>> = HashMap::new();
     for (index, row) in rows.iter().enumerate() {
         // PHP writes string concatenation with `.`.
-        if row.is_call() && !row.has_qualifier() && row.language != "php" {
+        if (row.is_call() || row.kind == "member_access")
+            && !row.has_qualifier()
+            && row.language != "php"
+        {
             by_path.entry(row.path.clone()).or_default().push(index);
         }
     }
