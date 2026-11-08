@@ -85,6 +85,23 @@ The operation codes describe fixture assertions:
 
 ## Julie 3.12 corrected facts
 
+The [3.12.1 release](https://github.com/anortham/julie-extractors/releases/tag/v3.12.1)
+is a patch on 3.12.0 with the same schema, contract, language IDs, and
+capability flags. Its pinned `tree-sitter-razor` reads a `@* … *@` comment as
+one token in every parser state, so a Razor file with a comment first in an
+`@if`, `else`, or `@foreach` block, first in an element, or first in a `@code`
+block parses whole; with 3.12.0 the file was one error from line 1 and kept
+only its component class and directives, which `check_edit` read as every
+`@code` member removed (code-kb 2.13.2 skips the symbols such an error loses;
+with 3.12.1 the error is gone). An empty or comment-only block (`@if (x) { }`)
+is still a local error. A Python `@property`, `@x.setter`, or
+`@cached_property` method and a Dart getter or setter are now the containing
+symbol of the identifiers, relationships, and type facts inside them, as a
+method is; 3.12.0 gave them the class, so `find_references` named the class as
+the caller of a write inside such a property and the `blast_radius` walk could
+not step from the property to its readers. A property that holds a value keeps
+the class as the container of a call in its initializer.
+
 The [3.12.0 release](https://github.com/anortham/julie-extractors/releases/tag/v3.12.0)
 keeps SQLite schema 8 and extracted-data contract v4. Code-kb rebuilds an index
 written by an older extractor before serving it. That refresh brings corrected
